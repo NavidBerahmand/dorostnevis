@@ -99,19 +99,36 @@ function splitMessage(m: Msg): { text: string; source: string } {
     return match ? { text: match[1], source: match[2] } : { text: m.message, source: "" };
 }
 
+/**
+ * Marks always cover whole words. A mark around one letter («ي» in «رييس») is
+ * a separate inline box, and some browsers (Safari, the iOS app) then draw the
+ * letters on either side of it in their unjoined forms.
+ */
 function renderPreview(text: string) {
-    const marks = [...messages].sort((a, b) => a.range[0] - b.range[0]);
+    const spans = messages
+        .map((m, i) => {
+            const [s, e] = wordAround(text, m.range[0], m.range[1]);
+            return { s, e, i, fix: Boolean(m.fix) };
+        })
+        .sort((a, b) => a.s - b.s || b.e - a.e);
+    const merged: Array<{ s: number; e: number; i: number; fix: boolean }> = [];
+    for (const sp of spans) {
+        const last = merged[merged.length - 1];
+        if (last && sp.s < last.e) {
+            last.e = Math.max(last.e, sp.e);
+            last.fix = last.fix || sp.fix;
+        } else {
+            merged.push({ ...sp });
+        }
+    }
     let out = "";
     let pos = 0;
-    marks.forEach((m) => {
-        const [s, e] = m.range;
-        if (s < pos) return; // overlapping: the first one wins in the preview
+    for (const { s, e, i, fix } of merged) {
         out += show(text.slice(pos, s));
-        const i = messages.indexOf(m);
-        const cls = m.fix ? "mark" : "mark mark-judge";
+        const cls = fix ? "mark" : "mark mark-judge";
         out += `<a href="#issue-${i}" class="${cls}" data-i="${i}">${show(text.slice(s, e)) || "&#8203;"}</a>`;
         pos = e;
-    });
+    }
     out += show(text.slice(pos));
     preview.innerHTML = out.replace(/\n/g, "<br>");
 }
