@@ -11,7 +11,11 @@
  * - «نیس، هس، ماس» ← «نیست، هست، ماست» («ت» پایانی خودبه‌خود نرم ادا می‌شود؛ ص ۱۴، ۲۴، ۴۱)
  * - «یه» ← «یک» (ص ۴۲)
  * - «منو، اینو، کتابو» ← «من را، این را، کتاب را» («را» را باید نگه داشت؛ ص ۲۵، ۲۷)
- * - «بهت، بهش» ← «بهات، بهاش» (ص ۲۱)
+ * - «بهت، بهش، بهشون» ← «به‌ات، به‌اش، به‌شون» («به» شکل خود را نگه می‌دارد؛ ص ۲۱–۲۲)
+ * - «هنوزم، بازم» ← «هنوز هم، باز هم» («هم» هجا کم نمی‌کند؛ ص ۲۶)
+ * - «بفرمایین، می‌کنین» ← «بفرمایید، می‌کنید» (دوم شخص جمع را کامل بنویسید؛ ص ۱۹)
+ * - «خارجن، دزدن» ← «خارج‌اند، دزدند» (ص ۴۰–۴۱)
+ * - «خالهم، تهش» ← «خاله‌م، ته‌ش» (شکل «خاله» حفظ شود؛ ص ۲۱ و ۴۲)
  * - «می‌خورن، می‌گن» ← «می‌خورند، می‌گند» (دال آخر خودبه‌خود تلفظ نمی‌شود؛ ص ۱۹، ۴۲)
  * - «رفته‌ان» ← «رفته‌اند» (ص ۲۰)
  * - «اومدم» ← «آمدم» (ماضی «آمدن» و «رفتن» هجا از دست نمی‌دهد؛ ص ۱۷)
@@ -22,7 +26,13 @@
 import { createPatternRule } from "../../../textlint-rule-preset-farhangestan/src/util/pattern-rule";
 import { START, END, LETTER, ZWNJ } from "../../../textlint-rule-preset-farhangestan/src/util/persian";
 import { KNOWN } from "../../../textlint-rule-preset-farhangestan/src/util/words";
-import { isPresentStem } from "../../../textlint-rule-preset-farhangestan/src/rules/mi-prefix";
+import { isPresentStem, verbForm } from "../../../textlint-rule-preset-farhangestan/src/rules/mi-prefix";
+import { endsWithSilentHe } from "../../../textlint-rule-preset-farhangestan/src/util/words";
+import hazmAdjectives from "../../../textlint-rule-preset-farhangestan/src/dict/hazm-adjectives.json";
+import commonNouns from "../../../textlint-rule-preset-farhangestan/src/dict/hazm-common-nouns.json";
+
+const ADJECTIVES = new Set<string>(hazmAdjectives.adjectives);
+const COMMON_NOUNS = new Set<string>(commonNouns.words);
 
 const BOOK = "اصول شکسته‌نویسی";
 
@@ -40,7 +50,9 @@ const SAME_SYLLABLES: Array<[string, string, string]> = [
     ["آسمون", "آسمان", "۱۴"], ["بارون", "باران", "۱۴"], ["ارزون", "ارزان", "۱۴"], ["سوهون", "سوهان", "۱۲"],
     ["نیس", "نیست", "۲۴"], ["هس", "هست", "۴۱"], ["ماس", "ماست", "۹"], ["گف", "گفت", "۱۴"], ["رف", "رفت", "۱۴"],
     ["یه", "یک", "۴۲"], ["منو", "من را", "۲۷"], ["اینو", "این را", "۲۵"],
-    ["بهت", "بهات", "۲۱"], ["بهش", "بهاش", "۲۱"], ["تش", "ته‌اش", "۴۲"],
+    ["بهت", "به‌ات", "۲۱"], ["بهش", "به‌اش", "۲۱"], ["بهاش", "به‌اش", "۲۱"], ["بهات", "به‌ات", "۲۱"],
+    ["بهشون", "به‌شون", "۲۲"], ["بهتون", "به‌تون", "۲۲"], ["تش", "ته‌ش", "۴۲"],
+    ["هنوزم", "هنوز هم", "۲۶"], ["بازم", "باز هم", "۲۶"],
     ["اومدم", "آمدم", "۱۷"], ["اومدی", "آمدی", "۱۷"], ["اومد", "آمد", "۱۷"], ["اومدیم", "آمدیم", "۱۷"],
     ["اومدید", "آمدید", "۱۷"], ["اومدن", "آمدند", "۱۷"], ["اومدند", "آمدند", "۱۷"], ["اومده", "آمده", "۱۷"]
 ];
@@ -160,6 +172,41 @@ export default createPatternRule(() => ({
                     replacement: fixed,
                     source: `${BOOK}، ص ۱۹ و ۳۰`
                 };
+            }
+        },
+        {
+            // 2nd person plural: «بفرمایین، می‌کنین، بنویسین» → «بفرمایید…» (ص ۱۹)
+            pattern: new RegExp(`${START}(ن?می${ZWNJ}?|ب|ن)(${LETTER}+?)ین${END}`, "g"),
+            check: (m) => {
+                const [, prefix, stem] = m;
+                if (!isPresentStem(stem) || KNOWN.has(m[0])) return null;
+                const fixed = (prefix.startsWith("می") || prefix.startsWith("نمی") ? prefix.replace(/^(ن?می)(?!‌)/, "$1‌") : prefix) + stem + "ید";
+                return {
+                    message: `دوم شخص جمع را کامل بنویسید: «${fixed}»`,
+                    replacement: fixed,
+                    source: `${BOOK}، ص ۱۹`
+                };
+            }
+        },
+        {
+            // copula «-ن» after a noun or adjective: «خارجن» → «خارج‌اند»، «دزدن» → «دزدند» (ص ۴۰–۴۱)
+            pattern: new RegExp(`${START}(${LETTER}{2,})ن${END}`, "g"),
+            check: (m) => {
+                const stem = m[1];
+                if (KNOWN.has(m[0]) || verbForm(m[0]) || !(ADJECTIVES.has(stem) || COMMON_NOUNS.has(stem))) return null;
+                if (stem.endsWith("ه") || stem.endsWith("ا") || stem.endsWith("و") || stem.endsWith("ی")) return null;
+                const fixed = "اآدذرزژو".includes(stem[stem.length - 1]) ? stem + "ند" : stem + ZWNJ + "اند";
+                return { message: `«اند» را کامل بنویسید: «${fixed}»`, replacement: fixed, source: `${BOOK}، ص ۴۰–۴۱` };
+            }
+        },
+        {
+            // «خالهم، تهش» → «خاله‌م، ته‌ش»: the word keeps its shape (ص ۲۱ و ۴۲)
+            pattern: new RegExp(`${START}(${LETTER}+ه)(م|ت|ش)${END}`, "g"),
+            check: (m) => {
+                const stem = m[1];
+                if (KNOWN.has(m[0]) || !KNOWN.has(stem) || !endsWithSilentHe(stem)) return null;
+                const fixed = stem + ZWNJ + m[2];
+                return { message: `شکل کلمه حفظ شود: «${fixed}»`, replacement: fixed, source: `${BOOK}، ص ۲۱ و ۴۲` };
             }
         },
         {
