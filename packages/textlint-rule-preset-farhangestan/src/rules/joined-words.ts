@@ -16,11 +16,13 @@
  *    «همکلاسی» ← «هم‌کلاسی»، «زیستفناوری» ← «زیست‌فناوری». (ص ۳۶–۴۰)
  * ۵. «هر» با کلمهٔ بعد: «هرروز» ← «هر روز»، جز فهرست کتاب (هرکس، هرچند…). (ص ۳۵)
  * ۶. «به» در قیدها: «بسادگی» ← «به‌سادگی». (ص ۳۸)
- * ۷. «را» چسبیده به کلمهٔ قبل: «کتابرا» ← «کتاب را». فقط پیشنهاد، بدون اصلاح
- *    خودکار، چون نام‌های خاصی مثل «سمیرا» هم به «را» ختم می‌شوند. (ص ۳۵)
+ * ۷. «را» چسبیده به کلمهٔ قبل: «کتابرا» ← «کتاب را». نام‌های خاصی مثل «لورا»،
+ *    «نورا» و «کاپرا» هم به «را» ختم می‌شوند، پس یک مدل آماری کوچک
+ *    (src/util/ezafe-model.ts، آموزش‌دیده روی ویکی‌پدیا) از روی کلمه‌های
+ *    اطراف تصمیم می‌گیرد: از ۹۰٪ اطمینان اصلاح خودکار، از ۵۰٪ پیشنهاد. (ص ۳۵)
  */
 import { createPatternRule, PatternResult } from "../util/pattern-rule";
-import { START, END, LETTER, ZWNJ, isNonJoining } from "../util/persian";
+import { START, END, LETTER, LETTER_RANGE, ZWNJ, isNonJoining } from "../util/persian";
 import { isKnown, isDictionaryWord, endsWithSilentHe, BOOK_JOINED } from "../util/words";
 import { verbForm } from "./mi-prefix";
 import hazmCompounds from "../dict/hazm-compounds.json";
@@ -28,6 +30,19 @@ import hazmBi from "../dict/hazm-bi.json";
 import commonNouns from "../dict/hazm-common-nouns.json";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 import { isPresentStem } from "./mi-prefix";
+import { raCandidates, RaCandidate } from "../util/ezafe-model";
+
+const RA_FIX = 0.9;
+const RA_SUGGEST = 0.5;
+let raText = "";
+let raCache = new Map<number, RaCandidate>();
+function raAt(text: string, start: number): RaCandidate | undefined {
+    if (text !== raText) {
+        raText = text;
+        raCache = new Map(raCandidates(text).map((c) => [c.start, c]));
+    }
+    return raCache.get(start);
+}
 
 const COMMON_NOUNS = new Set<string>(commonNouns.words);
 const ADJECTIVES = new Set<string>(hazmAdjectives.adjectives);
@@ -250,13 +265,6 @@ function check(word: string): PatternResult | null {
         return { message: `پس از «ه»ی غیرملفوظ نیم‌فاصله لازم است: «${fixed}»`, replacement: fixed, source: S_SILENT_HE };
     }
 
-    // ۷. «را» joined to the previous word: suggestion only
-    if (word.endsWith("را") && word.length >= 5) {
-        const stem = word.slice(0, -2);
-        if (isKnown(stem)) {
-            return { message: `«را» با فاصلهٔ کامل نوشته می‌شود: «${stem} را»`, replacement: stem + " را", fix: false, source: S_RA };
-        }
-    }
     return null;
 }
 
@@ -267,6 +275,35 @@ export default createPatternRule(() => ({
             // the word may continue after a ZWNJ («پیشبینی‌ها»)
             pattern: new RegExp(`${START}${LETTER}{4,}(?=${ZWNJ}|${END})`, "g"),
             check: (m) => check(m[0])
+        },
+        {
+            // ۷. plural + «را» joined: «کتاب‌هارا»، «کتابهارا» → «کتاب‌ها را»
+            pattern: new RegExp(`${START}([${LETTER_RANGE}${ZWNJ}]+?)${ZWNJ}?هارا${END}`, "g"),
+            check: (m) => {
+                const root = m[1];
+                if (root.length < 2 || !isKnown(root.replace(/\u200c/g, ""))) return null;
+                const fixed = join(root, "ها") + " را";
+                // «گندهارا»، «ویهارا» are names: fix only after a frequent word
+                const plain = root.replace(/\u200c/g, "");
+                const sure = COMMON_NOUNS.has(plain) || ADJECTIVES.has(plain);
+                return { message: `«را» با فاصلهٔ کامل نوشته می‌شود: «${fixed}»`, replacement: fixed, fix: sure ? undefined : false, source: S_RA };
+            }
+        },
+        {
+            // ۷. «را» joined: «کتابرا» → «کتاب را» (the model tells names like «لورا» apart)
+            pattern: new RegExp(`${START}(${LETTER}{2,})را${END}`, "g"),
+            check: (m) => {
+                const c = raAt(m.input, m.index);
+                if (!c || c.p < RA_SUGGEST) return null;
+                const fixed = m[1] + " را";
+                return {
+                    message: `«را» با فاصلهٔ کامل نوشته می‌شود: «${fixed}» (احتمال ${Math.round(c.p * 100)}٪)`,
+                    replacement: fixed,
+                    // a rare first part may be a place or a name («نوشرا»): suggest only
+                    fix: c.p >= RA_FIX && COMMON_NOUNS.has(m[1]) ? undefined : false,
+                    source: S_RA
+                };
+            }
         }
     ]
 }));

@@ -179,3 +179,61 @@ def candidates(text: str):
         if i + 1 >= len(toks) or not WORD.match(toks[i + 1]):
             continue
         yield features(toks, i), int(marked[i]), w
+
+
+# --- joined «را» («کتابرا» → «کتاب را») ---------------------------------------
+_KNOWN = set(json.load(open(os.path.join(_DICT, "hazm-words.json"), encoding="utf-8"))["words"])
+# pronouns and demonstratives + «را» are handled by word lists, not the model
+RA_SKIP_STEMS = {"آن", "این", "خود", "ما", "تو", "شما", "آنها", "اینها", "او", "من", "هم", "مرا", "چه"}
+
+
+def ra_features(t: str, toks: list[str], i: int) -> list[str]:
+    """Features for the token t = X + «را», at position i of toks (t itself is toks[i])."""
+    x = t[:-2]
+    w1, w2 = context(toks, i, 1, 2)
+    m1, _ = context(toks, i, -1, 2)
+    return [
+        "b",
+        "x=" + x,
+        "xs=" + x[-3:],
+        "ts=" + t[-4:],
+        "tk=" + ("1" if t in _KNOWN else "0"),
+        "xt=" + tag(x),
+        "xlen=" + str(min(len(x), 6)),
+        "w1=" + w1,
+        "w1t=" + tag(w1),
+        "w1p=" + w1[:2],
+        "w2t=" + tag(w2),
+        "m1=" + m1,
+        "m1t=" + tag(m1),
+        "xw1t=" + x + "|" + tag(w1),
+        "m1tw1t=" + tag(m1) + "|" + tag(w1),
+    ]
+
+
+def ra_candidate(t: str) -> bool:
+    """A token the «را» model looks at: X + «را», X a known word, not a pronoun."""
+    return t.endswith("را") and len(t) >= 4 and t[:-2] in _KNOWN and t[:-2] not in RA_SKIP_STEMS and ZWNJ not in t
+
+
+def ra_examples(text: str, sample_positive: float, rnd):
+    """Training examples. Wikipedia writes «را» apart, so:
+    - every joined token X + «را» in the text is a word ending in «را» (label 0: «لورا»، «کارا»);
+    - «X را» written apart becomes a synthetic joined token (label 1), sampled."""
+    toks = [plain(t) for t in tokens(normalize(text))]
+    for i, t in enumerate(toks):
+        if ra_candidate(t):
+            yield ra_features(t, toks, i), 0
+        elif i + 1 < len(toks) and toks[i + 1] == "را" and WORD.match(t):
+            joined = t + "را"
+            if ra_candidate(joined) and rnd.random() < sample_positive:
+                merged = toks[:i] + [joined] + toks[i + 2:]
+                yield ra_features(joined, merged, i), 1
+
+
+def ra_candidates(text: str):
+    """(features, token) for every candidate token in text, as the rule sees it."""
+    toks = [plain(t) for t in tokens(normalize(text))]
+    for i, t in enumerate(toks):
+        if ra_candidate(t):
+            yield ra_features(t, toks, i), t

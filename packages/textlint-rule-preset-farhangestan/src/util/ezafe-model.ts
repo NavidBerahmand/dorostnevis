@@ -10,6 +10,8 @@
 import model from "../dict/ezafe-model.json";
 import pos from "../dict/ezafe-pos.json";
 import hazmVerbs from "../dict/hazm-verbs.json";
+import raModel from "../dict/ra-model.json";
+import hazmWords from "../dict/hazm-words.json";
 
 const ZWNJ = "‌";
 const HAMZA_ABOVE = "ٔ";
@@ -212,4 +214,68 @@ function ezafeCandidatesAll(text: string): Array<[string, number]> {
         out.push([w, 1 / (1 + Math.exp(-z))]);
     });
     return out;
+}
+
+// --- joined «را» («کتابرا» → «کتاب را»): mirrors ra_features() in features.py ---
+
+
+const RA_WEIGHTS: Record<string, number> = raModel.weights as Record<string, number>;
+const HAZM_KNOWN = new Set<string>(hazmWords.words);
+const RA_SKIP_STEMS = new Set(["آن", "این", "خود", "ما", "تو", "شما", "آنها", "اینها", "او", "من", "هم", "مرا", "چه"]);
+
+function raCandidate(t: string): boolean {
+    return t.endsWith("را") && t.length >= 4 && HAZM_KNOWN.has(t.slice(0, -2)) && !RA_SKIP_STEMS.has(t.slice(0, -2)) && !t.includes(ZWNJ);
+}
+
+function raFeatures(t: string, toks: string[], i: number): string[] {
+    const x = t.slice(0, -2);
+    const [w1, w2] = context(toks, i, 1, 2);
+    const [m1] = context(toks, i, -1, 2);
+    return [
+        "b",
+        "x=" + x,
+        "xs=" + x.slice(-3),
+        "ts=" + t.slice(-4),
+        "tk=" + (HAZM_KNOWN.has(t) ? "1" : "0"),
+        "xt=" + tag(x),
+        "xlen=" + String(Math.min(x.length, 6)),
+        "w1=" + w1,
+        "w1t=" + tag(w1),
+        "w1p=" + w1.slice(0, 2),
+        "w2t=" + tag(w2),
+        "m1=" + m1,
+        "m1t=" + tag(m1),
+        "xw1t=" + x + "|" + tag(w1),
+        "m1tw1t=" + tag(m1) + "|" + tag(w1)
+    ];
+}
+
+export interface RaCandidate {
+    word: string;
+    start: number;
+    end: number;
+    /** probability that the token is X + «را» written joined */
+    p: number;
+}
+
+/** Tokens that may be X + «را» written joined, with the model's probability. */
+export function raCandidates(text: string): RaCandidate[] {
+    const raw: Array<{ tok: string; start: number }> = [];
+    TOKEN.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = TOKEN.exec(text)) !== null) raw.push({ tok: m[0], start: m.index });
+    const toks = raw.map((r) => plain(normalize(r.tok)));
+    const out: RaCandidate[] = [];
+    toks.forEach((t, i) => {
+        if (!raCandidate(t)) return;
+        let z = 0;
+        for (const f of raFeatures(t, toks, i)) z += RA_WEIGHTS[f] ?? 0;
+        out.push({ word: raw[i].tok, start: raw[i].start, end: raw[i].start + raw[i].tok.length, p: 1 / (1 + Math.exp(-z)) });
+    });
+    return out;
+}
+
+/** For the parity test: [token, probability] for every candidate. */
+export function raScoresForTest(text: string): Array<[string, number]> {
+    return raCandidates(text).map((c) => [plain(normalize(c.word)), c.p]);
 }
