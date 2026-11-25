@@ -4,6 +4,7 @@ import { inv, z } from "./helpers";
 
 new TextLintTester().run("plural-ha", rule, {
     valid: [
+        "دو علامت منهای پی در پی",
         z("کتاب‹ها، باغ‹ها، خانه‹ها، پیش‹بینی‹ها"),
         "درها و دیوارها",
         "واژه‌های مختوم به های غیرملفوظ",   // «های» = the letter ه                  // after non-joining letters joined and separate look the same
@@ -28,6 +29,7 @@ new TextLintTester().run("plural-ha", rule, {
             errors: [{}]
         },
         // a rare «Xه» before «ایم» («هلهایم», a name): no automatic fix
-        { text: "هلهایم", output: "هلهایم", errors: [{}] }
+        { text: "هلهایم", output: "هلهایم", errors: [{}] },
+
     ]
 });

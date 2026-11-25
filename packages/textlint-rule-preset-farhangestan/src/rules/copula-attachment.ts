@@ -25,7 +25,7 @@
  * - «ه»ی ملفوظ (کوه، راه) و کلمه‌های ناشناخته.
  */
 import { createPatternRule, PatternResult } from "../util/pattern-rule";
-import { START, END, LETTER, ZWNJ, isNonJoining } from "../util/persian";
+import { START, END, LETTER, LETTER_RANGE, ZWNJ, isNonJoining } from "../util/persian";
 import { isKnown, endsWithSilentHe } from "../util/words";
 import { verbForm } from "./mi-prefix";
 
@@ -103,7 +103,8 @@ export default createPatternRule(() => ({
     checks: [
         {
             // «خسته ام»، «کشتی ای»، «کتاب اش»، «پاک اند»، «پا ام»
-            pattern: new RegExp(`${START}(${LETTER}+) +(ایم|اید|اند|ام|ای|ات|اش|مان|تان|شان)${END}(?= +(${LETTER}+))?`, "g"),
+            // (the word may contain a ZWNJ: «خواب‌های تان» → «خواب‌های‌تان»)
+            pattern: new RegExp(`${START}([${LETTER_RANGE}${ZWNJ}]*${LETTER}) +(ایم|اید|اند|ام|ای|ات|اش|مان|تان|شان)${END}(?= +(${LETTER}+))?`, "g"),
             check: (m) => {
                 const [word, ending] = [m[1], m[2]];
                 const last = word[word.length - 1];

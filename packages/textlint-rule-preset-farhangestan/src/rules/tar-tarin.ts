@@ -60,11 +60,11 @@ export default createPatternRule(() => ({
         {
             // «بزرگ تر»: «تر» after a known adjective is the comparative, not «wet»
             // «لباس تر را پهن کرد»: before «را» it is the adjective «wet»
-            pattern: new RegExp(`${START}(${LETTER}+) +(تر)${END}(?! +(?:از|را)${END})`, "g"),
+            pattern: new RegExp(`${START}(${LETTER}+) +(تری|تر)${END}(?! +(?:از|را)${END})`, "g"),
             check: (m) => {
                 if (!ADJECTIVES.has(m[1]) || BLOCKED.has(m[1]) || NOT_A_STEM.has(m[1])) return null;
-                const fixed = joinWithHalfSpace(m[1], "تر");
-                return { message: `«تر» با نیم‌فاصله/بی‌فاصله به صفت می‌چسبد: «${fixed}»`, replacement: fixed };
+                const fixed = joinWithHalfSpace(m[1], m[2]);
+                return { message: `«${m[2]}» با نیم‌فاصله/بی‌فاصله به صفت می‌چسبد: «${fixed}»`, replacement: fixed };
             }
         },
         {

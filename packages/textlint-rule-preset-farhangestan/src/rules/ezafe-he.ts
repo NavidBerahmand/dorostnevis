@@ -209,6 +209,14 @@ export default createPatternRule<Options>((options) => {
                 }
             },
             {
+                // the ezafe typed as a separate hamza: «بهانهء»، «بهانه ء»، «خانه‌ٔ»
+                pattern: new RegExp(`${START}(${LETTER}*ه)(?:[ ${ZWNJ}]?ء|${ZWNJ}\u0654)(?!${LETTER})`, "g"),
+                check: (m) => {
+                    if (isPronouncedHe(m[1])) return null;
+                    return { message: `نشانهٔ اضافه پس از «ه»ی غیرملفوظ «${target}» است`, replacement: m[1].slice(0, -1) + target };
+                }
+            },
+            {
                 pattern: options.style === "he-hamza" ? /ۀ/g : /هٔ/g,
                 check: () => ({ message: `شکل یکدستِ نشانهٔ اضافه «${target}» است`, replacement: target })
             }

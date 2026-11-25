@@ -29,7 +29,11 @@ const ARABIC_TO_PERSIAN: Record<string, string> = {
     "ك": "ک", // ك
     "ہ": "ه", // ہ
     "ە": "ه", // ە
-    "ھ": "ه" // ھ
+    "ھ": "ه", // ھ
+    "ے": "ی", // ے Urdu yeh barree
+    "ۍ": "ی", // ۍ Pashto yeh
+    "ڪ": "ک", // ڪ swash kaf
+    "ۃ": "ة" // ۃ teh marbuta goal
 };
 
 /** Map a presentation-form character to its base letter(s) via NFKC. */
@@ -48,13 +52,17 @@ const FOREIGN: Record<string, string> = {
     "ك": "حرف عربی",
     "ہ": "حرف اردو",
     "ە": "حرف کردی",
-    "ھ": "حرف عربی (هاء دوچشم)"
+    "ھ": "حرف عربی (هاء دوچشم)",
+    "ے": "حرف اردو",
+    "ۍ": "حرف پشتو",
+    "ڪ": "شکل دیگری از «ک»",
+    "ۃ": "حرف اردو"
 };
 
 export default createPatternRule<Options>((options) => {
     const checks = [
         {
-            pattern: /[يىكہەھ]/g,
+            pattern: /[يىكہەھےۍڪۃ]/g,
             check: (m: RegExpExecArray) => ({
                 message: `«${m[0]}» ${FOREIGN[m[0]]} است؛ باید «${ARABIC_TO_PERSIAN[m[0]]}» فارسی نوشته شود`,
                 replacement: ARABIC_TO_PERSIAN[m[0]]
@@ -74,6 +82,16 @@ export default createPatternRule<Options>((options) => {
         {
             pattern: new RegExp(`(?<=${LETTER})\\u0640+(?=${LETTER})`, "g"),
             check: () => ({ message: "کشیده (ـ) در میان کلمه آمده است؛ باید حذف شود", replacement: "" })
+        },
+        {
+            // the same diacritic twice: «لطفاًً»
+            pattern: /([\u064B-\u0652])\1+/g,
+            check: (m: RegExpExecArray) => ({ message: "یک نشانه دو بار آمده است؛ یکی کافی است", replacement: m[1] })
+        },
+        {
+            // soft hyphen (U+00AD) between letters, from Word: «حرف­ها»
+            pattern: new RegExp(`(?<=${LETTER})\\u00AD+(?=${LETTER})`, "g"),
+            check: () => ({ message: "اینجا «خط تیرهٔ نرم» آمده است؛ باید نیم‌فاصله باشد", replacement: ZWNJ })
         },
         {
             pattern: new RegExp(`(?<=${LETTER})[\\u200E\\u200F]+(?=${LETTER})`, "g"),
