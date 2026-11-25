@@ -17,6 +17,7 @@
  * «همی» عمداً کنار گذاشته شده: تبصرهٔ همین بند می‌گوید «همی» در نقش تأکید
  * با فاصلهٔ کامل نوشته می‌شود (همی نیست اندر دوزخ…) و تشخیص این دو خودکار نیست.
  */
+import { isKnown } from "../util/words";
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, WORD_CHAR, ZWNJ } from "../util/persian";
 import hazmVerbs from "../dict/hazm-verbs.json";
@@ -83,6 +84,8 @@ export default createPatternRule(() => ({
             pattern: JOINED,
             check: (m) => {
                 if (NOT_VERBS.has(m[0])) return null;
+                // «میگوی» is «میگو» (shrimp) + «ی»
+                if (m[0].endsWith("ی") && isKnown(m[0].slice(0, -1)) && !m[1]) return null;
                 const form = verbForm(m[3]);
                 if (!form) return null;
                 const fixed = (m[1] ?? "") + m[2] + ZWNJ + form;

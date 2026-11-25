@@ -153,11 +153,13 @@ function check(word: string): PatternResult | null {
         const fixedStem = isKnown(stem) ? null : fixedCompound(stem);
         // «ایرانی» (nisba «ی» on a known word) counts as known: «ایرانیاند» → «ایرانی‌اند»
         // («-یات» is the Arabic plural: «هزلیات» is not «هزلی» + «ات»)
-        const nisba = stem.endsWith("ی") && stem.length >= 5 && isKnown(stem.slice(0, -1)) && ["ام", "ای", "ایم", "اید", "اند"].includes(suffix);
+        const nisba = stem.endsWith("ی") && stem.length >= 5 && COMMON_NOUNS.has(stem.slice(0, -1)) && ["ام", "ای", "ایم", "اید", "اند"].includes(suffix);
         if (!isKnown(stem) && !fixedStem && !nisba) continue;
         if (fixedStem) stem = fixedStem;
         // «دریای» is «دریا» + ی (ezafe), not «دری» + «ای»
         if (suffix.startsWith("ا") && isKnown(stem + "ا")) continue;
+        // «موجهات»، «وفیات»: Arabic plurals in «-ات», not «موجه» + «ات»
+        if (suffix === "ات" && !COMMON_NOUNS.has(stem)) continue;
         if (endsWithSilentHe(stem) || (stem.endsWith("ی") && AFTER_YEH.includes(suffix))) {
             const fixed = stem + ZWNJ + suffix;
             return { message: `«${suffix}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: S_COPULA };

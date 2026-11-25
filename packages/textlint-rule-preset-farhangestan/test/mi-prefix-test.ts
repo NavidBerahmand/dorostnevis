@@ -4,6 +4,7 @@ import { inv, z } from "./helpers";
 
 new TextLintTester().run("mi-prefix", rule, {
     valid: [
+        "میگوی سوخاری",
         z("می‹افکند، می‹رود، همی‹گوید"), // examples from the book, p. 39
         "می ناب نوشید.",                   // «می» the noun (wine)
         "همی نیست اندر دوزخ، جایگاه، کافران را؟", // emphatic «همی» stays separate

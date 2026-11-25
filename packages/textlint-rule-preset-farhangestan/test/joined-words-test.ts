@@ -4,6 +4,7 @@ import { inv, z } from "./helpers";
 
 new TextLintTester().run("joined-words", rule, {
     valid: [
+        "موجهات و وفیات و آمونیام",
         "استخوان و شاهدان و خاندانی",
         "رویدادهای مهم و متهمان",
         "تکمیلی و تکنیک و بومیس",

@@ -28,6 +28,8 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const [word, prefix, , alef, rest] = m;
                 if (isKnown(word)) return null;
+                // «بازاری» = «بازار» + «ی», «نادانی» = «نادان» + «ی»: not verbs
+                if (word.endsWith("ی") && isKnown(word.slice(0, -1))) return null;
                 if (verbForm(word) || isPresentStem(word)) return null; // «ماند» is a verb, not م + «اند»
                 if (rest.startsWith("یست")) return null; // ایستادن keeps its alef: بایست
                 // «نیافت» = ن + «یافت», «بیابد» = ب + «یابد»: already correct

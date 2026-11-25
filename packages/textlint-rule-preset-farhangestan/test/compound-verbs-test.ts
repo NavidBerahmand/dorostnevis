@@ -4,6 +4,7 @@ import { inv, z } from "./helpers";
 
 new TextLintTester().run("compound-verbs", rule, {
     valid: [
+        z("روی‹کردی تازه"),
         z("دربرمی‹گرفت"),
         z("فیلم‹برداری"),
         "اختصاص دادن، سخن گفتن، صحبت کرد", // p. 68

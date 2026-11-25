@@ -58,6 +58,7 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const [, noun, verb] = m;
                 if (isKnown(noun + verb)) return null; // «عملکرد»، «رویکرد»
+                if (verb.endsWith("ی") && isKnown(noun + verb.slice(0, -1))) return null; // «روی‌کردی» = «رویکرد» + «ی»
                 if (ZWNJ_NOUNS.has(m[0])) return null;
                 if (isDictionaryWord(m[0])) return null; // «خوش‌نمود»، «برون‌شد»: dictionary words, not verbs
                 // «می‌شد» is one verb (also with Arabic «ي/ى»); «دربرمی‌گرفت»: a preverb before «می»

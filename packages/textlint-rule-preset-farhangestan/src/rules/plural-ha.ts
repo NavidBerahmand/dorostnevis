@@ -12,6 +12,8 @@
  * با گزینهٔ { "mode": "required-only" } فقط موارد الزامی (کلمهٔ مختوم به «ه»)
  * گزارش می‌شوند و نویسنده می‌تواند «ها» را در بقیهٔ موارد پیوسته بنویسد.
  */
+import commonNouns from "../dict/hazm-common-nouns.json";
+import hazmAdjectives from "../dict/hazm-adjectives.json";
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, NON_JOINING, ZWNJ, joinWithHalfSpace } from "../util/persian";
 import { isKnown, isDictionaryWord } from "../util/words";
@@ -43,6 +45,9 @@ const SPACED = new RegExp(
     "g"
 );
 
+const COMMON_NOUNS = new Set<string>(commonNouns.words);
+const ADJECTIVES = new Set<string>(hazmAdjectives.adjectives);
+
 export default createPatternRule<Options>((options) => ({
     source: SOURCE,
     checks: [
@@ -66,7 +71,8 @@ export default createPatternRule<Options>((options) => ({
                 // «خانهای» = «خانه» + «ای», «خستهایم» = «خسته» + «ایم», not a plural
                 if ((suffix === "ی" || suffix === "یم") && isKnown(stem + "ه")) {
                     const copula = stem + "ه" + ZWNJ + "ا" + suffix;
-                    if (!isKnown(stem)) {
+                    // a rare «Xه» («هله» in «هلهایم», a name) is not enough for an automatic fix
+                    if (!isKnown(stem) && (COMMON_NOUNS.has(stem + "ه") || ADJECTIVES.has(stem + "ه"))) {
                         return {
                             message: `«ا${suffix}» پس از «ه» با نیم‌فاصله نوشته می‌شود: «${copula}»`,
                             replacement: copula

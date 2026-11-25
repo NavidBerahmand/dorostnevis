@@ -55,7 +55,7 @@ const AFTER_DEMONSTRATIVE = new Set([
     "روز", "روزها", "شب", "سال", "سال‌ها", "ماه", "هفته", "وقت", "زمان", "بار", "دفعه", "کار", "کارها", "حال", "چیز", "چیزها",
     "طرف", "سو", "سوی", "موقع", "لحظه", "دوره", "دوران", "مرد", "زن", "کتاب", "خانه", "شهر", "کشور", "مسئله", "موضوع",
     "مورد", "موارد", "نوع", "گروه", "قسمت", "بخش", "مقدار", "اندازه", "همه", "دو", "سه", "یکی", "دیگری", "شخص", "فرد",
-    "کس", "کسی", "مطلب", "حرف", "حرف‌ها", "راه", "دنیا", "جهان", "عمل", "امر", "نظر", "مسیر", "صورت", "شکل", "رو", "ور"
+    "کس", "کسی", "مطلب", "حرف", "حرف‌ها", "راه", "دنیا", "جهان", "عمل", "امر", "نظر", "مسیر", "صورت", "شکل"
 ]);
 
 /** Nouns that take ZWNJ after «به» (adverbs and compound prepositions, ص ۳۸ ب). */
@@ -110,7 +110,7 @@ function joinedWord(word: string): PatternResult | null {
     for (const d of ["این", "آن"]) {
         if (!word.startsWith(d)) continue;
         const rest = word.slice(d.length);
-        if (rest === "ست") return null; // «اینست»: the word lists write «این است»
+        if (rest === "ست" || rest === "رو") return null; // «اینست»، «ازاینرو»: in the word lists
         if (CONJUNCTION_PARTS.has(rest)) {
             const fixed = d + ZWNJ + rest;
             return { message: `در حروف ربط مرکّب، «${d}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: S_DEMONSTRATIVE };

@@ -26,6 +26,8 @@ new TextLintTester().run("plural-ha", rule, {
             output: z("خانه‹ها"),
             options: { mode: "required-only" },
             errors: [{}]
-        }
+        },
+        // a rare «Xه» before «ایم» («هلهایم», a name): no automatic fix
+        { text: "هلهایم", output: "هلهایم", errors: [{}] }
     ]
 });
