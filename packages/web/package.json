@@ -1,0 +1,12 @@
+{
+  "name": "dorostnevis-web",
+  "private": true,
+  "description": "صفحهٔ آزمایشی درست‌نویس: textlint و قواعد فرهنگستان در مرورگر",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.24.2"
+  }
+}

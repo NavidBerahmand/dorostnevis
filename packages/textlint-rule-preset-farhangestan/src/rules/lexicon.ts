@@ -15,7 +15,7 @@
  *   { "dictionaries": { "hamza": false } }
  */
 import { createPatternRule } from "../util/pattern-rule";
-import { START, END, escapeRegExp } from "../util/persian";
+import { START, END, ZWNJ, escapeRegExp } from "../util/persian";
 import multiSpelling from "../dict/multi-spelling.json";
 import compounds from "../dict/compounds.json";
 import hamza from "../dict/hamza.json";
@@ -63,7 +63,8 @@ function buildIndex(enabled: Options["dictionaries"]) {
     // longest forms first, so «در حالی که» wins over shorter overlaps
     const forms = [...map.keys()].sort((a, b) => b.length - a.length);
     const alternation = forms.map((f) => escapeRegExp(f).replace(/ /g, " +")).join("|");
-    const pattern = new RegExp(`${START}(?:${alternation})${END}`, "g");
+    // the word may continue after a ZWNJ: «بلیط‌ها», «اطاق‌ها»
+    const pattern = new RegExp(`${START}(?:${alternation})(?=${ZWNJ}|${END})`, "g");
     return { map, pattern };
 }
 

@@ -1,0 +1,255 @@
+<title>درست‌نویس</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&family=Noto+Naskh+Arabic:wght@400;600&display=swap">
+<style>
+  /* Layout: a proofreader's desk — the manuscript on the right, the margin notes on the left (RTL); stacked on phones. */
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --ink: #1b2433;
+    --muted: #5b6577;
+    --line: #dde2ea;
+    --lapis: #1f4e9c;
+    --lapis-soft: #e6edf8;
+    --saffron: #f2c14e;
+    --saffron-soft: #fcf0cf;
+    --judge: #8a5a00;
+    --ok: #1d7a4f;
+    --font-ui: "Vazirmatn", "Noto Sans Arabic", Tahoma, sans-serif;
+    --font-text: "Noto Naskh Arabic", "Vazirmatn", "Times New Roman", serif;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f141c; --surface: #172030; --ink: #e7ebf2; --muted: #9aa6b8; --line: #2a3446;
+      --lapis: #8fb1f2; --lapis-soft: #1c2a44; --saffron: #e0b041; --saffron-soft: #3a3016;
+      --judge: #e9b75a; --ok: #6fcf9c; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f141c; --surface: #172030; --ink: #e7ebf2; --muted: #9aa6b8; --line: #2a3446;
+    --lapis: #8fb1f2; --lapis-soft: #1c2a44; --saffron: #e0b041; --saffron-soft: #3a3016;
+    --judge: #e9b75a; --ok: #6fcf9c; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.7;
+    direction: rtl;
+  }
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding-block: 28px 48px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid;
+    gap: 20px;
+  }
+  header { display: grid; gap: 6px; }
+  h1 {
+    margin: 0;
+    font-weight: 800;
+    font-size: clamp(1.6rem, 3vw, 2.1rem);
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  h1 .zwnj-demo { color: var(--lapis); }
+  .lede { margin: 0; color: var(--muted); max-width: 62ch; }
+
+  .desk {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { .desk { grid-template-columns: minmax(0, 1fr); } }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+  }
+  .panel-title {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 220px;
+    resize: vertical;
+    font-family: var(--font-text);
+    font-size: 1.15rem;
+    line-height: 2;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+    direction: rtl;
+  }
+  textarea:focus-visible, select:focus-visible, button:focus-visible, input:focus-visible, a:focus-visible {
+    outline: 2px solid var(--lapis);
+    outline-offset: 2px;
+  }
+
+  .preview {
+    font-family: var(--font-text);
+    font-size: 1.15rem;
+    line-height: 2.2;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: var(--bg);
+    border: 1px dashed var(--line);
+    overflow-wrap: anywhere;
+    min-height: 4em;
+  }
+  .mark {
+    color: inherit;
+    text-decoration: none;
+    background: var(--saffron-soft);
+    border-bottom: 2px solid var(--saffron);
+    border-radius: 3px;
+    padding: 0 1px;
+  }
+  .mark-judge { background: transparent; border-bottom: 2px dotted var(--judge); }
+  .zw {
+    display: inline-block;
+    width: 2px;
+    height: 0.9em;
+    margin: 0 1px;
+    vertical-align: -0.1em;
+    background: var(--lapis);
+    border-radius: 1px;
+  }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .btn {
+    font: inherit;
+    font-weight: 700;
+    border: 1px solid var(--lapis);
+    background: var(--lapis);
+    color: var(--surface);
+    border-radius: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-quiet { background: transparent; color: var(--lapis); }
+  .btn-small { padding: 2px 10px; font-size: 0.85rem; }
+  .status { color: var(--ok); font-size: 0.85rem; }
+
+  .options {
+    display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+    font-size: 0.85rem; color: var(--muted);
+    border-top: 1px solid var(--line); padding-top: 12px;
+  }
+  .options label { display: inline-flex; gap: 6px; align-items: center; }
+  select {
+    font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px;
+  }
+
+  .summary { margin: 0; font-weight: 500; }
+  .issues {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; gap: 10px;
+    max-height: 72vh; overflow-y: auto;
+  }
+  .issue {
+    border: 1px solid var(--line);
+    border-inline-start: 3px solid var(--saffron);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: grid;
+    gap: 4px;
+    transition: background-color 0.4s;
+  }
+  .issue-judge { border-inline-start-color: var(--judge); }
+  .issue.flash { background: var(--lapis-soft); }
+  .issue-head { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    font-size: 0.72rem; font-weight: 700;
+    color: var(--lapis); background: var(--lapis-soft);
+    border-radius: 999px; padding: 0 8px;
+  }
+  .chip-judge { color: var(--judge); background: var(--saffron-soft); }
+  .change { margin: 0; font-family: var(--font-text); font-size: 1.1rem; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+  .from { text-decoration: line-through; text-decoration-color: var(--muted); color: var(--muted); }
+  .issue-judge .from { text-decoration: none; color: var(--ink); }
+  .to { font-weight: 600; color: var(--ok); }
+  .arrow { color: var(--muted); }
+  .msg { margin: 0; font-size: 0.9rem; }
+  .source { margin: 0; font-size: 0.78rem; color: var(--muted); }
+  .actions { display: flex; gap: 6px; margin-top: 2px; }
+
+  footer { color: var(--muted); font-size: 0.8rem; max-width: 70ch; }
+  footer p { margin: 0 0 6px; }
+
+  @media (prefers-reduced-motion: reduce) { .issue { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>درست<span class="zwnj-demo">‌</span>نویس</h1>
+    <p class="lede">متن فارسی را بنویسید یا بچسبانید. هر پیشنهاد با بند و صفحهٔ <strong>دستور خطّ فارسی</strong> (ویراست دوم، فرهنگستان، ۱۴۰۴) یا <strong>فرهنگ املایی خطّ فارسی</strong> همراه است. متن از این صفحه بیرون نمی‌رود.</p>
+  </header>
+
+  <main class="desk">
+    <section class="panel" aria-labelledby="text-title">
+      <h2 class="panel-title" id="text-title">متن</h2>
+      <textarea id="text" spellcheck="false" aria-label="متن برای بررسی"></textarea>
+      <div class="toolbar">
+        <button type="button" class="btn" id="apply-all">اعمال همهٔ اصلاح‌های خودکار</button>
+        <button type="button" class="btn btn-quiet" id="copy">رونوشت متن</button>
+        <button type="button" class="btn btn-quiet" id="sample">متن نمونه</button>
+        <button type="button" class="btn btn-quiet" id="clear">پاک کردن</button>
+        <span class="status" id="status" role="status"></span>
+      </div>
+      <h2 class="panel-title">پیش‌نمایش</h2>
+      <div class="preview" id="preview" aria-live="polite"></div>
+      <div class="options">
+        <label><input type="checkbox" id="show-zwnj"> نمایش نیم‌فاصله‌ها</label>
+        <label>«ها»ی جمع
+          <select id="plural-mode">
+            <option value="recommended">همیشه جدا (توصیهٔ کتاب)</option>
+            <option value="required-only">فقط موارد الزامی</option>
+          </select>
+        </label>
+        <label>نشانهٔ اضافه
+          <select id="ezafe-style">
+            <option value="he-yeh">ۀ</option>
+            <option value="he-hamza">هٔ</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="issues-title">
+      <h2 class="panel-title" id="issues-title">پیشنهادها</h2>
+      <p class="summary" id="summary">در حال بارگذاری قواعد…</p>
+      <ol class="issues" id="issues"></ol>
+    </section>
+  </main>
+
+  <footer>
+    <p>نسخهٔ آزمایشی. قواعد: دستور خطّ فارسی، ویراست دوم؛ فرهنگ املایی خطّ فارسی (۱۳۹۴)، با برتری ویراست دوم در تعارض‌ها؛ واژه‌نامهٔ Hazm برای تشخیص کلمه‌های شناخته‌شده.</p>
+    <p>پیشنهادهای «نیازمند تشخیص» به معنا بستگی دارند و اصلاح خودکار ندارند. اگر پیشنهادی غلط بود، متن را برای سازنده بفرستید.</p>
+  </footer>
+</div>
+
+<script src="app.js"></script>

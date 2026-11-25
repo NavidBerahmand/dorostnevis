@@ -39,6 +39,12 @@ for (const s of PRESENT_STEMS) {
 /** Nouns the book writes with a ZWNJ (ج-۲، تبصرهٔ ۲، استثنا). */
 const ZWNJ_NOUNS = new Set(["برون‌رفت", "بوم‌نگاشت", "بیرون‌شد", "ته‌نشست"]);
 
+// subjunctive without «ب» («صحبت‌کنم»، «ساخته‌شود»). Only کن/شو: «-گرد» and «-نما»
+// are also suffixes («جهان‌گرد»، «جهان‌نما»).
+for (const s of ["کن", "شو"]) {
+    for (const p of PRESENT_PERSON) FORMS.add(s + p);
+}
+
 const ALTERNATION = [...FORMS].sort((a, b) => b.length - a.length).join("|");
 
 export default createPatternRule(() => ({
@@ -51,7 +57,7 @@ export default createPatternRule(() => ({
                 if (isKnown(noun + verb)) return null; // «عملکرد»، «رویکرد»
                 if (ZWNJ_NOUNS.has(m[0])) return null;
                 if (isDictionaryWord(m[0])) return null; // «خوش‌نمود»، «برون‌شد»: dictionary words, not verbs
-                if (/^(ن?می|همی)$/.test(noun)) return null; // «می‌شد» is one verb
+                if (/^(ن?م[یيى]|هم[یيى])$/.test(noun)) return null; // «می‌شد» is one verb (also with Arabic «ي/ى»)
                 return {
                     message: `همکرد «${verb}» با فاصلهٔ کامل از «${noun}» نوشته می‌شود`,
                     replacement: `${noun} ${verb}`
