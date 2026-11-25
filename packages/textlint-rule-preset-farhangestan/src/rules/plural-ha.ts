@@ -14,7 +14,7 @@
  */
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, NON_JOINING, ZWNJ, joinWithHalfSpace } from "../util/persian";
-import { isKnown } from "../util/words";
+import { isKnown, isDictionaryWord } from "../util/words";
 
 export interface Options {
     mode?: "recommended" | "required-only";
@@ -59,6 +59,9 @@ export default createPatternRule<Options>((options) => ({
                 const stem = m[1];
                 const suffix = m[2] ?? "";
                 if (NOT_PLURAL.has(stem + "ها")) return null;
+                // a dictionary word that merely contains «ها» (درنهایت، شیربها، بااشتها):
+                // what comes before «ها» is not a word. («آنها» is a plural: «آن» is.)
+                if (isDictionaryWord(m[0]) && !isKnown(stem)) return null;
                 if (stem.length < 2) return null;
                 // «خانهای» = «خانه» + «ای», «خستهایم» = «خسته» + «ایم», not a plural
                 if ((suffix === "ی" || suffix === "یم") && isKnown(stem + "ه")) {

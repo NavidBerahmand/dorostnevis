@@ -83,6 +83,16 @@ function check(word: string): PatternResult | null {
         }
     }
 
+    // suffixes that always take ZWNJ (ترکیب‌ها، الف-۱، تبصرهٔ ۴): «ترشیجات» → «ترشی‌جات»
+    for (const suffix of ["جات", "آسا", "آگین", "باره", "فام", "وش"]) {
+        if (!word.endsWith(suffix)) continue;
+        const stem = word.slice(0, -suffix.length);
+        if (stem.length >= 2 && isKnown(stem) && !isNonJoining(stem[stem.length - 1])) {
+            const fixed = stem + ZWNJ + suffix;
+            return { message: `«-${suffix}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: "دستور خط، ترکیب‌ها، الف-۱، تبصرهٔ ۴، ص ۶۰" };
+        }
+    }
+
     // ۴. prefixes that take ZWNJ
     for (const prefix of PREFIXES) {
         if (!word.startsWith(prefix)) continue;

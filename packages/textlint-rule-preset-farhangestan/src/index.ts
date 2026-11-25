@@ -13,6 +13,7 @@ import numbers from "./rules/numbers";
 import verbPrefixAlef from "./rules/verb-prefix-alef";
 import hamzaTanvin from "./rules/hamza-tanvin";
 import arabicPrefixes from "./rules/arabic-prefixes";
+import dictionary from "./rules/dictionary";
 
 export default {
     rules: {
@@ -30,7 +31,8 @@ export default {
         "numbers": numbers,
         "verb-prefix-alef": verbPrefixAlef,
         "hamza-tanvin": hamzaTanvin,
-        "arabic-prefixes": arabicPrefixes
+        "arabic-prefixes": arabicPrefixes,
+        dictionary
     },
     rulesConfig: {
         "normalize-characters": true,
@@ -47,6 +49,7 @@ export default {
         "numbers": true,
         "verb-prefix-alef": true,
         "hamza-tanvin": true,
-        "arabic-prefixes": true
+        "arabic-prefixes": true,
+        dictionary: true
     }
 };

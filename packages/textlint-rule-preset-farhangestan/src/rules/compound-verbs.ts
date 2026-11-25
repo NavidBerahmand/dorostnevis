@@ -16,7 +16,7 @@
  */
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, ZWNJ } from "../util/persian";
-import { isKnown } from "../util/words";
+import { isKnown, isDictionaryWord } from "../util/words";
 
 const SOURCE = "دستور خط، ترکیب‌ها، ج-۲، ص ۶۸";
 
@@ -50,6 +50,7 @@ export default createPatternRule(() => ({
                 const [, noun, verb] = m;
                 if (isKnown(noun + verb)) return null; // «عملکرد»، «رویکرد»
                 if (ZWNJ_NOUNS.has(m[0])) return null;
+                if (isDictionaryWord(m[0])) return null; // «خوش‌نمود»، «برون‌شد»: dictionary words, not verbs
                 if (/^(ن?می|همی)$/.test(noun)) return null; // «می‌شد» is one verb
                 return {
                     message: `همکرد «${verb}» با فاصلهٔ کامل از «${noun}» نوشته می‌شود`,

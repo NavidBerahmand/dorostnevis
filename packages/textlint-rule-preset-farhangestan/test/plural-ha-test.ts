@@ -8,6 +8,7 @@ new TextLintTester().run("plural-ha", rule, {
         "درها و دیوارها",
         "واژه‌های مختوم به های غیرملفوظ",   // «های» = the letter ه                  // after non-joining letters joined and separate look the same
         "تنها آمد. تنهایی سخت است. بهای نان. انتها و اشتها", // not plurals
+        "درنهایت، شیربها، بااشتها",                       // dictionary words containing «ها»
         {
             text: "کتابها را خواندم.",
             options: { mode: "required-only" }
