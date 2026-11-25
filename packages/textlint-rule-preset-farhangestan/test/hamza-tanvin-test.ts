@@ -12,6 +12,7 @@ new TextLintTester().run("hamza-tanvin", rule, {
         inv("جزءاً", "جزئاً"),
         inv("حقیقةً", "حقیقتاً"),
         inv("اصلًا", "اصلاً"),
-        { text: "این علاقة", errors: [{}] }
+        { text: "این علاقة", errors: [{}] },
+        inv("ابتداءً", "ابتدائاً")
     ]
 });

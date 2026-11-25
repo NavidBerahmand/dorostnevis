@@ -21,7 +21,7 @@
  */
 import { createPatternRule, PatternResult } from "../util/pattern-rule";
 import { START, END, LETTER, ZWNJ, isNonJoining } from "../util/persian";
-import { isKnown, endsWithSilentHe, BOOK_JOINED } from "../util/words";
+import { isKnown, isDictionaryWord, endsWithSilentHe, BOOK_JOINED } from "../util/words";
 import { verbForm } from "./mi-prefix";
 import hazmCompounds from "../dict/hazm-compounds.json";
 import hazmBi from "../dict/hazm-bi.json";
@@ -63,6 +63,12 @@ const AFTER_YEH = ["ایم", "اید", "اند", "ام", "ای", "اش", "ات"]
 
 const PREFIXES = ["برون", "بوم", "تک", "درون", "زیست", "میان", "نیم", "هم"];
 
+/** Present stems that build many compounds (ب-۲): «زبان‌شناس»، «ریاضی‌دان». */
+const PRODUCTIVE_STEMS = [
+    "شناس", "نویس", "پرداز", "پرور", "گذار", "پذیر", "رسان", "فروش", "آموز", "پرست", "نگار", "نشین",
+    "سنج", "گزین", "افزا", "شکن", "تراش", "دان", "خوان", "بین", "یاب"
+];
+
 /** Join two parts the way the book does: ZWNJ after a joining letter, nothing after a non-joining one. */
 function join(a: string, b: string): string {
     return isNonJoining(a[a.length - 1]) ? a + b : a + ZWNJ + b;
@@ -80,8 +86,39 @@ function ownedElsewhere(word: string): boolean {
 /** Words these heuristics misread: «همچین» (colloquial «such»), «تکنیک» (technique). */
 const NOT_COMPOUNDS = new Set(["همچین", "همچی", "همچو", "همینطوری"]);
 
+/** Second part a present stem (ب-۲). Runs before the known-word guard. */
+function presentStemCompound(word: string): PatternResult | null {
+    if (isDictionaryWord(word) || BOOK_JOINED.has(word)) return null;
+    // plurals and nisba forms of known words: «شاهدان» (شاهد + ان)، «خاندانی» (خاندان + ی)
+    if (word.endsWith("ان")) {
+        const root = word.slice(0, -2);
+        if (isKnown(root) && !PRODUCTIVE_STEMS.some((st) => root.endsWith(st))) return null;
+    }
+    if (word.endsWith("ی") && isDictionaryWord(word.slice(0, -1))) return null;
+    // second part a present stem (ترکیب‌ها، ب-۲): «ریاضیدان» → «ریاضی‌دان»، «زبانشناسی» → «زبان‌شناسی».
+    // Lexicalized joined forms («استاندار»، «خبرنگار») are in the dictionary and are kept;
+    // Hazm also counts common misspellings («ریاضیدان») as words, so it is not consulted.
+    for (const stem of PRODUCTIVE_STEMS) {
+        const at = word.lastIndexOf(stem);
+        if (at < 3) continue;
+        const a = word.slice(0, at);
+        const tail = word.slice(at + stem.length);
+        if (!["", "ی", "ان", "انه", "ها", "های"].includes(tail) || !solidPart(a) || a === "است") continue;
+        // «دان»، «خوان»، «بین» end many simple words: require a frequent noun before them
+        if (["دان", "خوان", "بین", "یاب"].includes(stem) && !(COMMON_NOUNS.has(a) || (a.endsWith("ی") && COMMON_NOUNS.has(a.slice(0, -1))))) continue;
+        const fixed = join(a, stem + tail);
+        if (fixed === word) continue;
+        return { message: `جزء دوم بن مضارع است و با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: "دستور خط، ترکیب‌ها، ب-۲، ص ۶۲" };
+    }
+
+    return null;
+}
+
 function check(word: string): PatternResult | null {
-    if (isKnown(word) || NOT_COMPOUNDS.has(word) || word.startsWith("تکن")) return null;
+    if (NOT_COMPOUNDS.has(word) || word.startsWith("تکن")) return null;
+    const stemCompound = presentStemCompound(word);
+    if (stemCompound) return stemCompound;
+    if (isKnown(word)) return null;
     // plural in «-ان» of a known word: «متهمان» is not «مته» + «مان»
     if (word.endsWith("ان") && isKnown(word.slice(0, -2))) return null;
 
@@ -135,7 +172,9 @@ function check(word: string): PatternResult | null {
     }
 
     // suffixes that always take ZWNJ (ترکیب‌ها، الف-۱، تبصرهٔ ۴): «ترشیجات» → «ترشی‌جات»
-    for (const suffix of ["جات", "آسا", "آگین", "باره", "فام", "وش"]) {
+    // (and «-وار»، «-سان» (تبصرۀ ۱ و ۲) and «-خانه»، «-نامه» (تبصرۀ ۵), whose lexicalized
+    // joined forms («بزرگوار»، «یکسان»، «کتابخانه») are known words and never reach here)
+    for (const suffix of ["جات", "آسا", "آگین", "باره", "فام", "وش", "وار", "سان", "خانه", "نامه"]) {
         if (!word.endsWith(suffix)) continue;
         const stem = word.slice(0, -suffix.length);
         if (stem.length >= 2 && isKnown(stem) && !isNonJoining(stem[stem.length - 1])) {
@@ -182,6 +221,13 @@ function check(word: string): PatternResult | null {
             const fixed = "به" + ZWNJ + rest;
             return { message: `«به» در قید با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: S_BE };
         }
+    }
+
+    // «-گر، -گری» after «ط، ظ» take ZWNJ (ترکیب‌ها، الف-۱، تبصرۀ ۳): «افراطگری» → «افراط‌گری»
+    const gar = word.match(/^(.+[طظ])(گر|گری|گرا|گرایی)$/);
+    if (gar && isKnown(gar[1])) {
+        const fixed = gar[1] + ZWNJ + gar[2];
+        return { message: `«-${gar[2]}» پس از «${gar[1].slice(-1)}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: "دستور خط، ترکیب‌ها، الف-۱، تبصرۀ ۳، ص ۶۰" };
     }
 
     // ۳. first part ending in a silent ه: «بهانهگیر» → «بهانه‌گیر».

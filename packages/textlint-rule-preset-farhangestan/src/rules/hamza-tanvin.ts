@@ -38,6 +38,11 @@ export default createPatternRule(() => ({
             check: () => ({ message: "پیش از تنوین نصب، همزه روی کرسی می‌نشیند: «ئاً»", replacement: "ئاً" })
         },
         {
+            // «ابتداءً»، «استثناءً»: tanvin on the bare hamza → «ابتدائاً»
+            pattern: new RegExp(`(?<=${LETTER})ء\\u064Bا?`, "g"),
+            check: () => ({ message: "پیش از تنوین نصب، همزه روی کرسی می‌نشیند و تنوین روی الف: «ئاً»", replacement: "ئاً" })
+        },
+        {
             pattern: new RegExp(`(?<=${LETTER})ة\\u064B`, "g"),
             check: () => ({ message: "«ة» پیش از تنوین نصب «ت» می‌شود: «تاً»", replacement: "تاً" })
         },

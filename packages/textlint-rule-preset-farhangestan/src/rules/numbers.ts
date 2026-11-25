@@ -71,6 +71,22 @@ export default createPatternRule(() => ({
             }
         },
         {
+            // numbers with «و»: full spaces («بیست‌و‌یک»، «بیست‌ویک»، «بیستویک» → «بیست و یک»)
+            pattern: new RegExp(`${START}(${[...TENS, ...HUNDREDS, ...BIG].join("|")})(?:${ZWNJ}?و${ZWNJ}?| و${ZWNJ}|${ZWNJ}و )(${NUMBER_WORDS.join("|")}|${BIG.join("|")})${END}`, "g"),
+            check: (m) => {
+                const fixed = `${m[1]} و ${m[2]}`;
+                return { message: `اجزای عدد واودار با فاصلهٔ کامل نوشته می‌شوند: «${fixed}»`, replacement: fixed };
+            }
+        },
+        {
+            // «۴۷ سالگی» → «۴۷سالگی» (ب-۱۰-الف)
+            pattern: new RegExp(`(?<![۰-۹0-9])([۰-۹0-9]+)[ ${ZWNJ}](سالگی|ساله|ماهه|روزه|سالة|درصدی|نفره|طبقه|گانه)${END}`, "g"),
+            check: (m) => {
+                const fixed = m[1] + m[2];
+                return { message: `واژهٔ مرکّب با عدد پیوسته نوشته می‌شود: «${fixed}»`, replacement: fixed };
+            }
+        },
+        {
             // «سی ام»، «سی امین» → «سی‌ام»
             pattern: new RegExp(`${START}سی +(ام|امی|امین)${END}`, "g"),
             check: (m) => {
