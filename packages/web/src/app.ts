@@ -77,6 +77,44 @@ const copyBtn = $<HTMLButtonElement>("copy");
 const status = $<HTMLSpanElement>("status");
 
 let messages: Msg[] = [];
+/** Other rules' messages folded into card i (same word, same correction). */
+let extras: Msg[][] = [];
+
+/**
+ * Several rules can propose the same correction for the same word («زکوة» ←
+ * «زکات»: the book's list, the dictionary and the «ة» rule): one card, with
+ * every rule and source. Different corrections for one word stay apart.
+ */
+function mergeSame(msgs: Msg[], text: string): { primary: Msg[]; extra: Msg[][] } {
+    const spanOf = (m: Msg) =>
+        wordAround(text, Math.min(m.range[0], m.fix?.range[0] ?? m.range[0]), Math.max(m.range[1], m.fix?.range[1] ?? m.range[1]));
+    const groups = new Map<string, Msg[]>();
+    for (const m of msgs) {
+        const k = spanOf(m).join(":");
+        groups.set(k, [...(groups.get(k) ?? []), m]);
+    }
+    // the book's own rules first, then the dictionary, then the statistical models
+    const rank = (m: Msg) => (m.ruleId === "dictionary" ? 1 : /احتمال/.test(m.message) ? 2 : 0);
+    const primary: Msg[] = [];
+    const extra: Msg[][] = [];
+    for (const [k, group] of groups) {
+        const [ws, we] = k.split(":").map(Number);
+        const fixes = group.filter((m) => m.fix);
+        const results = new Set(fixes.map((m) => text.slice(ws, m.fix!.range[0]) + m.fix!.text + text.slice(m.fix!.range[1], we)));
+        if (fixes.length === 0 || results.size > 1) {
+            for (const m of group) {
+                primary.push(m);
+                extra.push([]);
+            }
+            continue;
+        }
+        const best = [...fixes].sort((a, b) => rank(a) - rank(b))[0];
+        primary.push(best);
+        extra.push(group.filter((m) => m !== best));
+    }
+    const order = primary.map((m, i) => i).sort((a, b) => primary[a].range[0] - primary[b].range[0]);
+    return { primary: order.map((i) => primary[i]), extra: order.map((i) => extra[i]) };
+}
 /** What «این پیشنهاد غلط است» would send for each card. */
 let reports: Report[] = [];
 let timer: number | undefined;
@@ -255,19 +293,24 @@ function renderList(text: string) {
     reports = [];
     messages.forEach((m, i) => {
         const split = splitMessage(m);
-        const source = split.source;
+        const members = [m, ...extras[i]];
+        const sources = [...new Set(members.map((x) => splitMessage(x).source).filter(Boolean))];
+        const source = sources.join(" | ");
+        const labels = [...new Set(members.map((x) => RULE_LABELS[x.ruleId] ?? x.ruleId))];
         const { msg, p } = takeConfidence(split.text);
         const li = document.createElement("li");
         li.id = `issue-${i}`;
-        const meter = meterFor(m, p);
+        // a book rule agreeing with a model's guess: the book's certainty
+        const bookAgrees = extras[i].some((x) => x.fix && !/احتمال/.test(x.message) && x.ruleId !== "punctuation");
+        const meter = bookAgrees ? bookMeter() : meterFor(m, p);
         li.className = (m.fix ? "issue" : "issue issue-judge") + (meter.includes("confidence-none") ? " has-note" : " has-confidence");
         // show the whole word around the change, so «ي ← ی» reads «رييس ← رئیس»
         const [ws, we] = wordAround(text, Math.min(m.range[0], m.fix?.range[0] ?? m.range[0]), Math.max(m.range[1], m.fix?.range[1] ?? m.range[1]));
         const original = text.slice(ws, we);
         const fixed = m.fix ? text.slice(ws, m.fix.range[0]) + m.fix.text + text.slice(m.fix.range[1], we) : "";
         reports.push({
-            rule: m.ruleId,
-            ruleLabel: RULE_LABELS[m.ruleId] ?? m.ruleId,
+            rule: members.map((x) => x.ruleId).join(", "),
+            ruleLabel: labels.join("، "),
             message: msg,
             source,
             original,
@@ -280,7 +323,7 @@ function renderList(text: string) {
         li.innerHTML = `
             ${meter}
             <div class="issue-head">
-                <span class="chip">${esc(RULE_LABELS[m.ruleId] ?? m.ruleId)}</span>
+                ${labels.map((l) => `<span class="chip">${esc(l)}</span>`).join("")}
                 ${m.fix ? "" : m.ruleId === "may-break" ? '<span class="chip chip-style">پیشنهاد سبکی</span>' : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
             </div>
             <p class="change">
@@ -288,7 +331,7 @@ function renderList(text: string) {
                 ${m.fix ? `<span class="arrow" aria-hidden="true">←</span><span class="to">${show(fixed) || "(حذف)"}</span>` : ""}
             </p>
             <p class="msg">${esc(msg)}</p>
-            ${source ? `<p class="source">${citation(source)}</p>` : ""}
+            ${sources.map((src) => `<p class="source">${citation(src)}</p>`).join("")}
             <div class="actions">
                 ${m.fix ? `<button type="button" class="btn btn-small" data-apply="${i}">اعمال</button>` : ""}
                 <button type="button" class="btn btn-small btn-quiet" data-ignore="${i}">نادیده</button>
@@ -323,9 +366,12 @@ async function check() {
     const text = input.value;
     status.textContent = "در حال بررسی…";
     const result = await kernel.lintText(text, options());
-    messages = (result.messages as unknown as Msg[])
-        .filter((m) => !ignored.has(key(m, text)))
-        .sort((a, b) => a.range[0] - b.range[0]);
+    const merged = mergeSame(
+        (result.messages as unknown as Msg[]).filter((m) => !ignored.has(key(m, text))),
+        text
+    );
+    messages = merged.primary;
+    extras = merged.extra;
     renderPreview(text);
     renderList(text);
     status.textContent = "";
@@ -356,19 +402,20 @@ list.addEventListener("click", (ev) => {
     if (a) applyFix(messages[Number(a.dataset.apply)]);
     if (rp) {
         const i = Number(rp.dataset.report);
-        const m = messages[i];
+        const members = [messages[i], ...extras[i]];
         const text = input.value;
         void openReport(reports[i]).then((ok) => {
             if (!ok || input.value !== text) return;
             // a reported card goes away like an ignored one
-            ignored.add(key(m, text));
+            for (const x of members) ignored.add(key(x, text));
             void check().then(() => {
                 status.textContent = "گزارش رسید. سپاس!";
             });
         });
     }
     if (ig) {
-        ignored.add(key(messages[Number(ig.dataset.ignore)], input.value));
+        const i = Number(ig.dataset.ignore);
+        for (const x of [messages[i], ...extras[i]]) ignored.add(key(x, input.value));
         check();
     }
 });
