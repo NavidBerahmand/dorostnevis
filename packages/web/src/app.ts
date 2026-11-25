@@ -77,7 +77,7 @@ function options() {
     const rules = Object.entries(all).map(([ruleId, rule]) => {
         let opts: object | boolean = true;
         if (ruleId === "plural-ha") opts = { mode: pluralMode.value };
-        if (ruleId === "ezafe-he") opts = { style: ezafeStyle.value };
+        if (ruleId === "ezafe-he") opts = { style: ezafeStyle.value, formal: mode.value !== "dialogue" };
         return { ruleId, rule: rule as any, options: opts };
     });
     return { ext: ".txt", plugins: [{ pluginId: "text", plugin: (textPlugin as any).default ?? textPlugin }], rules };
