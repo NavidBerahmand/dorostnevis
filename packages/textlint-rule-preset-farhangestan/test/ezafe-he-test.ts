@@ -21,6 +21,10 @@ new TextLintTester().run("ezafe-he", rule, {
         inv(z("نامه‹ی او"), "نامۀ او"),
         inv("خانهٔ او", "خانۀ او"),
         inv("کتابه من را بده.", "کتاب من را بده."),
+        inv("خانه من بزرگ است.", "خانۀ من بزرگ است."),
+        inv("این نامه او است.", "این نامۀ او است."),
+        // a verb after the pronoun: the sentence may split there («در خانه، من نبودم»)
+        { text: "در خانه من نبودم.", output: "در خانه من نبودم.", errors: [{}] },
         inv("دوسته شما آمد.", "دوست شما آمد."),
         // before other words: suggestion only
         { text: "دوسته علی آمد.", output: "دوسته علی آمد.", errors: [{}] },

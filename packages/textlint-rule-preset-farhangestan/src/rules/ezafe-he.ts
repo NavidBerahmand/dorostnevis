@@ -24,7 +24,13 @@
  */
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, ZWNJ } from "../util/persian";
-import { isKnown } from "../util/words";
+import { isKnown, endsWithSilentHe } from "../util/words";
+import { verbForm } from "./mi-prefix";
+import hazmAdjectives from "../dict/hazm-adjectives.json";
+import commonNouns from "../dict/hazm-common-nouns.json";
+
+const ADJECTIVES = new Set<string>(hazmAdjectives.adjectives);
+const COMMON_NOUNS = new Set<string>(commonNouns.words);
 
 export interface Options {
     /** "he-yeh" → ۀ (U+06C0, the book's form); "he-hamza" → هٔ (ه + U+0654). */
@@ -69,6 +75,13 @@ function ezafeWrittenAsHe(word: string): string | null {
     return stem;
 }
 
+const EZAFE_PRONOUNS = ["من", "تو", "او", "ما", "شما", "ایشان", "آنها", "آن‌ها", "وی"];
+/** Conjunctions and adverbs in «ه»: «بلکه ما»، «همیشه او» are not ezafes. */
+const NOT_EZAFE = new Set([
+    "بلکه", "که", "چه", "آنچه", "هرچه", "چنانچه", "اگرچه", "گرچه", "همیشه", "البته", "تازه", "دوباره", "همواره",
+    "هماره", "یکباره", "وگرنه", "نه", "آهسته", "ناگه", "شبانه", "روزانه", "همانا", "زیراکه", "چنانکه", "آنکه", "اینکه"
+]);
+
 export default createPatternRule<Options>((options) => {
     const target = options.style === "he-hamza" ? "هٔ" : "ۀ";
     return {
@@ -98,6 +111,27 @@ export default createPatternRule<Options>((options) => {
                         message: `کسرهٔ اضافه با «ه» نوشته نمی‌شود؛ باید «${stem} ${next}» (یا «${stem}ِ ${next}») نوشته شود`,
                         replacement: stem,
                         fix: pronoun ? undefined : false
+                    };
+                }
+            },
+            {
+                // «خانه من» → «خانۀ من»: before a personal pronoun the word is an ezafe.
+                // When a verb follows the pronoun the sentence may split there
+                // («در خانه من نبودم»), so that case is only suggested.
+                pattern: new RegExp(`${START}(${LETTER}{2,}ه) (${EZAFE_PRONOUNS.join("|")})${END}(?: +(${LETTER}+))?`, "g"),
+                check: (m) => {
+                    const word = m[1];
+                    if (isPronouncedHe(word) || !endsWithSilentHe(word) || !isKnown(word) || NOT_EZAFE.has(word)) return null;
+                    // adjectives and participles rarely take a pronoun as ezafe: «خسته من»، «رفته او»
+                    if ((ADJECTIVES.has(word) && !COMMON_NOUNS.has(word)) || verbForm(word.slice(0, -1))) return null;
+                    const next = m[3];
+                    const verbNext = next !== undefined && next !== "است" && (verbForm(next) !== null || /^(ن?می|ب|ن)/.test(next) && verbForm(next.replace(/^(ن?می|ب|ن)/, "")) !== null);
+                    const fixed = word.slice(0, -1) + target;
+                    return {
+                        message: `نشانهٔ اضافه پس از «ه»ی غیرملفوظ «${target}» است: «${fixed} ${m[2]}»`,
+                        replacement: fixed,
+                        end: word.length,
+                        fix: verbNext ? false : undefined
                     };
                 }
             },

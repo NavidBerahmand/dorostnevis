@@ -47,7 +47,7 @@ const PREFIXES = [
 /** Prefix-like words followed by a verb are usually a separate adverb: «کار پیش رفت». */
 const ADVERB_LIKE = new Set(["پیش", "باز", "بر", "میان"]);
 /** Never the second part of a prefixed word: «باز هم» (again), «پیش از». */
-const FUNCTION_WORDS = new Set(["هم", "از", "به", "با", "در", "را", "که", "و", "تا", "نیز", "یا", "این", "آن", "چه", "هر", "بر", "رو", "او", "ما", "من", "تو"]);
+const FUNCTION_WORDS = new Set(["هم", "از", "به", "با", "در", "را", "که", "و", "تا", "نیز", "یا", "این", "آن", "چه", "هر", "بر", "رو", "روی", "سر", "او", "ما", "من", "تو"]);
 /** «آن/این» + these are compound conjunctions with ZWNJ: «آن‌طور»، «این‌قدر» (ص ۳۴، تبصرۀ ۱). */
 const CONJUNCTION_PARTS = new Set(["طور", "گونه", "قدر", "سان", "چنان"]);
 /** Nouns that so often follow «این/آن» that a joined form is a typo, not a name. */
@@ -110,6 +110,7 @@ function joinedWord(word: string): PatternResult | null {
     for (const d of ["این", "آن"]) {
         if (!word.startsWith(d)) continue;
         const rest = word.slice(d.length);
+        if (rest === "ست") return null; // «اینست»: the word lists write «این است»
         if (CONJUNCTION_PARTS.has(rest)) {
             const fixed = d + ZWNJ + rest;
             return { message: `در حروف ربط مرکّب، «${d}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: S_DEMONSTRATIVE };

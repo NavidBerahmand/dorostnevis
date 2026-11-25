@@ -25,6 +25,16 @@ import { isKnown, endsWithSilentHe, BOOK_JOINED } from "../util/words";
 import { verbForm } from "./mi-prefix";
 import hazmCompounds from "../dict/hazm-compounds.json";
 import hazmBi from "../dict/hazm-bi.json";
+import commonNouns from "../dict/hazm-common-nouns.json";
+import hazmAdjectives from "../dict/hazm-adjectives.json";
+import { isPresentStem } from "./mi-prefix";
+
+const COMMON_NOUNS = new Set<string>(commonNouns.words);
+const ADJECTIVES = new Set<string>(hazmAdjectives.adjectives);
+/** A word common enough to be a compound part, not a rare homograph («یکه»، «ستد»). */
+function solidPart(w: string): boolean {
+    return COMMON_NOUNS.has(w) || ADJECTIVES.has(w) || isPresentStem(w) || (w.endsWith("ی") && (COMMON_NOUNS.has(w.slice(0, -1)) || ADJECTIVES.has(w.slice(0, -1))));
+}
 
 const COMPOUNDS: Record<string, string> = hazmCompounds.pairs;
 const BI: Record<string, string> = hazmBi.pairs;
@@ -33,7 +43,10 @@ const BI_EXCEPTIONS = new Set(["بیجا", "بیچاره", "بیخود", "بید
 /** The corrected form of a joined compound, if we know one («بیحوصله» → «بی‌حوصله»). */
 function fixedCompound(word: string): string | null {
     if (BI_EXCEPTIONS.has(word)) return null;
-    return COMPOUNDS[word] ?? BI[word] ?? null;
+    const fixed = COMPOUNDS[word] ?? BI[word] ?? null;
+    // Hazm also lists names split into syllables («لی‌لی»): skip when no part has 3 letters
+    if (fixed && fixed.split(ZWNJ).every((p) => p.length <= 2)) return null;
+    return fixed;
 }
 
 const S_COMPOUND = "دستور خط، ترکیب‌ها، بخش ب، ص ۶۱–۶۷";
@@ -64,13 +77,20 @@ function ownedElsewhere(word: string): boolean {
     );
 }
 
+/** Words these heuristics misread: «همچین» (colloquial «such»), «تکنیک» (technique). */
+const NOT_COMPOUNDS = new Set(["همچین", "همچی", "همچو", "همینطوری"]);
+
 function check(word: string): PatternResult | null {
-    if (isKnown(word)) return null;
+    if (isKnown(word) || NOT_COMPOUNDS.has(word) || word.startsWith("تکن")) return null;
+    // plural in «-ان» of a known word: «متهمان» is not «مته» + «مان»
+    if (word.endsWith("ان") && isKnown(word.slice(0, -2))) return null;
 
     // three parts joined, where the first two are a compound we can fix and
     // the third a copula/possessive ending: «بیحوصلهاند» → «بی‌حوصله‌اند».
     // Checked before ownedElsewhere(): the بی- rule only sees whole words.
-    for (const suffix of AFTER_HE) {
+    // (plurals are left to the «ها» rule: «رویدادهای» is not «رویداده» + «ای»)
+    const plural = /ها(ی|یی|یم|یت|یش|یمان|یتان|یشان)?$/.test(word);
+    for (const suffix of plural ? [] : AFTER_HE) {
         if (!word.endsWith(suffix)) continue;
         const stem = word.slice(0, -suffix.length);
         const fixedStem = isKnown(stem) ? null : fixedCompound(stem);
@@ -83,7 +103,7 @@ function check(word: string): PatternResult | null {
     if (ownedElsewhere(word)) return null;
 
     // ۱. compounds Hazm writes with ZWNJ
-    const compound = COMPOUNDS[word];
+    const compound = fixedCompound(word) && COMPOUNDS[word] ? COMPOUNDS[word] : null;
     if (compound) {
         return { message: `ترکیب با نیم‌فاصله نوشته می‌شود: «${compound}»`, replacement: compound, source: S_COMPOUND };
     }
@@ -94,7 +114,10 @@ function check(word: string): PatternResult | null {
         let stem = word.slice(0, -suffix.length);
         // three parts joined: «بیحوصلهاند» = «بیحوصله» (itself fixable) + «اند»
         const fixedStem = isKnown(stem) ? null : fixedCompound(stem);
-        if (!isKnown(stem) && !fixedStem) continue;
+        // «ایرانی» (nisba «ی» on a known word) counts as known: «ایرانیاند» → «ایرانی‌اند»
+        // («-یات» is the Arabic plural: «هزلیات» is not «هزلی» + «ات»)
+        const nisba = stem.endsWith("ی") && stem.length >= 4 && isKnown(stem.slice(0, -1)) && ["ام", "ای", "ایم", "اید", "اند"].includes(suffix);
+        if (!isKnown(stem) && !fixedStem && !nisba) continue;
         if (fixedStem) stem = fixedStem;
         // «دریای» is «دریا» + ی (ezafe), not «دری» + «ای»
         if (suffix.startsWith("ا") && isKnown(stem + "ا")) continue;
@@ -103,7 +126,8 @@ function check(word: string): PatternResult | null {
             return { message: `«${suffix}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: S_COPULA };
         }
     }
-    if (word.endsWith("است")) {
+    // «شهرهاست» is «شهرها» + «ست», not «شهره» + «است»
+    if (word.endsWith("است") && !(word.endsWith("هاست") && isKnown(word.slice(0, -4)))) {
         const stem = word.slice(0, -3);
         if (isKnown(stem) && endsWithSilentHe(stem)) {
             return { message: "«است» با فاصلهٔ کامل نوشته می‌شود", replacement: stem + " است", source: S_COPULA };
@@ -116,7 +140,9 @@ function check(word: string): PatternResult | null {
         const stem = word.slice(0, -suffix.length);
         if (stem.length >= 2 && isKnown(stem) && !isNonJoining(stem[stem.length - 1])) {
             const fixed = stem + ZWNJ + suffix;
-            return { message: `«-${suffix}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: "دستور خط، ترکیب‌ها، الف-۱، تبصرهٔ ۴، ص ۶۰" };
+            // «مرگوش» (a place) is not «مرگ» + «وش»: the rarer suffixes are only suggested
+            const rare = suffix === "وش" || suffix === "فام";
+            return { message: `«-${suffix}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, fix: rare ? false : undefined, source: "دستور خط، ترکیب‌ها، الف-۱، تبصرهٔ ۴، ص ۶۰" };
         }
     }
 
@@ -124,7 +150,9 @@ function check(word: string): PatternResult | null {
     for (const prefix of PREFIXES) {
         if (!word.startsWith(prefix)) continue;
         const rest = word.slice(prefix.length);
-        if (rest.length >= 2 && isKnown(rest)) {
+        // «تکمیلی» is «تکمیل» + «ی», not «تک» + «میلی»; «بومیس» is a name
+        if (word.endsWith("ی") && isKnown(word.slice(0, -1))) continue;
+        if (rest.length >= 3 && isKnown(rest) && (solidPart(rest) || isKnown(join(prefix, rest)))) {
             const fixed = join(prefix, rest);
             return { message: `«${prefix}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: S_PREFIX };
         }
@@ -149,7 +177,8 @@ function check(word: string): PatternResult | null {
         const rest = word.slice(1);
         // the base must be a known word too: «زودی» ← «زود», «سادگی» ← «ساده»
         const base = rest.endsWith("گی") ? rest.slice(0, -2) + "ه" : rest.slice(0, -1);
-        if (isKnown(rest) && isKnown(base) && !verbForm(rest) && !BOOK_JOINED.has(word)) {
+        // an adverb from an adjective («سادگی» ← «ساده»); «بزندگی»، «بحکمرانی» are «به» + noun
+        if (isKnown(rest) && ADJECTIVES.has(base) && !COMMON_NOUNS.has(rest) && !verbForm(rest) && !BOOK_JOINED.has(word)) {
             const fixed = "به" + ZWNJ + rest;
             return { message: `«به» در قید با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: S_BE };
         }
@@ -164,8 +193,10 @@ function check(word: string): PatternResult | null {
         const b = word.slice(i);
         if (isKnown(a) && isKnown(b)) splits.push([a, b]);
     }
-    const heSplits = splits.filter(([a]) => a.length >= 3 && endsWithSilentHe(a));
-    if (heSplits.length > 0 && heSplits.length === splits.length) {
+    const heSplits = splits.filter(([a, b]) => a.length >= 3 && b.length >= 3 && endsWithSilentHe(a) && solidPart(b));
+    // any other way to split the word into two known words makes it ambiguous
+    const otherSplits = splits.filter(([a]) => !(a.length >= 3 && endsWithSilentHe(a)));
+    if (heSplits.length > 0 && otherSplits.length === 0) {
         const [a, b] = heSplits[heSplits.length - 1];
         const fixed = a + ZWNJ + b;
         return { message: `پس از «ه»ی غیرملفوظ نیم‌فاصله لازم است: «${fixed}»`, replacement: fixed, source: S_SILENT_HE };
