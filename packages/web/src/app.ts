@@ -7,6 +7,7 @@ import textPlugin from "@textlint/textlint-plugin-text";
 import preset from "../../textlint-rule-preset-farhangestan/src/index";
 import { loadSpellingLexicon } from "../../textlint-rule-preset-farhangestan/src/util/speller";
 import shekaste from "../../textlint-rule-preset-shekaste/src/index";
+import virayesh from "../../textlint-rule-preset-virayesh/src/index";
 import { openReport, sentenceAround, setupOwnerPanel, Report } from "./report";
 
 type Msg = {
@@ -25,7 +26,8 @@ const SAMPLE = [
     "من خستهام، ولی هم‌چنین باید پیش از آنکه شب شود با او صحبت‌کنم.",
     "زبانشناسی و روانشناسی دو رشته ی همسو هستند؛ اما آدم بیسواد نمیتواند آنرا بفهمد.",
     "بمحض رسیدن، کتاب اش را از خانه من آورد؛ واقعا آنروز ریاضیدان ها چه طور اینگونه فکر میکردند؟",
-    "او نتیجه نهایی را اعلام کرد و همه دفترهارا جمع کرد؛ بعد مسیررا عوض کردیم."
+    "او نتیجه نهایی را اعلام کرد و همه دفترهارا جمع کرد؛ بعد مسیررا عوض کردیم.",
+    "این طرح مورد بررسی قرار گرفت و مسئولین گفتند نتیجه جهت اطلاع عموم در رابطه با بودجه منتشر می‌شود و قابل قبول می‌باشد."
 ].join("\n");
 
 const RULE_LABELS: Record<string, string> = {
@@ -49,7 +51,14 @@ const RULE_LABELS: Record<string, string> = {
     spelling: "غلط تایپی",
     punctuation: "نشانه‌گذاری",
     "over-broken": "شکستن بی‌جا",
-    "may-break": "شکستن روا"
+    "may-break": "شکستن روا",
+    "redundant-verbs": "فعل زائد",
+    "arabic-plurals": "جمع عربی",
+    prepositions: "حرف اضافه",
+    calques: "ترجمه‌زدگی",
+    redundancy: "حشو",
+    "repeated-words": "تکرار",
+    "long-sentences": "جملهٔ بلند"
 };
 
 const SAMPLE_DIALOGUE = [
@@ -119,13 +128,23 @@ function mergeSame(msgs: Msg[], text: string): { primary: Msg[]; extra: Msg[][] 
 let reports: Report[] = [];
 let timer: number | undefined;
 
-function options() {
-    const all = { ...preset.rules, ...(mode.value === "dialogue" ? shekaste.rules : {}) };
+/** Language-editing rules: suggestions only, never in «اعمال همه». */
+const STYLE_RULES = new Set(Object.keys(virayesh.rules));
+const isStyle = (m: Msg) => STYLE_RULES.has(m.ruleId);
+const styleBoxes = [...document.querySelectorAll<HTMLInputElement>("#style-rules input[data-rule]")];
+
+/** The rules to run; `forFix` leaves out what «اعمال همه» must not touch. */
+function options(forFix = false) {
+    const style = mode.value === "dialogue" || forFix ? {} : Object.fromEntries(
+        Object.entries(virayesh.rules).filter(([id]) => styleBoxes.find((b) => b.dataset.rule === id)?.checked !== false)
+    );
+    const all = { ...preset.rules, ...(mode.value === "dialogue" ? shekaste.rules : {}), ...style };
     // spoken forms («می‌رم»، «خونه») are not typos: no spelling check in dialogue
     const rules = Object.entries(all).filter(([ruleId]) => !(ruleId === "spelling" && mode.value === "dialogue")).map(([ruleId, rule]) => {
         let opts: object | boolean = true;
         if (ruleId === "plural-ha") opts = { mode: pluralMode.value };
         if (ruleId === "ezafe-he") opts = { style: ezafeStyle.value, formal: mode.value !== "dialogue" };
+        if (ruleId === "calques") opts = { ezafe: ezafeStyle.value };
         return { ruleId, rule: rule as any, options: opts };
     });
     return { ext: ".txt", plugins: [{ pluginId: "text", plugin: (textPlugin as any).default ?? textPlugin }], rules };
@@ -163,24 +182,25 @@ function renderPreview(text: string) {
     const spans = messages
         .map((m, i) => {
             const [s, e] = wordAround(text, m.range[0], m.range[1]);
-            return { s, e, i, fix: Boolean(m.fix) };
+            return { s, e, i, fix: Boolean(m.fix) && !isStyle(m), style: isStyle(m) };
         })
         .sort((a, b) => a.s - b.s || b.e - a.e);
-    const merged: Array<{ s: number; e: number; i: number; fix: boolean }> = [];
+    const merged: Array<{ s: number; e: number; i: number; fix: boolean; style: boolean }> = [];
     for (const sp of spans) {
         const last = merged[merged.length - 1];
         if (last && sp.s < last.e) {
             last.e = Math.max(last.e, sp.e);
             last.fix = last.fix || sp.fix;
+            last.style = last.style && sp.style;
         } else {
             merged.push({ ...sp });
         }
     }
     let out = "";
     let pos = 0;
-    for (const { s, e, i, fix } of merged) {
+    for (const { s, e, i, fix, style } of merged) {
         out += show(text.slice(pos, s));
-        const cls = fix ? "mark" : "mark mark-judge";
+        const cls = fix ? "mark" : style ? "mark mark-style" : "mark mark-judge";
         out += `<a href="#issue-${i}" class="${cls}" data-i="${i}">${show(text.slice(s, e)) || "&#8203;"}</a>`;
         pos = e;
     }
@@ -276,12 +296,13 @@ function noMeterReason(m: Msg): string {
     if (m.ruleId === "spelling") return "حدس غلط‌یاب است، نه قاعده";
     if (m.ruleId === "may-break") return "پیشنهاد سبکی است، نه غلط";
     if (m.ruleId === "punctuation") return "قرارداد رایج است، نه کتاب";
+    if (isStyle(m)) return "توصیهٔ ویرایشی است، نه قاعدهٔ کتاب";
     return "به معنای جمله بستگی دارد";
 }
 
 function meterFor(m: Msg, p: number | null): string {
     if (p !== null) return confidenceMeter(p);
-    if (m.fix && m.ruleId !== "punctuation") return bookMeter();
+    if (m.fix && m.ruleId !== "punctuation" && !isStyle(m)) return bookMeter();
     return `<div class="confidence confidence-none" title="این کارت درجهٔ اطمینان ندارد: ${noMeterReason(m)}.">
                 <span class="confidence-label">درجه ندارد</span>
                 <span class="confidence-why">${noMeterReason(m)}</span>
@@ -301,9 +322,10 @@ function renderList(text: string) {
         const li = document.createElement("li");
         li.id = `issue-${i}`;
         // a book rule agreeing with a model's guess: the book's certainty
-        const bookAgrees = extras[i].some((x) => x.fix && !/احتمال/.test(x.message) && x.ruleId !== "punctuation");
+        const bookAgrees = [m, ...extras[i]].some((x) => x.fix && !/احتمال/.test(x.message) && x.ruleId !== "punctuation" && !isStyle(x));
         const meter = bookAgrees ? bookMeter() : meterFor(m, p);
-        li.className = (m.fix ? "issue" : "issue issue-judge") + (meter.includes("confidence-none") ? " has-note" : " has-confidence");
+        const styleOnly = members.every(isStyle);
+        li.className = (styleOnly ? "issue issue-style" : m.fix ? "issue" : "issue issue-judge") + (m.fix ? "" : " no-fix") + (meter.includes("confidence-none") ? " has-note" : " has-confidence");
         // show the whole word around the change, so «ي ← ی» reads «رييس ← رئیس»
         const [ws, we] = wordAround(text, Math.min(m.range[0], m.fix?.range[0] ?? m.range[0]), Math.max(m.range[1], m.fix?.range[1] ?? m.range[1]));
         const original = text.slice(ws, we);
@@ -324,7 +346,7 @@ function renderList(text: string) {
             ${meter}
             <div class="issue-head">
                 ${labels.map((l) => `<span class="chip">${esc(l)}</span>`).join("")}
-                ${m.fix ? "" : m.ruleId === "may-break" ? '<span class="chip chip-style">پیشنهاد سبکی</span>' : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
+                ${styleOnly ? '<span class="chip chip-style">ویرایش زبانی · پیشنهاد</span>' : m.fix ? "" : m.ruleId === "may-break" ? '<span class="chip chip-style">پیشنهاد سبکی</span>' : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
             </div>
             <p class="change">
                 <span class="from">${show(original) || "&nbsp;"}</span>
@@ -339,12 +361,14 @@ function renderList(text: string) {
             </div>`;
         list.appendChild(li);
     });
-    const fixable = messages.filter((m) => m.fix).length;
-    const judge = messages.length - fixable;
+    const styleCount = messages.filter((m, i) => [m, ...extras[i]].every(isStyle)).length;
+    const fixable = messages.filter((m, i) => m.fix && ![m, ...extras[i]].every(isStyle)).length;
+    const judge = messages.length - fixable - styleCount;
     summary.textContent =
         messages.length === 0
             ? "پیشنهادی نیست. متن با قواعدی که این ابزار می‌شناسد سازگار است."
-            : `${messages.length.toLocaleString("fa-IR")} پیشنهاد: ${fixable.toLocaleString("fa-IR")} اصلاح خودکار، ${judge.toLocaleString("fa-IR")} نیازمند تشخیص`;
+            : `${messages.length.toLocaleString("fa-IR")} پیشنهاد: ${fixable.toLocaleString("fa-IR")} اصلاح خودکار، ${judge.toLocaleString("fa-IR")} نیازمند تشخیص` +
+              (styleCount ? `، ${styleCount.toLocaleString("fa-IR")} ویرایش زبانی` : "");
     applyAllBtn.disabled = fixable === 0;
 }
 
@@ -435,7 +459,7 @@ applyAllBtn.addEventListener("click", async () => {
     // one fix can make another possible («همه دفترهارا» → «همه دفترها را» → «همۀ دفترها را»)
     let text = input.value;
     for (let round = 0; round < 3; round++) {
-        const next = (await kernel.fixText(text, options())).output;
+        const next = (await kernel.fixText(text, options(true))).output;
         if (next === text) break;
         text = next;
     }
@@ -468,6 +492,23 @@ $<HTMLButtonElement>("clear").addEventListener("click", () => {
 
 input.addEventListener("input", schedule);
 [showZwnj, pluralMode, ezafeStyle].forEach((el) => el.addEventListener("change", check));
+// which language-editing rules are on: remembered per browser
+try {
+    const off = JSON.parse(localStorage.getItem("dorostnevis:style-off") || "[]") as string[];
+    for (const b of styleBoxes) b.checked = !off.includes(b.dataset.rule!);
+} catch {
+    /* storage may be unavailable */
+}
+for (const b of styleBoxes) {
+    b.addEventListener("change", () => {
+        try {
+            localStorage.setItem("dorostnevis:style-off", JSON.stringify(styleBoxes.filter((x) => !x.checked).map((x) => x.dataset.rule)));
+        } catch {
+            /* storage may be unavailable */
+        }
+        check();
+    });
+}
 mode.addEventListener("change", () => {
     try {
         localStorage.setItem("dorostnevis:mode", mode.value);

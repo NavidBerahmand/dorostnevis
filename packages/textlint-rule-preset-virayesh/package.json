@@ -1,0 +1,26 @@
+{
+  "name": "textlint-rule-preset-virayesh",
+  "version": "0.1.0",
+  "description": "ویرایش زبانی فارسی برای textlint: فعل زائد، جمع عربی، ترجمه‌زدگی، حشو، تکرار و جملهٔ بلند؛ همه پیشنهادند",
+  "main": "lib/index.js",
+  "files": [
+    "lib",
+    "src"
+  ],
+  "scripts": {
+    "build": "textlint-scripts build",
+    "test": "tsc -p . && mocha --require ./test/register.cjs --timeout 10000 \"test/**/*-test.ts\""
+  },
+  "keywords": [
+    "textlint",
+    "textlintrule",
+    "persian",
+    "farsi",
+    "preset",
+    "style"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "textlint": ">=14.0.0"
+  }
+}

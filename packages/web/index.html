@@ -128,6 +128,7 @@
     padding: 0 1px;
   }
   .mark-judge { background: transparent; border-bottom: 2px dotted var(--judge); }
+  .mark-style { background: transparent; border-bottom: 2px dotted var(--ok); }
   .zw {
     display: inline-block;
     width: 2px;
@@ -181,6 +182,14 @@
     transition: background-color 0.4s;
   }
   .issue-judge { border-inline-start-color: var(--judge); }
+  .issue-style { border-inline-start-color: var(--ok); }
+  .style-rules { border-top: 1px solid var(--line); padding-top: 10px; font-size: 0.85rem; color: var(--muted); }
+  .style-rules summary { cursor: pointer; color: var(--ink); font-weight: 700; }
+  .style-hint { font-weight: 400; color: var(--muted); font-size: 0.78rem; margin-inline-start: 6px; }
+  .style-note { margin: 8px 0; font-size: 0.8rem; }
+  .style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 6px 14px; }
+  .style-grid label { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; color: var(--ink); }
+  .style-grid small { color: var(--muted); font-size: 0.75rem; }
   /* model confidence: top-left corner of the card (the end side in RTL) */
   .issue { position: relative; }
   .issue.has-confidence .issue-head { padding-inline-end: 96px; min-height: 30px; }
@@ -213,7 +222,7 @@
   .chip-style { color: var(--ok); background: var(--bg); border: 1px solid var(--line); }
   .change { margin: 0; font-family: var(--font-text); font-size: 1.1rem; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
   .from { text-decoration: line-through; text-decoration-color: var(--muted); color: var(--muted); }
-  .issue-judge .from { text-decoration: none; color: var(--ink); }
+  .issue-judge .from, .no-fix .from { text-decoration: none; color: var(--ink); }
   .to { font-weight: 600; color: var(--ok); }
   .arrow { color: var(--muted); }
   .msg { margin: 0; font-size: 0.9rem; }
@@ -312,6 +321,19 @@
           </select>
         </label>
       </div>
+      <details class="style-rules" id="style-rules">
+        <summary>ویرایش زبانی <span class="style-hint">فقط پیشنهاد؛ در متن رسمی</span></summary>
+        <p class="style-note">این‌ها توصیه‌های رایج ویراستاران‌اند، نه قاعدهٔ دستور خط. هیچ‌کدام خودکار اعمال نمی‌شوند؛ هر کدام را می‌شود خاموش کرد.</p>
+        <div class="style-grid">
+          <label><input type="checkbox" data-rule="redundant-verbs" checked> فعل زائد <small>«می‌باشد»، «مورد بررسی قرار گرفت»</small></label>
+          <label><input type="checkbox" data-rule="arabic-plurals" checked> جمع عربی <small>«اساتید»، «مسئولین»</small></label>
+          <label><input type="checkbox" data-rule="prepositions" checked> حرف اضافه <small>«جهت اطلاع»، «توسط» در مجهول</small></label>
+          <label><input type="checkbox" data-rule="calques" checked> ترجمه‌زدگی <small>«در رابطه با»، «به چالش کشیدن»</small></label>
+          <label><input type="checkbox" data-rule="redundancy" checked> حشو <small>«بازگشت مجدد»، «سایر … دیگر»</small></label>
+          <label><input type="checkbox" data-rule="repeated-words" checked> تکرار <small>«را را»، «و و»</small></label>
+          <label><input type="checkbox" data-rule="long-sentences" checked> جملهٔ بلند <small>بیش از ۴۰ کلمه، «که»ی پی‌درپی</small></label>
+        </div>
+      </details>
     </section>
 
     <section class="panel" aria-labelledby="issues-title">
@@ -323,7 +345,7 @@
 
   <footer>
     <p>نسخهٔ آزمایشی. قواعد: دستور خطّ فارسی، ویراست جدید؛ فرهنگ املایی خطّ فارسی (۱۳۹۴)، با برتری ویراست جدید در تعارض‌ها؛ در حالت گفت‌وگو، اصول شکسته‌نویسی (علی صلح‌جو)؛ واژه‌نامهٔ Hazm برای تشخیص کلمه‌های شناخته‌شده. کسرهٔ اضافهٔ جاافتاده («خانه قبلی» ← «خانۀ قبلی») و «را»ی چسبیده («کتابرا» ← «کتاب را») را دو مدل آماری کوچک حدس می‌زنند که روی متن ویکی‌پدیای فارسی (CC BY-SA) آموزش دیده‌اند؛ اصلاح خودکار فقط وقتی است که مدل دست‌کم ۹۰٪ مطمئن باشد.</p>
-    <p>پیشنهادهای «نیازمند تشخیص» به معنا بستگی دارند و اصلاح خودکار ندارند. اگر پیشنهادی غلط بود، دکمهٔ «این پیشنهاد غلط است» را بزنید: پیش از فرستادن، دقیقاً همان چیزی را که فرستاده می‌شود می‌بینید.</p>
+    <p>پیشنهادهای «نیازمند تشخیص» به معنا بستگی دارند و اصلاح خودکار ندارند. پیشنهادهای «ویرایش زبانی» (فعل زائد، جمع عربی، ترجمه‌زدگی و…) توصیه‌های رایج ویراستاران‌اند، نه قاعدهٔ دستور خط، و هرگز خودکار اعمال نمی‌شوند. اگر پیشنهادی غلط بود، دکمهٔ «این پیشنهاد غلط است» را بزنید: پیش از فرستادن، دقیقاً همان چیزی را که فرستاده می‌شود می‌بینید.</p>
     <p><strong>منابع و مجوز.</strong> قواعد و فهرست‌ها از «<a href="https://apll.ir/wp-content/uploads/2023/07/Dastour-e-Khat-17.04.1402.pdf" target="_blank" rel="noopener">دستور خطّ فارسی</a>» (ویراست جدید، چاپ اول ۱۴۰۱؛ در چاپ‌های بعد «ویراست دوم» نام گرفته) و «<a href="https://apll.ir/wp-content/uploads/2018/10/F-E-1394.pdf" target="_blank" rel="noopener">فرهنگ املایی خطّ فارسی</a>» (۱۳۹۴)، هر دو از <a href="https://apll.ir">فرهنگستان زبان و ادب فارسی</a>، برای استفادهٔ رایگان و غیرتجاری و با ذکر منبع. واژه‌نامهٔ غلط‌یاب و دو مدل آماری از متن <a href="https://fa.wikipedia.org">ویکی‌پدیای فارسی</a> ساخته شده‌اند، به قلم ویرایشگران ویکی‌پدیا، با مجوز <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.fa">CC BY-SA 4.0</a>؛ همین داده‌ها با همان مجوز منتشر می‌شوند. واژه‌نامهٔ <a href="https://github.com/roshan-research/hazm">Hazm</a> (MIT). «اصول شکسته‌نویسی»، علی صلح‌جو. کد ابزار: MIT.</p>
     <details class="reports-panel" id="reports-panel" hidden>
       <summary>گزارش‌های «پیشنهاد غلط» (<span id="reports-count">بارگذاری با باز کردن</span>)</summary>
