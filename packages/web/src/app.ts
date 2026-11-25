@@ -235,8 +235,14 @@ preview.addEventListener("click", (ev) => {
 
 applyAllBtn.addEventListener("click", async () => {
     status.textContent = "در حال اعمال…";
-    const fixed = await kernel.fixText(input.value, options());
-    input.value = fixed.output;
+    // one fix can make another possible («همه دفترهارا» → «همه دفترها را» → «همۀ دفترها را»)
+    let text = input.value;
+    for (let round = 0; round < 3; round++) {
+        const next = (await kernel.fixText(text, options())).output;
+        if (next === text) break;
+        text = next;
+    }
+    input.value = text;
     await check();
     status.textContent = "همهٔ اصلاح‌های خودکار اعمال شد.";
 });

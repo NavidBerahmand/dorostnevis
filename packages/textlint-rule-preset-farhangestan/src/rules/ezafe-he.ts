@@ -25,7 +25,7 @@
  * کسرهٔ اضافهٔ جاافتاده («خانه قبلی» ← «خانۀ قبلی»): اینکه کلمه در حالت اضافه
  * است یا نه را قاعده نمی‌تواند بگوید؛ یک مدل آماری کوچک (src/util/ezafe-model.ts)
  * از روی کلمه‌های اطراف حدس می‌زند. اگر مدل دست‌کم ۹۰٪ مطمئن باشد و کلمه
- * شناخته‌شده باشد اصلاح خودکار، و از ۵۵٪ به بالا فقط پیشنهاد. با گزینهٔ
+ * شناخته‌شده باشد اصلاح خودکار، و از ۶۰٪ به بالا فقط پیشنهاد. با گزینهٔ
  * { "model": false } خاموش می‌شود.
  */
 import { createPatternRule } from "../util/pattern-rule";
@@ -37,12 +37,12 @@ import commonNouns from "../dict/hazm-common-nouns.json";
 import { ezafeCandidates, EzafeCandidate } from "../util/ezafe-model";
 
 /**
- * Model thresholds. In a hand check of unmarked Wikipedia text, fixes at 0.8
- * were right about 93% of the time and at 0.9 all 50 sampled were right, so
- * only ≥ 0.9 is fixed automatically; 0.55–0.9 is a suggestion.
+ * Thresholds on the calibrated probability (scripts/ezafe-model/calibrate.py).
+ * At 0.9: 94–96% precision and 48–65% recall on the book and on 300
+ * hand-labelled Wikipedia cases. Fixed automatically from 0.9, suggested from 0.6.
  */
 const MODEL_FIX = 0.9;
-const MODEL_SUGGEST = 0.55;
+const MODEL_SUGGEST = 0.6;
 
 /** The model's candidates for the last text seen (a rule sees one node's text at a time). */
 let cachedText = "";

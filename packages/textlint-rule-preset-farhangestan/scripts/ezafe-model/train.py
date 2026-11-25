@@ -5,6 +5,7 @@ Train the ezafe model (logistic regression) and write src/dict/ezafe-model.json.
 Usage:
     python3 -I extract_wiki.py fawiki-slice.xml > articles.jsonl
     python3 train.py articles.jsonl book.txt
+    python3 calibrate.py book.txt      # always after train.py: it rewrites the model file
 
 Training data is Persian Wikipedia, which marks the ezafe after a silent «ه»
 as «هٔ». Many articles skip the mark, which would teach the model that the

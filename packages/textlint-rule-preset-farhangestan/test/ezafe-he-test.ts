@@ -5,6 +5,7 @@ import { inv, z } from "./helpers";
 new TextLintTester().run("ezafe-he", rule, {
     valid: [
         "او خسته بود و رفت.", // no ezafe: the model stays quiet
+        "در اداره کار می‌کند.",
         "این‌گونه واژه‌ها را نوشت.",
         { text: "خانه قبلی", options: { model: false } },
         "برنامۀ روزانه، بندۀ خدا، خانۀ او، رانندۀ ماهر", // p. 47
@@ -40,6 +41,9 @@ new TextLintTester().run("ezafe-he", rule, {
         // the model: a missing ezafe before another word
         inv("نتیجه نهایی را نشان داد.", "نتیجۀ نهایی را نشان داد."),
         // less sure (0.55–0.9): a suggestion, no automatic fix
-        { text: "این روستا در دهستان قلعه شاهین قرار دارد.", output: "این روستا در دهستان قلعه شاهین قرار دارد.", errors: [{}] }
+        { text: "این نامه رسمی است.", output: "این نامه رسمی است.", errors: [{}] }, // «این نامهٔ رسمی» or «این نامه رسمی است»
+        inv("این روستا در دهستان قلعه شاهین قرار دارد.", "این روستا در دهستان قلعۀ شاهین قرار دارد."),
+        inv("خانه قبلی را فروخت.", "خانۀ قبلی را فروخت."),
+        inv("همه دفترها را جمع کرد.", "همۀ دفترها را جمع کرد.")
     ]
 });

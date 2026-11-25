@@ -23,6 +23,8 @@ const TOKEN = new RegExp(
 const WORD = new RegExp(`^[ء-غف-يٱ-ۓەیکگپچژ${ZWNJ}]+$`);
 
 const WEIGHTS: Record<string, number> = model.weights as Record<string, number>;
+/** Platt scaling from scripts/ezafe-model/calibrate.py (the raw model is too cautious). */
+const CAL = (model as { calibration?: { a: number; b: number } }).calibration ?? { a: 1, b: 0 };
 const POS = new Map<string, string>();
 for (const [tag, words] of Object.entries(pos.tags as Record<string, string>)) {
     for (const w of words.split(" ")) POS.set(w, tag);
@@ -144,7 +146,7 @@ export interface EzafeCandidate {
     word: string;
     start: number;
     end: number;
-    /** probability that the word is in the ezafe */
+    /** probability that the word is in the ezafe (calibrated) */
     p: number;
 }
 
@@ -184,12 +186,12 @@ export function ezafeCandidates(text: string): EzafeCandidate[] {
         if (info[i].marked) return;
         let z = 0;
         for (const f of features(toks, i)) z += WEIGHTS[f] ?? 0;
-        out.push({ word: info[i].word, start: info[i].start, end: info[i].end, p: 1 / (1 + Math.exp(-z)) });
+        out.push({ word: info[i].word, start: info[i].start, end: info[i].end, p: 1 / (1 + Math.exp(-(CAL.a * z + CAL.b))) });
     });
     return out;
 }
 
-/** Same as features.py candidates(), for the parity test: every candidate, marked or not. */
+/** Same as features.py candidates(), for the parity test: every candidate, marked or not; raw (uncalibrated) scores. */
 export function scoresForTest(text: string): Array<[string, number]> {
     return ezafeCandidatesAll(text);
 }
