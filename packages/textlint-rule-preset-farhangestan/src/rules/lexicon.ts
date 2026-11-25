@@ -38,6 +38,8 @@ interface Entry {
     fix?: boolean;
     /** overrides the default message */
     message?: string;
+    /** not when the word continues after a ZWNJ: Arabic terms keep their spelling («مستثنی‌منه») */
+    wholeWordOnly?: boolean;
 }
 
 const DICTIONARIES: Record<keyof NonNullable<Options["dictionaries"]>, { entries: Entry[] }> = {
@@ -80,6 +82,7 @@ export default createPatternRule<Options>((options) => {
                 check: (m) => {
                     const entry = map.get(key(m[0]));
                     if (!entry) return null;
+                    if (entry.wholeWordOnly && m.input[m.index + m[0].length] === ZWNJ) return null;
                     if (entry.fix === false) {
                         return {
                             message: entry.message ?? `اگر در معنای اصطلاحی است، «${entry.to}» نوشته می‌شود`,

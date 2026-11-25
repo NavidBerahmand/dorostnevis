@@ -153,7 +153,7 @@ function check(word: string): PatternResult | null {
         const fixedStem = isKnown(stem) ? null : fixedCompound(stem);
         // «ایرانی» (nisba «ی» on a known word) counts as known: «ایرانیاند» → «ایرانی‌اند»
         // («-یات» is the Arabic plural: «هزلیات» is not «هزلی» + «ات»)
-        const nisba = stem.endsWith("ی") && stem.length >= 4 && isKnown(stem.slice(0, -1)) && ["ام", "ای", "ایم", "اید", "اند"].includes(suffix);
+        const nisba = stem.endsWith("ی") && stem.length >= 5 && isKnown(stem.slice(0, -1)) && ["ام", "ای", "ایم", "اید", "اند"].includes(suffix);
         if (!isKnown(stem) && !fixedStem && !nisba) continue;
         if (fixedStem) stem = fixedStem;
         // «دریای» is «دریا» + ی (ezafe), not «دری» + «ای»
