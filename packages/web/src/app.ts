@@ -5,6 +5,7 @@
 import { TextlintKernel } from "@textlint/kernel";
 import textPlugin from "@textlint/textlint-plugin-text";
 import preset from "../../textlint-rule-preset-farhangestan/src/index";
+import shekaste from "../../textlint-rule-preset-shekaste/src/index";
 
 type Msg = {
     ruleId: string;
@@ -39,8 +40,19 @@ const RULE_LABELS: Record<string, string> = {
     "verb-prefix-alef": "بـ/نـ پیش از ا",
     "hamza-tanvin": "همزه و تنوین",
     "arabic-prefixes": "سوء/ضد/غیر",
-    dictionary: "فرهنگ املایی"
+    dictionary: "فرهنگ املایی",
+    "over-broken": "شکستن بی‌جا",
+    "may-break": "شکستن روا"
 };
+
+const SAMPLE_DIALOGUE = [
+    "ـ دیروز اومدم دنبالت که بریم پارک. نبودی.",
+    "ـ آره، رفته بودم خونه‌ی خاله‌م. حالش خیلی خرابه.",
+    "ـ اگه دیگه نیاد چی؟ یه خرده صبر کن، بهش زنگ می‌زنم.",
+    "ـ بچه‌ها رفته‌ان؟ نمی‌تونن بیان، دکترا می‌گن مریضه.",
+    "ـ کتابو بده، شاید فردا وقت کنم بخونمش. الان نیس.",
+    "ـ هوا سرد است. من می‌روم، تو هم بیا."
+].join("\n");
 
 const kernel = new TextlintKernel();
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -52,6 +64,7 @@ const summary = $<HTMLParagraphElement>("summary");
 const showZwnj = $<HTMLInputElement>("show-zwnj");
 const pluralMode = $<HTMLSelectElement>("plural-mode");
 const ezafeStyle = $<HTMLSelectElement>("ezafe-style");
+const mode = $<HTMLSelectElement>("mode");
 const applyAllBtn = $<HTMLButtonElement>("apply-all");
 const copyBtn = $<HTMLButtonElement>("copy");
 const status = $<HTMLSpanElement>("status");
@@ -60,7 +73,8 @@ let messages: Msg[] = [];
 let timer: number | undefined;
 
 function options() {
-    const rules = Object.entries(preset.rules).map(([ruleId, rule]) => {
+    const all = { ...preset.rules, ...(mode.value === "dialogue" ? shekaste.rules : {}) };
+    const rules = Object.entries(all).map(([ruleId, rule]) => {
         let opts: object | boolean = true;
         if (ruleId === "plural-ha") opts = { mode: pluralMode.value };
         if (ruleId === "ezafe-he") opts = { style: ezafeStyle.value };
@@ -123,7 +137,7 @@ function renderList(text: string) {
         li.innerHTML = `
             <div class="issue-head">
                 <span class="chip">${esc(RULE_LABELS[m.ruleId] ?? m.ruleId)}</span>
-                ${m.fix ? "" : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
+                ${m.fix ? "" : m.ruleId === "may-break" ? '<span class="chip chip-style">پیشنهاد سبکی</span>' : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
             </div>
             <p class="change">
                 <span class="from">${show(original) || "&nbsp;"}</span>
@@ -218,7 +232,7 @@ copyBtn.addEventListener("click", async () => {
 });
 
 $<HTMLButtonElement>("sample").addEventListener("click", () => {
-    input.value = SAMPLE;
+    input.value = mode.value === "dialogue" ? SAMPLE_DIALOGUE : SAMPLE;
     ignored = new Set();
     check();
 });
@@ -231,6 +245,19 @@ $<HTMLButtonElement>("clear").addEventListener("click", () => {
 
 input.addEventListener("input", schedule);
 [showZwnj, pluralMode, ezafeStyle].forEach((el) => el.addEventListener("change", check));
+mode.addEventListener("change", () => {
+    try {
+        localStorage.setItem("dorostnevis:mode", mode.value);
+    } catch {
+        /* storage may be unavailable */
+    }
+    check();
+});
+try {
+    mode.value = localStorage.getItem("dorostnevis:mode") || "formal";
+} catch {
+    /* storage may be unavailable */
+}
 
 let initial = SAMPLE;
 try {

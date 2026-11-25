@@ -36,7 +36,7 @@ export default createPatternRule(() => ({
     checks: [
         {
             // joined: «بزرگتر»، «بزرگترین»، «بزرگتری»، «بزرگترها»
-            pattern: new RegExp(`${START}(${LETTER}+?)(ترین|تر)(ها|های|هایی|ی)?${END}`, "g"),
+            pattern: new RegExp(`${START}(${LETTER}+?)(ترین|تر)(ها|های|هایی|ی)?(?=${ZWNJ}|${END})`, "g"),
             check: (m) => {
                 const stem = m[1];
                 if (!ADJECTIVES.has(stem) || BLOCKED.has(stem)) return null;

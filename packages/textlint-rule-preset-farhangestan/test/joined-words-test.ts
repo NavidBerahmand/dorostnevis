@@ -20,6 +20,8 @@ new TextLintTester().run("joined-words", rule, {
         inv("زیستفناوری", z("زیست‹فناوری")),
         { text: "هرنفر", errors: [{}] },         // «هر»: suggestion only (the book's list is open)
         inv("بسادگی حل شد", z("به‹سادگی حل شد")),
+        inv("همه بیحوصلهاند", z("همه بی‹حوصله‹اند")),
+        inv(z("پیشبینی‹ها"), z("پیش‹بینی‹ها")),
         { text: "کتابرا آورد", errors: [{}] } // «را»: suggestion only, no automatic fix
     ]
 });

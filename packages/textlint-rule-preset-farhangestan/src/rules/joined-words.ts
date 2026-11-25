@@ -24,8 +24,17 @@ import { START, END, LETTER, ZWNJ, isNonJoining } from "../util/persian";
 import { isKnown, endsWithSilentHe, BOOK_JOINED } from "../util/words";
 import { verbForm } from "./mi-prefix";
 import hazmCompounds from "../dict/hazm-compounds.json";
+import hazmBi from "../dict/hazm-bi.json";
 
 const COMPOUNDS: Record<string, string> = hazmCompounds.pairs;
+const BI: Record<string, string> = hazmBi.pairs;
+const BI_EXCEPTIONS = new Set(["بیجا", "بیچاره", "بیخود", "بیداد", "بیدل", "بیراه", "بیزار", "بیعار", "بیکار", "بینوا", "بیهوش"]);
+
+/** The corrected form of a joined compound, if we know one («بیحوصله» → «بی‌حوصله»). */
+function fixedCompound(word: string): string | null {
+    if (BI_EXCEPTIONS.has(word)) return null;
+    return COMPOUNDS[word] ?? BI[word] ?? null;
+}
 
 const S_COMPOUND = "دستور خط، ترکیب‌ها، بخش ب، ص ۶۱–۶۷";
 const S_COPULA = "دستور خط، «مجموعۀ ام…» ص ۴۲ و «ضمایر ملکی» ص ۴۴";
@@ -56,7 +65,22 @@ function ownedElsewhere(word: string): boolean {
 }
 
 function check(word: string): PatternResult | null {
-    if (isKnown(word) || ownedElsewhere(word)) return null;
+    if (isKnown(word)) return null;
+
+    // three parts joined, where the first two are a compound we can fix and
+    // the third a copula/possessive ending: «بیحوصلهاند» → «بی‌حوصله‌اند».
+    // Checked before ownedElsewhere(): the بی- rule only sees whole words.
+    for (const suffix of AFTER_HE) {
+        if (!word.endsWith(suffix)) continue;
+        const stem = word.slice(0, -suffix.length);
+        const fixedStem = isKnown(stem) ? null : fixedCompound(stem);
+        if (fixedStem && (endsWithSilentHe(stem) || (stem.endsWith("ی") && AFTER_YEH.includes(suffix)))) {
+            const fixed = fixedStem + ZWNJ + suffix;
+            return { message: `ترکیب و «${suffix}» هر دو با نیم‌فاصله: «${fixed}»`, replacement: fixed, source: S_COPULA };
+        }
+    }
+
+    if (ownedElsewhere(word)) return null;
 
     // ۱. compounds Hazm writes with ZWNJ
     const compound = COMPOUNDS[word];
@@ -67,8 +91,11 @@ function check(word: string): PatternResult | null {
     // ۲. copula / possessive after silent ه or ی
     for (const suffix of AFTER_HE) {
         if (!word.endsWith(suffix)) continue;
-        const stem = word.slice(0, -suffix.length);
-        if (!isKnown(stem)) continue;
+        let stem = word.slice(0, -suffix.length);
+        // three parts joined: «بیحوصلهاند» = «بیحوصله» (itself fixable) + «اند»
+        const fixedStem = isKnown(stem) ? null : fixedCompound(stem);
+        if (!isKnown(stem) && !fixedStem) continue;
+        if (fixedStem) stem = fixedStem;
         // «دریای» is «دریا» + ی (ezafe), not «دری» + «ای»
         if (suffix.startsWith("ا") && isKnown(stem + "ا")) continue;
         if (endsWithSilentHe(stem) || (stem.endsWith("ی") && AFTER_YEH.includes(suffix))) {
@@ -158,7 +185,8 @@ export default createPatternRule(() => ({
     source: S_COMPOUND,
     checks: [
         {
-            pattern: new RegExp(`${START}${LETTER}{4,}${END}`, "g"),
+            // the word may continue after a ZWNJ («پیشبینی‌ها»)
+            pattern: new RegExp(`${START}${LETTER}{4,}(?=${ZWNJ}|${END})`, "g"),
             check: (m) => check(m[0])
         }
     ]

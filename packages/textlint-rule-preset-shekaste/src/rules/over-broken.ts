@@ -1,0 +1,179 @@
+/*
+ * شکستن بیش از حد
+ *
+ * اصول شکسته‌نویسی (علی صلح‌جو، نشر مرکز)، «کاهش تعداد هجا: راهنمای
+ * شکسته‌نویسی» (ص ۱۴–۱۵) و «خلاصه» (ص ۴۴–۴۵):
+ *   فقط کلماتی که در گفتار کاهش هجایی پیدا می‌کنند باید شکسته شوند …
+ *   واژه‌هایی با ساختار بالا، که تعداد هجاهای آن‌ها در گفتار و نوشتار یکسان
+ *   است (مثلاً نان/نون، همان/همون)، نباید شکست.
+ *
+ * - «نون، خونه، دیگه، اگه» ← «نان، خانه، دیگر، اگر» (هجا کم نمی‌شود)
+ * - «نیس، هس، ماس» ← «نیست، هست، ماست» («ت» پایانی خودبه‌خود نرم ادا می‌شود؛ ص ۱۴، ۲۴، ۴۱)
+ * - «یه» ← «یک» (ص ۴۲)
+ * - «منو، اینو، کتابو» ← «من را، این را، کتاب را» («را» را باید نگه داشت؛ ص ۲۵، ۲۷)
+ * - «بهت، بهش» ← «بهات، بهاش» (ص ۲۱)
+ * - «می‌خورن، می‌گن» ← «می‌خورند، می‌گند» (دال آخر خودبه‌خود تلفظ نمی‌شود؛ ص ۱۹، ۴۲)
+ * - «رفته‌ان» ← «رفته‌اند» (ص ۲۰)
+ * - «اومدم» ← «آمدم» (ماضی «آمدن» و «رفتن» هجا از دست نمی‌دهد؛ ص ۱۷)
+ * - «دکترا، کتابا» ← «دکترها، کتاب‌ها» (نشانهٔ جمع را نباید شکست؛ ص ۲۲)
+ * - «بخونمش، می‌دونم، موند» ← «بخوانمش، می‌دانم، ماند» (خواندن، دانستن، ماندن… هجا از
+ *   دست نمی‌دهند؛ ص ۱۹ و ۳۰). «می‌تونم» درست است، چون یک هجا کم می‌شود.
+ */
+import { createPatternRule } from "../../../textlint-rule-preset-farhangestan/src/util/pattern-rule";
+import { START, END, LETTER, ZWNJ } from "../../../textlint-rule-preset-farhangestan/src/util/persian";
+import { KNOWN } from "../../../textlint-rule-preset-farhangestan/src/util/words";
+import { isPresentStem } from "../../../textlint-rule-preset-farhangestan/src/rules/mi-prefix";
+
+const BOOK = "اصول شکسته‌نویسی";
+
+/** [broken, full, page] */
+const SAME_SYLLABLES: Array<[string, string, string]> = [
+    ["نون", "نان", "۱۳"], ["جون", "جان", "۱۳"], ["میدون", "میدان", "۱۳"], ["کدوم", "کدام", "۱۳"],
+    ["همون", "همان", "۱۴"], ["زبون", "زبان", "۱۴"], ["جوون", "جوان", "۱۴"], ["روون", "روان", "۱۴"],
+    ["دووم", "دوام", "۱۴"], ["رون", "ران", "۱۴"], ["دیگه", "دیگر", "۱۴"], ["اگه", "اگر", "۱۴"],
+    ["مث", "مثل", "۱۴"], ["وخ", "وقت", "۲۸"], ["خونه", "خانه", "۴۵"], ["لونه", "لانه", "۸"],
+    ["گرون", "گران", "۴۵"], ["نادون", "نادان", "۴۵"], ["قندون", "قندان", "۴۵"], ["لیوون", "لیوان", "۴۵"],
+    ["حیوون", "حیوان", "۴۵"], ["ایوون", "ایوان", "۴۵"], ["جوونه", "جوانه", "۴۵"], ["کمونه", "کمانه", "۴۵"],
+    ["شبونه", "شبانه", "۴۵"], ["روونه", "روانه", "۴۵"], ["زمونه", "زمانه", "۴۵"], ["پیمونه", "پیمانه", "۴۵"],
+    ["آشیونه", "آشیانه", "۴۵"], ["اصفهون", "اصفهان", "۴۵"], ["کرمون", "کرمان", "۱۳"], ["رفسنجون", "رفسنجان", "۴۵"],
+    ["لویزون", "لویزان", "۴۵"], ["تهرون", "تهران", "۱۲"], ["همدون", "همدان", "۱۳"], ["خیابون", "خیابان", "۱۱"],
+    ["آسمون", "آسمان", "۱۴"], ["بارون", "باران", "۱۴"], ["ارزون", "ارزان", "۱۴"], ["سوهون", "سوهان", "۱۲"],
+    ["نیس", "نیست", "۲۴"], ["هس", "هست", "۴۱"], ["ماس", "ماست", "۹"], ["گف", "گفت", "۱۴"], ["رف", "رفت", "۱۴"],
+    ["یه", "یک", "۴۲"], ["منو", "من را", "۲۷"], ["اینو", "این را", "۲۵"],
+    ["بهت", "بهات", "۲۱"], ["بهش", "بهاش", "۲۱"], ["تش", "ته‌اش", "۴۲"],
+    ["اومدم", "آمدم", "۱۷"], ["اومدی", "آمدی", "۱۷"], ["اومد", "آمد", "۱۷"], ["اومدیم", "آمدیم", "۱۷"],
+    ["اومدید", "آمدید", "۱۷"], ["اومدن", "آمدند", "۱۷"], ["اومدند", "آمدند", "۱۷"], ["اومده", "آمده", "۱۷"]
+];
+// a word ending in «ه» also appears with the ezafe sign: «خونۀ خاله» → «خانۀ خاله»
+for (const [b, f, p] of [...SAME_SYLLABLES]) {
+    if (b.endsWith("ه") && f.endsWith("ه")) SAME_SYLLABLES.push([b.slice(0, -1) + "ۀ", f.slice(0, -1) + "ۀ", p]);
+}
+const MAP = new Map(SAME_SYLLABLES.map(([b, f, p]) => [b, { full: f, page: p }]));
+
+/** Spoken past stems that keep their syllable count, so they should be written in full. */
+const SPOKEN_PAST: Record<string, string> = {
+    "خوند": "خواند", "موند": "ماند", "رسوند": "رساند", "کشوند": "کشاند", "ترسوند": "ترساند",
+    "سوزوند": "سوزاند", "پوشوند": "پوشاند", "چرخوند": "چرخاند", "خوابوند": "خواباند", "دونست": "دانست",
+    "رسوندید": "رساندید"
+};
+
+/** Present stems as people say them («می‌گن» from گفتن), besides Hazm's list. */
+const SPOKEN_STEMS = new Set(["گ", "ر", "آ", "ش", "د", "تون", "خوا", "ذار", "زار", "کن", "خور", "خواب"]);
+
+export default createPatternRule(() => ({
+    source: BOOK,
+    checks: [
+        {
+            // the word may continue after a ZWNJ («خونه‌ی»، «خونه‌ها»)
+            pattern: new RegExp(`${START}(${[...MAP.keys()].sort((a, b) => b.length - a.length).join("|")})(?=${ZWNJ}|${END})`, "g"),
+            check: (m) => {
+                const e = MAP.get(m[0])!;
+                return {
+                    message: `«${m[0]}» در گفتار هم همان‌قدر هجا دارد؛ کامل بنویسید تا شکسته خوانده شود: «${e.full}»`,
+                    replacement: e.full,
+                    source: `${BOOK}، ص ${e.page}`
+                };
+            }
+        },
+        {
+            // «می‌خورن» → «می‌خورند»، «نمی‌تونن» → «نمی‌تونند»، «باشن» → «باشند»
+            pattern: new RegExp(`${START}((?:ن?می${ZWNJ}?)?)(${LETTER}+?)ن${END}`, "g"),
+            check: (m) => {
+                const [, mi, stem] = m;
+                const isVerb = (mi && (isPresentStem(stem) || SPOKEN_STEMS.has(stem))) || stem === "باش";
+                if (!isVerb) return null;
+                const fixed = (mi ? mi.replace(/^(ن?می)(?!‌)/, "$1‌") : "") + stem + "ند";
+                return {
+                    message: `دال آخر در گفتار خودبه‌خود نرم ادا می‌شود؛ «ند» را نگه دارید: «${fixed}»`,
+                    replacement: fixed,
+                    source: `${BOOK}، ص ۱۹ و ۴۲`
+                };
+            }
+        },
+        {
+            // «رفته‌ان» → «رفته‌اند»
+            pattern: new RegExp(`${START}(${LETTER}+ه)[${ZWNJ} ]?ان${END}`, "g"),
+            check: (m) => {
+                if (KNOWN.has(m[0]) || KNOWN.has(m[0].replace(/[‌ ]/g, ""))) return null;
+                if (!KNOWN.has(m[1])) return null;
+                const fixed = m[1] + ZWNJ + "اند";
+                return { message: `«${fixed}» را کامل بنویسید`, replacement: fixed, source: `${BOOK}، ص ۲۰` };
+            }
+        },
+        {
+            // «کتابو» → «کتاب را» (را را نباید به «و» تبدیل کرد)
+            pattern: new RegExp(`${START}(${LETTER}{2,})و${END}`, "g"),
+            check: (m) => {
+                const word = m[0];
+                const stem = m[1];
+                if (KNOWN.has(word) || !KNOWN.has(stem)) return null;
+                if ("اوی".includes(stem[stem.length - 1])) return null; // «دریا رو»: here «را» keeps its «ر» anyway
+                return {
+                    message: `«را» را کامل بنویسید: «${stem} را»`,
+                    replacement: `${stem} را`,
+                    source: `${BOOK}، ص ۲۵`
+                };
+            }
+        },
+        {
+            // «دکترا، کتابا» → «دکترها، کتاب‌ها»
+            pattern: new RegExp(`${START}(${LETTER}{2,})ا${END}`, "g"),
+            check: (m) => {
+                const stem = m[1];
+                // «بیا» is a verb, not «بی» + «ا»: short stems are too ambiguous
+                if (KNOWN.has(m[0]) || !KNOWN.has(stem) || stem.endsWith("ه") || stem.length < 3) return null;
+                const fixed = "اآدذرزژو".includes(stem[stem.length - 1]) ? stem + "ها" : stem + ZWNJ + "ها";
+                return {
+                    message: `نشانهٔ جمع را کامل بنویسید؛ «${fixed}» خودبه‌خود «${m[0]}» خوانده می‌شود`,
+                    replacement: fixed,
+                    source: `${BOOK}، ص ۲۲`
+                };
+            }
+        },
+        {
+            // present with a prefix: «بخونمش، می‌دونم، نمی‌خونه» → «بخوانمش، می‌دانم، نمی‌خواند».
+            // «-ون» stands for «-ان» (دان) or «-وان» (خوان); a bare form («خونی») is left alone.
+            pattern: new RegExp(`${START}(ن?می${ZWNJ}?|ب|ن)(${LETTER}*?)ون(م|ی|ه|یم|ید|ند|ن)(ش|ت|م|شان|تان|مان)?${END}`, "g"),
+            check: (m) => {
+                const [, prefix, head, ending, pronoun = ""] = m;
+                // «تون» (توان) loses a syllable in speech, so «می‌تونم» is a correct broken form
+                if (isPresentStem(head + "ون") || SPOKEN_STEMS.has(head + "ون")) return null;
+                const formal = [head + "ان", head + "وان"].find(isPresentStem);
+                if (!formal) return null;
+                const end = ({ ه: "د", ن: "ند" } as Record<string, string>)[ending] ?? ending; // «می‌دونه» → «می‌داند»
+                const fixed = prefix + formal + end + pronoun;
+                return {
+                    message: `این فعل در گفتار هجا از دست نمی‌دهد؛ کامل بنویسید: «${fixed}»`,
+                    replacement: fixed,
+                    source: `${BOOK}، ص ۱۹ و ۳۰`
+                };
+            }
+        },
+        {
+            // past, from a closed list (a pattern would also catch «روند»): «موند، خوندم» → «ماند، خواندم»
+            pattern: new RegExp(`${START}(ن?)(${Object.keys(SPOKEN_PAST).join("|")})(م|ی|یم|ید|ند|ن|ه)?${END}`, "g"),
+            check: (m) => {
+                const [, neg, stem, ending = ""] = m;
+                const fixed = neg + SPOKEN_PAST[stem] + (ending === "ن" ? "ند" : ending);
+                return {
+                    message: `ماضی این فعل در گفتار هجا از دست نمی‌دهد؛ کامل بنویسید: «${fixed}»`,
+                    replacement: fixed,
+                    source: `${BOOK}، ص ۱۹ و ۳۰`
+                };
+            }
+        },
+        {
+            // ambiguous: report only
+            pattern: new RegExp(`${START}(اونو|اون|رو|صب)${END}`, "g"),
+            check: (m) => {
+                const hints: Record<string, string> = {
+                    "اونو": "«آن را» یا «او را»",
+                    "اون": "«آن» یا «او» (برای «او» صورت شکسته لازم نیست؛ ص ۲۹)",
+                    "رو": "اگر «را»ست، «را» بنویسید (ص ۲۵)",
+                    "صب": "اگر «صبر» است، کامل بنویسید (ص ۴۲)"
+                };
+                return { message: hints[m[1]], fix: false, source: BOOK };
+            }
+        }
+    ]
+}));

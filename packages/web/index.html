@@ -188,6 +188,7 @@
     border-radius: 999px; padding: 0 8px;
   }
   .chip-judge { color: var(--judge); background: var(--saffron-soft); }
+  .chip-style { color: var(--ok); background: var(--bg); border: 1px solid var(--line); }
   .change { margin: 0; font-family: var(--font-text); font-size: 1.1rem; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
   .from { text-decoration: line-through; text-decoration-color: var(--muted); color: var(--muted); }
   .issue-judge .from { text-decoration: none; color: var(--ink); }
@@ -206,7 +207,7 @@
 <div class="wrap">
   <header>
     <h1>درست<span class="zwnj-demo">‌</span>نویس</h1>
-    <p class="lede">متن فارسی را بنویسید یا بچسبانید. هر پیشنهاد با بند و صفحهٔ <strong>دستور خطّ فارسی</strong> (ویراست دوم، فرهنگستان، ۱۴۰۴) یا <strong>فرهنگ املایی خطّ فارسی</strong> همراه است. متن از این صفحه بیرون نمی‌رود.</p>
+    <p class="lede">متن فارسی را بنویسید یا بچسبانید. هر پیشنهاد با بند و صفحهٔ <strong>دستور خطّ فارسی</strong> (ویراست دوم، فرهنگستان، ۱۴۰۴)، <strong>فرهنگ املایی خطّ فارسی</strong> یا، برای گفت‌وگوی داستان، <strong>اصول شکسته‌نویسی</strong> همراه است. متن از این صفحه بیرون نمی‌رود.</p>
   </header>
 
   <main class="desk">
@@ -223,6 +224,12 @@
       <h2 class="panel-title">پیش‌نمایش</h2>
       <div class="preview" id="preview" aria-live="polite"></div>
       <div class="options">
+        <label>نوع متن
+          <select id="mode">
+            <option value="formal">متن رسمی</option>
+            <option value="dialogue">گفت‌وگوی داستان (شکسته)</option>
+          </select>
+        </label>
         <label><input type="checkbox" id="show-zwnj"> نمایش نیم‌فاصله‌ها</label>
         <label>«ها»ی جمع
           <select id="plural-mode">
@@ -247,7 +254,7 @@
   </main>
 
   <footer>
-    <p>نسخهٔ آزمایشی. قواعد: دستور خطّ فارسی، ویراست دوم؛ فرهنگ املایی خطّ فارسی (۱۳۹۴)، با برتری ویراست دوم در تعارض‌ها؛ واژه‌نامهٔ Hazm برای تشخیص کلمه‌های شناخته‌شده.</p>
+    <p>نسخهٔ آزمایشی. قواعد: دستور خطّ فارسی، ویراست دوم؛ فرهنگ املایی خطّ فارسی (۱۳۹۴)، با برتری ویراست دوم در تعارض‌ها؛ در حالت گفت‌وگو، اصول شکسته‌نویسی (علی صلح‌جو)؛ واژه‌نامهٔ Hazm برای تشخیص کلمه‌های شناخته‌شده.</p>
     <p>پیشنهادهای «نیازمند تشخیص» به معنا بستگی دارند و اصلاح خودکار ندارند. اگر پیشنهادی غلط بود، متن را برای سازنده بفرستید.</p>
   </footer>
 </div>

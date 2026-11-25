@@ -19,7 +19,7 @@
  *   استثناهای کتاب بر داده‌های Hazm مقدّم‌اند (Hazm «بی‌هوش» و «بی‌عار» دارد).
  */
 import { createPatternRule } from "../util/pattern-rule";
-import { START, END, WORD, ZWNJ } from "../util/persian";
+import { START, END, LETTER, WORD, ZWNJ } from "../util/persian";
 import hazmBi from "../dict/hazm-bi.json";
 
 const SOURCE = "دستور خط، «بی»، ص ۳۹";
@@ -52,7 +52,7 @@ export default createPatternRule(() => ({
         },
         {
             // joined: «بیدلیل» → «بی‌دلیل»
-            pattern: new RegExp(`${START}بی${WORD}`, "g"),
+            pattern: new RegExp(`${START}بی${LETTER}+(?=${ZWNJ}|${END})`, "g"),
             check: (m) => {
                 const separated = JOINED_TO_SEPARATED[m[0]];
                 if (!separated || ALL_EXCEPTIONS.has(m[0])) return null;
