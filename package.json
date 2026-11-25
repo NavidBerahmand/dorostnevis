@@ -1,38 +1,13 @@
 {
-  "name": "textlint-rule-preset-farhangestan",
-  "version": "0.1.0",
-  "description": "قواعد دستور خطّ فارسی (ویراست دوم، فرهنگستان زبان و ادب فارسی) برای textlint",
-  "main": "lib/index.js",
+  "name": "dorostnevis",
+  "private": true,
+  "description": "درست‌نویس: ابزار بررسی و اصلاح متن فارسی بر پایهٔ دستور خطّ فرهنگستان",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "textlint-scripts build && node -e \"require('fs').cpSync('src/dict','lib/dict',{recursive:true})\"",
-    "test": "textlint-scripts test",
-    "prepublishOnly": "npm run build"
+    "build": "npm run build --workspaces",
+    "test": "npm test --workspaces"
   },
-  "keywords": [
-    "textlint",
-    "textlintrule",
-    "persian",
-    "farsi",
-    "preset"
-  ],
-  "author": "",
-  "license": "MIT",
-  "devDependencies": {
-    "@types/mocha": "^10.0.10",
-    "@types/node": "^26.6.7",
-    "textlint": "^16.1.3",
-    "textlint-scripts": "^16.1.3",
-    "textlint-tester": "^16.1.3",
-    "typescript": "^7.0.2"
-  },
-  "dependencies": {
-    "textlint-rule-helper": "^2.6.0"
-  },
-  "files": [
-    "lib",
-    "src"
-  ],
-  "peerDependencies": {
-    "textlint": ">=14.0.0"
-  }
+  "license": "MIT"
 }
