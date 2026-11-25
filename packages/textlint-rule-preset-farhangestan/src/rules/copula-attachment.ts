@@ -31,7 +31,7 @@ import { verbForm } from "./mi-prefix";
 
 const S_COPULA = "دستور خط، «مجموعۀ ام، ای، است، ایم، اید، اند»، ص ۴۲";
 const S_POSSESSIVE = "دستور خط، «ضمایر ملکی و مفعولی»، ص ۴۴";
-const S_INDEFINITE = "دستور خط، «یای نکره و مصدری و نسبت»، ص ۴۵";
+const S_INDEFINITE = "دستور خط، «یای نکره و مصدری و نسبت»، ص ۴۶";
 
 /** Hamza words in جدول ۳ that end in «ائی/وئی». */
 const HAMZA_WORDS = new Set(["لوئی", "سوئی", "استثنائی", "اسرائیل", "میکائیل", "عزرائیل", "جبرئیل"]);
@@ -135,7 +135,7 @@ export default createPatternRule(() => ({
         },
         {
             // «جائی»، «دانشجوئی»، «رادیوئی» → «یی». The book allows both mediators
-            // (پانویس ۱۸) and picks «ی» for consistency, so this is a suggestion. After a
+            // (پانویس ۱ در ص ۴۲) and picks «ی» for consistency, so this is a suggestion. After a
             // final hamza «ئ» is the rule (تبصرۀ ۲: «اجزائی»، «سمائی»، «سوئی»): left alone.
             pattern: new RegExp(`${START}(${LETTER}+[اوآ])ئ(ی|یم|ید)${END}`, "g"),
             check: (m) => {
@@ -145,7 +145,7 @@ export default createPatternRule(() => ({
                     message: `برای یکدستی، صامت میانجی «ی» توصیه می‌شود: «${fixed}»`,
                     replacement: fixed,
                     fix: false,
-                    source: S_INDEFINITE + " و پانویس ۱۸"
+                    source: S_INDEFINITE + "؛ پانویس ۱ در ص ۴۲"
                 };
             }
         }

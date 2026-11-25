@@ -16,7 +16,7 @@
  *   می‌شوند، بی اصلاح خودکار.
  */
 import { createPatternRule } from "../util/pattern-rule";
-import { START, END, WORD, ZWNJ, NON_JOINING } from "../util/persian";
+import { START, END, WORD, ZWNJ, NON_JOINING, toPersianDigits } from "../util/persian";
 import { FARHANG, FARHANG_OVERRIDES, BOOK_JOINED } from "../util/words";
 
 const SOURCE = "فرهنگ املایی خطّ فارسی";
@@ -54,8 +54,8 @@ export default createPatternRule(() => ({
                 if (target && seen === visibleForm(target)) return null;
                 if (!override && [preferred ?? "", ...others].some((f) => visibleForm(f) === seen)) return null;
                 const source = override
-                    ? `دستور خط (ویراست دوم)؛ فرهنگ املایی، ص ${page}، «${preferred}» دارد`
-                    : `${SOURCE}، ص ${page}`;
+                    ? `دستور خط (ویراست جدید)؛ فرهنگ املایی، ص ${toPersianDigits(page)}، «${preferred}» دارد`
+                    : `${SOURCE}، ص ${toPersianDigits(page)}`;
                 if (!target) {
                     return {
                         message: `این کلمه در فرهنگ به چند شکل و با معنای متفاوت آمده: «${others.join("»، «")}»`,

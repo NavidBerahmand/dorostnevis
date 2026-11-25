@@ -62,6 +62,7 @@
   }
   h1 .zwnj-demo { color: var(--lapis); }
   .lede { margin: 0; color: var(--muted); max-width: 62ch; }
+  .lede a { color: var(--lapis); }
 
   .desk {
     display: grid;
@@ -216,7 +217,12 @@
   .to { font-weight: 600; color: var(--ok); }
   .arrow { color: var(--muted); }
   .msg { margin: 0; font-size: 0.9rem; }
-  .source { margin: 0; font-size: 0.78rem; color: var(--muted); }
+  .source { margin: 0; font-size: 0.78rem; color: var(--muted); line-height: 1.6; }
+  .cite-book { display: block; color: var(--ink); font-weight: 500; }
+  .cite-where { display: block; }
+  .cite-link { color: inherit; text-decoration: none; display: block; border-radius: 4px; }
+  .cite-link .cite-book { color: var(--lapis); }
+  .cite-link:hover .cite-book, .cite-link:focus-visible .cite-book { text-decoration: underline; }
   .actions { display: flex; gap: 6px; margin-top: 2px; }
 
   footer { color: var(--muted); font-size: 0.8rem; max-width: 70ch; }
@@ -272,7 +278,7 @@
 <div class="wrap">
   <header>
     <h1>درست<span class="zwnj-demo">‌</span>نویس</h1>
-    <p class="lede">متن فارسی را بنویسید یا بچسبانید. هر پیشنهاد با بند و صفحهٔ <strong>دستور خطّ فارسی</strong> (ویراست دوم، فرهنگستان، ۱۴۰۴)، <strong>فرهنگ املایی خطّ فارسی</strong> یا، برای گفت‌وگوی داستان، <strong>اصول شکسته‌نویسی</strong> همراه است. متن از این صفحه بیرون نمی‌رود، مگر جمله‌ای که خودتان با «این پیشنهاد غلط است» گزارش کنید.</p>
+    <p class="lede">متن فارسی را بنویسید یا بچسبانید. هر پیشنهاد با بند و صفحهٔ <a href="https://apll.ir/wp-content/uploads/2023/07/Dastour-e-Khat-17.04.1402.pdf" target="_blank" rel="noopener"><strong>دستور خطّ فارسی</strong> (ویراست جدید، فرهنگستان زبان و ادب فارسی)</a>، <strong>فرهنگ املایی خطّ فارسی</strong> یا، برای گفت‌وگوی داستان، <strong>اصول شکسته‌نویسی</strong> همراه است. متن از این صفحه بیرون نمی‌رود، مگر جمله‌ای که خودتان با «این پیشنهاد غلط است» گزارش کنید.</p>
   </header>
 
   <main class="desk">
@@ -319,9 +325,9 @@
   </main>
 
   <footer>
-    <p>نسخهٔ آزمایشی. قواعد: دستور خطّ فارسی، ویراست دوم؛ فرهنگ املایی خطّ فارسی (۱۳۹۴)، با برتری ویراست دوم در تعارض‌ها؛ در حالت گفت‌وگو، اصول شکسته‌نویسی (علی صلح‌جو)؛ واژه‌نامهٔ Hazm برای تشخیص کلمه‌های شناخته‌شده. کسرهٔ اضافهٔ جاافتاده («خانه قبلی» ← «خانۀ قبلی») و «را»ی چسبیده («کتابرا» ← «کتاب را») را دو مدل آماری کوچک حدس می‌زنند که روی متن ویکی‌پدیای فارسی (CC BY-SA) آموزش دیده‌اند؛ اصلاح خودکار فقط وقتی است که مدل دست‌کم ۹۰٪ مطمئن باشد.</p>
+    <p>نسخهٔ آزمایشی. قواعد: دستور خطّ فارسی، ویراست جدید؛ فرهنگ املایی خطّ فارسی (۱۳۹۴)، با برتری ویراست جدید در تعارض‌ها؛ در حالت گفت‌وگو، اصول شکسته‌نویسی (علی صلح‌جو)؛ واژه‌نامهٔ Hazm برای تشخیص کلمه‌های شناخته‌شده. کسرهٔ اضافهٔ جاافتاده («خانه قبلی» ← «خانۀ قبلی») و «را»ی چسبیده («کتابرا» ← «کتاب را») را دو مدل آماری کوچک حدس می‌زنند که روی متن ویکی‌پدیای فارسی (CC BY-SA) آموزش دیده‌اند؛ اصلاح خودکار فقط وقتی است که مدل دست‌کم ۹۰٪ مطمئن باشد.</p>
     <p>پیشنهادهای «نیازمند تشخیص» به معنا بستگی دارند و اصلاح خودکار ندارند. اگر پیشنهادی غلط بود، دکمهٔ «این پیشنهاد غلط است» را بزنید: پیش از فرستادن، دقیقاً همان چیزی را که فرستاده می‌شود می‌بینید.</p>
-    <p><strong>منابع و مجوز.</strong> قواعد و فهرست‌ها از «دستور خطّ فارسی» (ویراست دوم، ۱۴۰۴) و «فرهنگ املایی خطّ فارسی» (۱۳۹۴)، هر دو از <a href="https://apll.ir">فرهنگستان زبان و ادب فارسی</a>، برای استفادهٔ رایگان و غیرتجاری و با ذکر منبع. واژه‌نامهٔ غلط‌یاب و دو مدل آماری از متن <a href="https://fa.wikipedia.org">ویکی‌پدیای فارسی</a> ساخته شده‌اند، به قلم ویرایشگران ویکی‌پدیا، با مجوز <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.fa">CC BY-SA 4.0</a>؛ همین داده‌ها با همان مجوز منتشر می‌شوند. واژه‌نامهٔ <a href="https://github.com/roshan-research/hazm">Hazm</a> (MIT). «اصول شکسته‌نویسی»، علی صلح‌جو. کد ابزار: MIT.</p>
+    <p><strong>منابع و مجوز.</strong> قواعد و فهرست‌ها از «<a href="https://apll.ir/wp-content/uploads/2023/07/Dastour-e-Khat-17.04.1402.pdf" target="_blank" rel="noopener">دستور خطّ فارسی</a>» (ویراست جدید، چاپ اول ۱۴۰۱؛ در چاپ‌های بعد «ویراست دوم» نام گرفته) و «فرهنگ املایی خطّ فارسی» (۱۳۹۴)، هر دو از <a href="https://apll.ir">فرهنگستان زبان و ادب فارسی</a>، برای استفادهٔ رایگان و غیرتجاری و با ذکر منبع. واژه‌نامهٔ غلط‌یاب و دو مدل آماری از متن <a href="https://fa.wikipedia.org">ویکی‌پدیای فارسی</a> ساخته شده‌اند، به قلم ویرایشگران ویکی‌پدیا، با مجوز <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.fa">CC BY-SA 4.0</a>؛ همین داده‌ها با همان مجوز منتشر می‌شوند. واژه‌نامهٔ <a href="https://github.com/roshan-research/hazm">Hazm</a> (MIT). «اصول شکسته‌نویسی»، علی صلح‌جو. کد ابزار: MIT.</p>
     <details class="reports-panel" id="reports-panel" hidden>
       <summary>گزارش‌های «پیشنهاد غلط» (<span id="reports-count">بارگذاری با باز کردن</span>)</summary>
       <p>فقط شما و ویراستاران این صفحه این بخش را می‌بینید.</p>

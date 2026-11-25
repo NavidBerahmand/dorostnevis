@@ -10,7 +10,7 @@
  *    (ترکیب‌ها، بخش ب)
  * ۲. «ام، ای، است، ایم، اید، اند» و «ـَم، ـَت، ـَش، ـِمان، ـِتان، ـِشان» پس از
  *    «ه»ی غیرملفوظ و «ی»: «خستهام» ← «خسته‌ام»، «خانهمان» ← «خانه‌مان»،
- *    «خستهاست» ← «خسته است». (ص ۴۲–۴۵)
+ *    «خستهاست» ← «خسته است». (ص ۴۲–۴۶)
  * ۳. جزء اوّل مختوم به «ه»ی غیرملفوظ: «بهانهگیر» ← «بهانه‌گیر». (ترکیب‌ها، ب-۱۱)
  * ۴. «هم-» و پیشوندهای پیوندپذیر (برون، بوم، تک، درون، زیست، میان، نیم):
  *    «همکلاسی» ← «هم‌کلاسی»، «زیستفناوری» ← «زیست‌فناوری». (ص ۳۶–۴۰)
@@ -198,7 +198,7 @@ function check(word: string): PatternResult | null {
             const fixed = stem + ZWNJ + suffix;
             // «مرگوش» (a place) is not «مرگ» + «وش»: the rarer suffixes are only suggested
             const rare = suffix === "وش" || suffix === "فام";
-            return { message: `«-${suffix}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, fix: rare ? false : undefined, source: "دستور خط، ترکیب‌ها، الف-۱، تبصرهٔ ۴، ص ۶۰" };
+            return { message: `«-${suffix}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, fix: rare ? false : undefined, source: "دستور خط، ترکیب‌ها، الف-۱، تبصرهٔ ۴، ص ۵۹–۶۰" };
         }
     }
 
@@ -244,7 +244,7 @@ function check(word: string): PatternResult | null {
     const gar = word.match(/^(.+[طظ])(گر|گری|گرا|گرایی)$/);
     if (gar && isKnown(gar[1])) {
         const fixed = gar[1] + ZWNJ + gar[2];
-        return { message: `«-${gar[2]}» پس از «${gar[1].slice(-1)}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: "دستور خط، ترکیب‌ها، الف-۱، تبصرۀ ۳، ص ۶۰" };
+        return { message: `«-${gar[2]}» پس از «${gar[1].slice(-1)}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: "دستور خط، ترکیب‌ها، الف-۱، تبصرۀ ۳، ص ۵۹" };
     }
 
     // ۳. first part ending in a silent ه: «بهانهگیر» → «بهانه‌گیر».

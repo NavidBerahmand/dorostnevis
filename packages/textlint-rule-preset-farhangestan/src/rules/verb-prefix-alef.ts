@@ -18,7 +18,7 @@ import { START, END, LETTER } from "../util/persian";
 import { isKnown } from "../util/words";
 import { verbForm, isPresentStem } from "./mi-prefix";
 
-const SOURCE = "دستور خط، «به»، تبصرهٔ ۲ و ۳، ص ۳۸";
+const SOURCE = "دستور خط، «به»، تبصرهٔ ۲ و ۳، ص ۳۸–۳۹";
 
 export default createPatternRule(() => ({
     source: SOURCE,

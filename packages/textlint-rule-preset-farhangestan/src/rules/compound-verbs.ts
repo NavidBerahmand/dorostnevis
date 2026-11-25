@@ -1,7 +1,7 @@
 /*
  * مصدرهای مرکّب و فعل‌های گروهی
  *
- * دستور خط، ترکیب‌ها، ج-۲ (ص ۶۸):
+ * دستور خط، ترکیب‌ها، ج-۲ (ص ۶۷–۶۸):
  *   در مصدرهای مرکّب و مصدرهای گروهی، همکرد (به‏صورت مصدری یا صرف‏شده) با
  *   یک فاصلۀ کامل از جزء غیرهمکرد نوشته می‏شود: اختصاص دادن، اختصاص داده
  *   بودیم، به دست آوردن، سخن گفتن، سخن گفتم
@@ -19,7 +19,7 @@ import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, ZWNJ } from "../util/persian";
 import { isKnown, isDictionaryWord } from "../util/words";
 
-const SOURCE = "دستور خط، ترکیب‌ها، ج-۲، ص ۶۸";
+const SOURCE = "دستور خط، ترکیب‌ها، ج-۲، ص ۶۷–۶۸";
 
 // «دادن، گرفتن، داشتن، زدن، گفتن، یافتن» too, but not their bare present stems,
 // which are also suffixes («-ده»، «-گیر»، «-دار»، «-زن»، «-گو»، «-یاب»)

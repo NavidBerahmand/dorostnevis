@@ -189,6 +189,38 @@ function bookMeter(): string {
             </div>`;
 }
 
+const BOOK_PDF = "https://apll.ir/wp-content/uploads/2023/07/Dastour-e-Khat-17.04.1402.pdf";
+const BOOKS: Array<{ prefix: RegExp; name: string; url?: string }> = [
+    {
+        prefix: /^دستور خط(?: \(ویراست جدید\))?\s*[،؛:]?\s*/,
+        name: "دستور خطّ فارسی (ویراست جدید)، فرهنگستان زبان و ادب فارسی، ۱۴۰۱",
+        url: BOOK_PDF
+    },
+    { prefix: /^فرهنگ املایی(?: خطّ فارسی)?\s*[،؛]?\s*/, name: "فرهنگ املایی خطّ فارسی، فرهنگستان زبان و ادب فارسی، ۱۳۹۴" },
+    { prefix: /^اصول شکسته‌نویسی\s*[،؛]?\s*/, name: "اصول شکسته‌نویسی، علی صلح‌جو" }
+];
+const faDigits = (s: string) => Number(s.replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0)));
+
+/**
+ * «دستور خط، «تنوین»، ص ۵۶» → the full name of the book, the section, and a
+ * link to that page of the published PDF (its page index is the printed page).
+ */
+function citation(source: string): string {
+    for (const b of BOOKS) {
+        const m = source.match(b.prefix);
+        if (!m) continue;
+        const rest = source.slice(m[0].length);
+        const where = rest ? `<span class="cite-where">${esc(rest)}</span>` : "";
+        if (!b.url) return `<span class="cite-book">${esc(b.name)}</span>${where}`;
+        // a page after «فرهنگ املایی» is the dictionary's page, not the book's
+        const page = /فرهنگ املایی/.test(rest) ? null : rest.match(/ص ([۰-۹]+)/);
+        const href = page ? `${b.url}#page=${faDigits(page[1])}` : b.url;
+        const title = page ? `باز کردن صفحهٔ ${page[1]} کتاب (PDF، سایت فرهنگستان)` : "باز کردن کتاب (PDF، سایت فرهنگستان)";
+        return `<a class="cite-link" href="${href}" target="_blank" rel="noopener" title="${title}"><span class="cite-book">${esc(b.name)}</span>${where}</a>`;
+    }
+    return esc(source);
+}
+
 /** Why a card has no circles, in a few words. */
 function noMeterReason(m: Msg): string {
     if (m.ruleId === "spelling") return "حدس غلط‌یاب است، نه قاعده";
@@ -244,7 +276,7 @@ function renderList(text: string) {
                 ${m.fix ? `<span class="arrow" aria-hidden="true">←</span><span class="to">${show(fixed) || "(حذف)"}</span>` : ""}
             </p>
             <p class="msg">${esc(msg)}</p>
-            ${source ? `<p class="source">${esc(source)}</p>` : ""}
+            ${source ? `<p class="source">${citation(source)}</p>` : ""}
             <div class="actions">
                 ${m.fix ? `<button type="button" class="btn btn-small" data-apply="${i}">اعمال</button>` : ""}
                 <button type="button" class="btn btn-small btn-quiet" data-ignore="${i}">نادیده</button>

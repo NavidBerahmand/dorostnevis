@@ -21,7 +21,7 @@ export interface Options {
     digits?: boolean;
 }
 
-const SOURCE = "یکدست‌سازی نویسه‌ها، دستور خط: جدول ۱ و ۲";
+const SOURCE = "دستور خط، جدول‌های ۱ و ۲ (نشانه‌های خط فارسی)، ص ۲۹–۳۳";
 
 const ARABIC_TO_PERSIAN: Record<string, string> = {
     "ي": "ی", // ي

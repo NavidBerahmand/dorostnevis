@@ -15,7 +15,7 @@
 import { createPatternRule } from "../util/pattern-rule";
 import { WORD_CHAR, ZWNJ } from "../util/persian";
 
-const SOURCE = "دستور خط، قواعد کلّی، بند ۷: فاصله‌گذاری";
+const SOURCE = "دستور خط، قواعد کلّی، بند ۷: فاصله‌گذاری، ص ۲۲–۲۳";
 
 /** Non-joining letters, without ۀ/ة/ء (ZWNJ after them is harmless but kept out of scope). */
 const NON_JOINING_STRICT = "اآأإدذرزژو";
