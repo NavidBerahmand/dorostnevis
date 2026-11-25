@@ -44,6 +44,7 @@ const RULE_LABELS: Record<string, string> = {
     "arabic-prefixes": "سوء/ضد/غیر",
     dictionary: "فرهنگ املایی",
     "word-spacing": "فاصله‌گذاری",
+    punctuation: "نشانه‌گذاری",
     "over-broken": "شکستن بی‌جا",
     "may-break": "شکستن روا"
 };

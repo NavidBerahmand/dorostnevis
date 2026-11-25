@@ -21,6 +21,7 @@ import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, WORD, ZWNJ, joinWithHalfSpace, isNonJoining } from "../util/persian";
 import { isDictionaryWord } from "../util/words";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
+import posTags from "../dict/ezafe-pos.json";
 
 
 const SOURCE = "دستور خط، «تر و ترین»، ص ۴۰";
@@ -31,6 +32,10 @@ const EXCEPTION_STEMS = ["به", "که", "مه", "بیش", "کم"];
 const NOT_A_STEM = new Set(["و", "یا", "از", "با", "در", "را", "تا", "هم", "نه", "که", "چه", "این", "آن"]);
 
 const ADJECTIVES = new Set(hazmAdjectives.adjectives);
+/** Words Hazm tags as adjectives anywhere («زیبا»): used only for a spaced «تر». */
+const ANY_ADJECTIVE = new Set<string>(
+    Object.entries(posTags.tags as Record<string, string>).filter(([t]) => t.split(",").includes("AJ")).flatMap(([, w]) => w.split(" "))
+);
 // «فیلتر» is a noun, not «فیل» + «تر»
 const BLOCKED = new Set([...hazmAdjectives.blocked, ...EXCEPTION_STEMS, "کلان", "فیل"]);
 
@@ -62,7 +67,7 @@ export default createPatternRule(() => ({
             // «لباس تر را پهن کرد»: before «را» it is the adjective «wet»
             pattern: new RegExp(`${START}(${LETTER}+) +(تری|تر)${END}(?! +(?:از|را)${END})`, "g"),
             check: (m) => {
-                if (!ADJECTIVES.has(m[1]) || BLOCKED.has(m[1]) || NOT_A_STEM.has(m[1])) return null;
+                if (!(ADJECTIVES.has(m[1]) || ANY_ADJECTIVE.has(m[1])) || BLOCKED.has(m[1]) || NOT_A_STEM.has(m[1])) return null;
                 const fixed = joinWithHalfSpace(m[1], m[2]);
                 return { message: `«${m[2]}» با نیم‌فاصله/بی‌فاصله به صفت می‌چسبد: «${fixed}»`, replacement: fixed };
             }

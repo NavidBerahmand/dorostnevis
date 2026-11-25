@@ -15,6 +15,7 @@ import hamzaTanvin from "./rules/hamza-tanvin";
 import arabicPrefixes from "./rules/arabic-prefixes";
 import dictionary from "./rules/dictionary";
 import wordSpacing from "./rules/word-spacing";
+import punctuation from "./rules/punctuation";
 
 export default {
     rules: {
@@ -34,6 +35,7 @@ export default {
         "hamza-tanvin": hamzaTanvin,
         "arabic-prefixes": arabicPrefixes,
         "word-spacing": wordSpacing,
+        punctuation,
         dictionary
     },
     rulesConfig: {
@@ -53,6 +55,7 @@ export default {
         "hamza-tanvin": true,
         "arabic-prefixes": true,
         "word-spacing": true,
+        punctuation: true,
         dictionary: true
     }
 };
