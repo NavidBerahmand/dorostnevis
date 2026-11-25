@@ -221,6 +221,50 @@
 
   footer { color: var(--muted); font-size: 0.8rem; max-width: 70ch; }
   footer p { margin: 0 0 6px; }
+  footer a { color: var(--lapis); }
+
+  .actions { align-items: center; }
+  .btn-report {
+    margin-inline-start: auto;
+    background: transparent; color: var(--muted);
+    border-color: transparent; font-weight: 500;
+  }
+  .btn-report:hover { color: var(--judge); border-color: var(--line); }
+
+  .report-dialog {
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--ink);
+    padding: 18px;
+    direction: rtl;
+    font-family: var(--font-ui);
+  }
+  .report-dialog::backdrop { background: rgb(10 15 25 / 0.45); }
+  .report-dialog h2 { margin: 0 0 6px; font-size: 1.1rem; }
+  .report-dialog form { display: grid; gap: 10px; }
+  .report-intro, .report-note { margin: 0; font-size: 0.85rem; color: var(--muted); }
+  .report-preview {
+    margin: 0; padding: 10px 12px; border-radius: 8px;
+    background: var(--bg); border: 1px solid var(--line);
+    display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px;
+    font-size: 0.9rem;
+  }
+  .report-preview dt { color: var(--muted); }
+  .report-preview dd { margin: 0; font-family: var(--font-text); overflow-wrap: anywhere; }
+  .report-dialog label { display: grid; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+  .report-dialog textarea { min-height: 72px; font-size: 1rem; line-height: 1.8; }
+  .report-result { margin: 0; font-size: 0.85rem; color: var(--judge); min-height: 1.2em; }
+
+  .reports-panel { border-top: 1px solid var(--line); padding-top: 10px; }
+  .reports-panel summary { cursor: pointer; color: var(--ink); font-weight: 700; }
+  .reports-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+  .report-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+  .report-item p { margin: 0 0 4px; }
+  .report-head { font-weight: 500; color: var(--ink); }
+  .report-context { font-family: var(--font-text); color: var(--ink); }
 
   @media (prefers-reduced-motion: reduce) { .issue { transition: none; } }
 </style>
@@ -228,7 +272,7 @@
 <div class="wrap">
   <header>
     <h1>درست<span class="zwnj-demo">‌</span>نویس</h1>
-    <p class="lede">متن فارسی را بنویسید یا بچسبانید. هر پیشنهاد با بند و صفحهٔ <strong>دستور خطّ فارسی</strong> (ویراست دوم، فرهنگستان، ۱۴۰۴)، <strong>فرهنگ املایی خطّ فارسی</strong> یا، برای گفت‌وگوی داستان، <strong>اصول شکسته‌نویسی</strong> همراه است. متن از این صفحه بیرون نمی‌رود.</p>
+    <p class="lede">متن فارسی را بنویسید یا بچسبانید. هر پیشنهاد با بند و صفحهٔ <strong>دستور خطّ فارسی</strong> (ویراست دوم، فرهنگستان، ۱۴۰۴)، <strong>فرهنگ املایی خطّ فارسی</strong> یا، برای گفت‌وگوی داستان، <strong>اصول شکسته‌نویسی</strong> همراه است. متن از این صفحه بیرون نمی‌رود، مگر جمله‌ای که خودتان با «این پیشنهاد غلط است» گزارش کنید.</p>
   </header>
 
   <main class="desk">
@@ -276,8 +320,31 @@
 
   <footer>
     <p>نسخهٔ آزمایشی. قواعد: دستور خطّ فارسی، ویراست دوم؛ فرهنگ املایی خطّ فارسی (۱۳۹۴)، با برتری ویراست دوم در تعارض‌ها؛ در حالت گفت‌وگو، اصول شکسته‌نویسی (علی صلح‌جو)؛ واژه‌نامهٔ Hazm برای تشخیص کلمه‌های شناخته‌شده. کسرهٔ اضافهٔ جاافتاده («خانه قبلی» ← «خانۀ قبلی») و «را»ی چسبیده («کتابرا» ← «کتاب را») را دو مدل آماری کوچک حدس می‌زنند که روی متن ویکی‌پدیای فارسی (CC BY-SA) آموزش دیده‌اند؛ اصلاح خودکار فقط وقتی است که مدل دست‌کم ۹۰٪ مطمئن باشد.</p>
-    <p>پیشنهادهای «نیازمند تشخیص» به معنا بستگی دارند و اصلاح خودکار ندارند. اگر پیشنهادی غلط بود، متن را برای سازنده بفرستید.</p>
+    <p>پیشنهادهای «نیازمند تشخیص» به معنا بستگی دارند و اصلاح خودکار ندارند. اگر پیشنهادی غلط بود، دکمهٔ «این پیشنهاد غلط است» را بزنید: پیش از فرستادن، دقیقاً همان چیزی را که فرستاده می‌شود می‌بینید.</p>
+    <p><strong>منابع و مجوز.</strong> قواعد و فهرست‌ها از «دستور خطّ فارسی» (ویراست دوم، ۱۴۰۴) و «فرهنگ املایی خطّ فارسی» (۱۳۹۴)، هر دو از <a href="https://apll.ir">فرهنگستان زبان و ادب فارسی</a>، برای استفادهٔ رایگان و غیرتجاری و با ذکر منبع. واژه‌نامهٔ غلط‌یاب و دو مدل آماری از متن <a href="https://fa.wikipedia.org">ویکی‌پدیای فارسی</a> ساخته شده‌اند، به قلم ویرایشگران ویکی‌پدیا، با مجوز <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.fa">CC BY-SA 4.0</a>؛ همین داده‌ها با همان مجوز منتشر می‌شوند. واژه‌نامهٔ <a href="https://github.com/roshan-research/hazm">Hazm</a> (MIT). «اصول شکسته‌نویسی»، علی صلح‌جو. کد ابزار: MIT.</p>
+    <details class="reports-panel" id="reports-panel" hidden>
+      <summary>گزارش‌های «پیشنهاد غلط» (<span id="reports-count">بارگذاری با باز کردن</span>)</summary>
+      <p>فقط شما و ویراستاران این صفحه این بخش را می‌بینید.</p>
+      <ol class="reports-list" id="reports-list"></ol>
+    </details>
   </footer>
+
+  <dialog class="report-dialog" id="report-dialog" aria-labelledby="report-title">
+    <form method="dialog">
+      <h2 id="report-title">این پیشنهاد غلط است</h2>
+      <p class="report-intro">این گزارش به بهتر شدن قاعده‌ها کمک می‌کند. این‌ها فرستاده می‌شود:</p>
+      <dl class="report-preview" id="report-preview"></dl>
+      <label>چرا غلط است؟ شکل درست چیست؟ (اختیاری)
+        <textarea id="report-comment" maxlength="1000"></textarea>
+      </label>
+      <p class="report-note" id="report-note"></p>
+      <p class="report-result" id="report-result" role="status"></p>
+      <div class="toolbar">
+        <button type="submit" class="btn" id="report-send">فرستادن گزارش</button>
+        <button type="submit" class="btn btn-quiet" value="cancel" formnovalidate>انصراف</button>
+      </div>
+    </form>
+  </dialog>
 </div>
 
 <script src="app.js" charset="utf-8"></script>

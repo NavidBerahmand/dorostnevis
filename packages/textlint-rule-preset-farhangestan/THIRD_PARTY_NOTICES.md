@@ -1,6 +1,31 @@
-# Third-party notices
+# Third-party notices / منابع و مجوز داده‌ها
 
-`src/dict/hazm-verbs.json`, `src/dict/hazm-bi.json` and `src/dict/hazm-adjectives.json`
+The code in this package is MIT-licensed (see `LICENSE`). The data files below
+come from other sources and keep their own terms. A build or package that
+includes them is bound by those terms too: in particular, the Farhangestan data
+allows **free, non-commercial use with attribution** only.
+
+کد این بسته با مجوز MIT است. فایل‌های دادهٔ زیر از منابع دیگرند و شرایط خودشان را دارند؛
+هر نسخه یا بسته‌ای که آن‌ها را در بر دارد تابع همین شرایط است. به‌ویژه دادهٔ فرهنگستان
+فقط برای **استفادهٔ رایگان و غیرتجاری با ذکر منبع** است.
+
+| فایل | منبع | شرایط |
+| --- | --- | --- |
+| `src/dict/farhang-emlaei.json`، `src/dict/farhang-v2-overrides.json` | فرهنگ املایی خطّ فارسی، فرهنگستان زبان و ادب فارسی، ۱۳۹۴ | استفادهٔ رایگان و غیرتجاری با ذکر منبع، به اجازهٔ فرهنگستان |
+| `src/dict/multi-spelling.json`، `book-joined.json`، `compounds.json`، `arabic.json`، `hamza.json`، و مثال‌ها و ارجاع‌های قاعده‌ها | دستور خطّ فارسی، ویراست دوم، فرهنگستان زبان و ادب فارسی، ۱۴۰۴ | همان |
+| `src/dict/spelling-lexicon.json` (بسامد واژه‌ها)، `src/dict/ezafe-model.json` و `src/dict/ra-model.json` (وزن‌های مدل)، `scripts/ezafe-model/hand-labels*.jsonl` (جمله‌های برچسب‌خورده) | ویکی‌پدیای فارسی (fa.wikipedia.org)، به قلم ویرایشگرانش | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)؛ این فایل‌ها با همین مجوز منتشر می‌شوند |
+| `src/dict/hazm-*.json`، `src/dict/ezafe-pos.json` | [Hazm](https://github.com/roshan-research/hazm) | MIT (متن زیر) |
+| قاعده‌های حالت گفت‌وگو (`textlint-rule-preset-shekaste`) | اصول شکسته‌نویسی، علی صلح‌جو | فقط ارجاع؛ متنی از کتاب در مخزن نیست |
+
+Persian Wikipedia: text by Wikipedia contributors, https://fa.wikipedia.org,
+licensed CC BY-SA 4.0. The lexicon holds word forms with their frequency
+buckets; the models hold feature weights learnt from article text; the
+hand-label files quote short sentences. Changes: text extracted from the dump,
+tokenised and counted or used as training examples.
+
+## Hazm
+
+`src/dict/hazm-*.json` and `src/dict/ezafe-pos.json`
 are derived from the data files of Hazm (https://github.com/roshan-research/hazm),
 used under the following licence:
 

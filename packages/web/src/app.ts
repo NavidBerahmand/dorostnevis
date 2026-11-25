@@ -7,6 +7,7 @@ import textPlugin from "@textlint/textlint-plugin-text";
 import preset from "../../textlint-rule-preset-farhangestan/src/index";
 import { loadSpellingLexicon } from "../../textlint-rule-preset-farhangestan/src/util/speller";
 import shekaste from "../../textlint-rule-preset-shekaste/src/index";
+import { openReport, sentenceAround, setupOwnerPanel, Report } from "./report";
 
 type Msg = {
     ruleId: string;
@@ -76,6 +77,8 @@ const copyBtn = $<HTMLButtonElement>("copy");
 const status = $<HTMLSpanElement>("status");
 
 let messages: Msg[] = [];
+/** What «این پیشنهاد غلط است» would send for each card. */
+let reports: Report[] = [];
 let timer: number | undefined;
 
 function options() {
@@ -205,6 +208,7 @@ function meterFor(m: Msg, p: number | null): string {
 
 function renderList(text: string) {
     list.innerHTML = "";
+    reports = [];
     messages.forEach((m, i) => {
         const split = splitMessage(m);
         const source = split.source;
@@ -217,6 +221,18 @@ function renderList(text: string) {
         const [ws, we] = wordAround(text, Math.min(m.range[0], m.fix?.range[0] ?? m.range[0]), Math.max(m.range[1], m.fix?.range[1] ?? m.range[1]));
         const original = text.slice(ws, we);
         const fixed = m.fix ? text.slice(ws, m.fix.range[0]) + m.fix.text + text.slice(m.fix.range[1], we) : "";
+        reports.push({
+            rule: m.ruleId,
+            ruleLabel: RULE_LABELS[m.ruleId] ?? m.ruleId,
+            message: msg,
+            source,
+            original,
+            suggestion: fixed,
+            context: sentenceAround(text, ws, we),
+            comment: "",
+            mode: mode.value,
+            at: ""
+        });
         li.innerHTML = `
             ${meter}
             <div class="issue-head">
@@ -232,6 +248,7 @@ function renderList(text: string) {
             <div class="actions">
                 ${m.fix ? `<button type="button" class="btn btn-small" data-apply="${i}">اعمال</button>` : ""}
                 <button type="button" class="btn btn-small btn-quiet" data-ignore="${i}">نادیده</button>
+                <button type="button" class="btn btn-small btn-report" data-report="${i}">این پیشنهاد غلط است</button>
             </div>`;
         list.appendChild(li);
     });
@@ -291,7 +308,21 @@ list.addEventListener("click", (ev) => {
     const target = ev.target as HTMLElement;
     const a = target.closest("[data-apply]") as HTMLElement | null;
     const ig = target.closest("[data-ignore]") as HTMLElement | null;
+    const rp = target.closest("[data-report]") as HTMLElement | null;
     if (a) applyFix(messages[Number(a.dataset.apply)]);
+    if (rp) {
+        const i = Number(rp.dataset.report);
+        const m = messages[i];
+        const text = input.value;
+        void openReport(reports[i]).then((ok) => {
+            if (!ok || input.value !== text) return;
+            // a reported card goes away like an ignored one
+            ignored.add(key(m, text));
+            void check().then(() => {
+                status.textContent = "گزارش رسید. سپاس!";
+            });
+        });
+    }
     if (ig) {
         ignored.add(key(messages[Number(ig.dataset.ignore)], input.value));
         check();
@@ -368,3 +399,4 @@ try {
 }
 input.value = initial;
 check();
+void setupOwnerPanel();
