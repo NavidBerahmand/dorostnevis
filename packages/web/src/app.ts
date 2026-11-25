@@ -107,10 +107,14 @@ function mergeSame(msgs: Msg[], text: string): { primary: Msg[]; extra: Msg[][] 
     const primary: Msg[] = [];
     const extra: Msg[][] = [];
     for (const [k, group] of groups) {
-        const [ws, we] = k.split(":").map(Number);
         const fixes = group.filter((m) => m.fix);
-        const results = new Set(fixes.map((m) => text.slice(ws, m.fix!.range[0]) + m.fix!.text + text.slice(m.fix!.range[1], we)));
-        if (fixes.length === 0 || results.size > 1) {
+        // the same edit proposed by several rules counts once
+        const edits = [...new Map(fixes.map((m) => [`${m.fix!.range[0]}:${m.fix!.range[1]}:${m.fix!.text}`, m.fix!])).values()]
+            .sort((a, b) => a.range[0] - b.range[0]);
+        // edits to different letters of the word complement each other («رييس»: one per «ي»);
+        // edits to the same letters that differ are a real disagreement and stay apart
+        const disjoint = edits.every((f, j) => j === 0 || edits[j - 1].range[1] <= f.range[0]);
+        if (fixes.length === 0 || !disjoint) {
             for (const m of group) {
                 primary.push(m);
                 extra.push([]);
@@ -118,7 +122,20 @@ function mergeSame(msgs: Msg[], text: string): { primary: Msg[]; extra: Msg[][] 
             continue;
         }
         const best = [...fixes].sort((a, b) => rank(a) - rank(b))[0];
-        primary.push(best);
+        let card = best;
+        if (edits.length > 1) {
+            const lo = edits[0].range[0];
+            const hi = edits[edits.length - 1].range[1];
+            let out = "";
+            let pos = lo;
+            for (const f of edits) {
+                out += text.slice(pos, f.range[0]) + f.text;
+                pos = f.range[1];
+            }
+            // one card that makes every edit; its range stays the original's, so «نادیده» still finds it
+            card = { ...best, fix: { range: [lo, hi], text: out + text.slice(pos, hi) } };
+        }
+        primary.push(card);
         extra.push(group.filter((m) => m !== best));
     }
     const order = primary.map((m, i) => i).sort((a, b) => primary[a].range[0] - primary[b].range[0]);
