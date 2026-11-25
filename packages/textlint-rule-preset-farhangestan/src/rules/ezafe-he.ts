@@ -21,6 +21,12 @@
  * - پیش از کلمه‌های دیگر فقط پیشنهاد، و فقط در متن رسمی، چون در گفتار
  *   «کتابه» نشانهٔ معرفه هم هست («این کتابه خوبه»).
  * شکل‌های گفتاری مثل «خونه» (خانه) و «نشونه» (نشانه) کنار گذاشته می‌شوند.
+ *
+ * کسرهٔ اضافهٔ جاافتاده («خانه قبلی» ← «خانۀ قبلی»): اینکه کلمه در حالت اضافه
+ * است یا نه را قاعده نمی‌تواند بگوید؛ یک مدل آماری کوچک (src/util/ezafe-model.ts)
+ * از روی کلمه‌های اطراف حدس می‌زند. اگر مدل دست‌کم ۹۰٪ مطمئن باشد و کلمه
+ * شناخته‌شده باشد اصلاح خودکار، و از ۵۵٪ به بالا فقط پیشنهاد. با گزینهٔ
+ * { "model": false } خاموش می‌شود.
  */
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, ZWNJ } from "../util/persian";
@@ -28,6 +34,26 @@ import { isKnown, endsWithSilentHe } from "../util/words";
 import { verbForm } from "./mi-prefix";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 import commonNouns from "../dict/hazm-common-nouns.json";
+import { ezafeCandidates, EzafeCandidate } from "../util/ezafe-model";
+
+/**
+ * Model thresholds. In a hand check of unmarked Wikipedia text, fixes at 0.8
+ * were right about 93% of the time and at 0.9 all 50 sampled were right, so
+ * only ≥ 0.9 is fixed automatically; 0.55–0.9 is a suggestion.
+ */
+const MODEL_FIX = 0.9;
+const MODEL_SUGGEST = 0.55;
+
+/** The model's candidates for the last text seen (a rule sees one node's text at a time). */
+let cachedText = "";
+let cached = new Map<number, EzafeCandidate>();
+function candidateAt(text: string, start: number): EzafeCandidate | undefined {
+    if (text !== cachedText) {
+        cachedText = text;
+        cached = new Map(ezafeCandidates(text).map((c) => [c.start, c]));
+    }
+    return cached.get(start);
+}
 
 const ADJECTIVES = new Set<string>(hazmAdjectives.adjectives);
 const COMMON_NOUNS = new Set<string>(commonNouns.words);
@@ -37,6 +63,8 @@ export interface Options {
     style?: "he-yeh" | "he-hamza";
     /** false in story dialogue, where «کتابه» may be the definite marker. Default true. */
     formal?: boolean;
+    /** false turns off the ezafe model (missing «ۀ» before other words). Default true. */
+    model?: boolean;
 }
 
 const SOURCE = "دستور خط، «کسرۀ اضافه»، ص ۴۷";
@@ -132,6 +160,22 @@ export default createPatternRule<Options>((options) => {
                         replacement: fixed,
                         end: word.length,
                         fix: verbNext ? false : undefined
+                    };
+                }
+            },
+            {
+                // the model: «خانه قبلی» → «خانۀ قبلی». Pronouns are handled above.
+                pattern: new RegExp(`${START}(${LETTER}{2,}ه)(?= +(${LETTER}+))`, "g"),
+                check: (m) => {
+                    if (options.model === false || EZAFE_PRONOUNS.includes(m[2])) return null;
+                    const c = candidateAt(m.input, m.index);
+                    if (!c || c.p < MODEL_SUGGEST) return null;
+                    const fixed = m[1].slice(0, -1) + target;
+                    const sure = c.p >= MODEL_FIX && isKnown(m[1]);
+                    return {
+                        message: `اگر «${m[1]}» در حالت اضافه است (احتمال ${Math.round(c.p * 100)}٪)، «${fixed}» نوشته می‌شود`,
+                        replacement: fixed,
+                        fix: sure ? undefined : false
                     };
                 }
             },
