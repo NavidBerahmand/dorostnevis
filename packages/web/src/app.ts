@@ -74,8 +74,8 @@ const kernel = new TextlintKernel();
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const input = $<HTMLTextAreaElement>("text");
-const preview = $<HTMLDivElement>("preview");
-const list = $<HTMLOListElement>("issues");
+const backdrop = $<HTMLDivElement>("backdrop");
+const pop = $<HTMLDivElement>("popover");
 const summary = $<HTMLParagraphElement>("summary");
 const showZwnj = $<HTMLInputElement>("show-zwnj");
 const pluralMode = $<HTMLSelectElement>("plural-mode");
@@ -158,7 +158,7 @@ function esc(s: string): string {
 /** Text with ZWNJs drawn as a visible mark, if the reader asked for it. */
 function show(s: string): string {
     const e = esc(s);
-    return showZwnj.checked ? e.replace(/‌/g, '<span class="zw" aria-label="نیم‌فاصله"></span>') : e;
+    return showZwnj.checked ? e.replace(/‌/g, '<span class="zw" aria-label="نیم‌فاصله">‌</span>') : e;
 }
 
 function splitMessage(m: Msg): { text: string; source: string } {
@@ -173,39 +173,58 @@ function splitMessage(m: Msg): { text: string; source: string } {
     return { text: m.message, source: "" };
 }
 
+/** A run of text that carries a highlighter mark, and the cards it opens. */
+type Span = { s: number; e: number; items: number[]; red: boolean };
+let spans: Span[] = [];
+
+/** The word(s) a card is about: the reported range plus the corrected one. */
+function cardSpan(m: Msg, text: string): [number, number] {
+    return wordAround(text, Math.min(m.range[0], m.fix?.range[0] ?? m.range[0]), Math.max(m.range[1], m.fix?.range[1] ?? m.range[1]));
+}
+
 /**
- * Marks always cover whole words. A mark around one letter («ي» in «رييس») is
- * a separate inline box, and some browsers (Safari, the iOS app) then draw the
- * letters on either side of it in their unjoined forms.
+ * Red: the book's own rules and lists say it is wrong («اعمال همه» fixes it).
+ * Yellow: a model's guess, a possible typo, a judgement of meaning, a style note.
  */
-function renderPreview(text: string) {
-    const spans = messages
+function isCertain(i: number): boolean {
+    return [messages[i], ...extras[i]].some((x) => x.fix && !isStyle(x) && !/احتمال/.test(x.message));
+}
+
+/**
+ * The highlighter: a copy of the text under the (transparent) textarea, with
+ * each marked word in a <mark>. Marks always cover whole words: a mark around
+ * one letter («ي» in «رييس») is a separate inline box, and some browsers
+ * (Safari, the iOS app) then draw the letters on either side unjoined, which
+ * would also shift the marks off the words above them.
+ */
+function renderBackdrop(text: string) {
+    const items = messages
         .map((m, i) => {
-            const [s, e] = wordAround(text, m.range[0], m.range[1]);
-            return { s, e, i, fix: Boolean(m.fix) && !isStyle(m), style: isStyle(m) };
+            const [s, e] = cardSpan(m, text);
+            return { s, e, i };
         })
         .sort((a, b) => a.s - b.s || b.e - a.e);
-    const merged: Array<{ s: number; e: number; i: number; fix: boolean; style: boolean }> = [];
-    for (const sp of spans) {
-        const last = merged[merged.length - 1];
-        if (last && sp.s < last.e) {
-            last.e = Math.max(last.e, sp.e);
-            last.fix = last.fix || sp.fix;
-            last.style = last.style && sp.style;
+    spans = [];
+    for (const it of items) {
+        const last = spans[spans.length - 1];
+        if (last && it.s < last.e) {
+            last.e = Math.max(last.e, it.e);
+            last.items.push(it.i);
+            last.red = last.red || isCertain(it.i);
         } else {
-            merged.push({ ...sp });
+            spans.push({ s: it.s, e: it.e, items: [it.i], red: isCertain(it.i) });
         }
     }
     let out = "";
     let pos = 0;
-    for (const { s, e, i, fix, style } of merged) {
-        out += show(text.slice(pos, s));
-        const cls = fix ? "mark" : style ? "mark mark-style" : "mark mark-judge";
-        out += `<a href="#issue-${i}" class="${cls}" data-i="${i}">${show(text.slice(s, e)) || "&#8203;"}</a>`;
-        pos = e;
-    }
+    spans.forEach((sp, k) => {
+        out += show(text.slice(pos, sp.s));
+        out += `<mark class="hl ${sp.red ? "hl-red" : "hl-yellow"}" id="mk-${k}">${show(text.slice(sp.s, sp.e)) || "&#8203;"}</mark>`;
+        pos = sp.e;
+    });
     out += show(text.slice(pos));
-    preview.innerHTML = out.replace(/\n/g, "<br>");
+    // a final newline needs a character after it to take up a line, as in the textarea
+    backdrop.innerHTML = out + "\u200b";
 }
 
 const WORD_CHAR = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\u200C\u200F\u0640]/;
@@ -309,8 +328,11 @@ function meterFor(m: Msg, p: number | null): string {
             </div>`;
 }
 
-function renderList(text: string) {
-    list.innerHTML = "";
+/** Card i's HTML and class, shown in the note when its word is clicked. */
+let cards: Array<{ cls: string; html: string }> = [];
+
+function buildCards(text: string) {
+    cards = [];
     reports = [];
     messages.forEach((m, i) => {
         const split = splitMessage(m);
@@ -319,13 +341,11 @@ function renderList(text: string) {
         const source = sources.join(" | ");
         const labels = [...new Set(members.map((x) => RULE_LABELS[x.ruleId] ?? x.ruleId))];
         const { msg, p } = takeConfidence(split.text);
-        const li = document.createElement("li");
-        li.id = `issue-${i}`;
         // a book rule agreeing with a model's guess: the book's certainty
         const bookAgrees = [m, ...extras[i]].some((x) => x.fix && !/احتمال/.test(x.message) && x.ruleId !== "punctuation" && !isStyle(x));
         const meter = bookAgrees ? bookMeter() : meterFor(m, p);
         const styleOnly = members.every(isStyle);
-        li.className = (styleOnly ? "issue issue-style" : m.fix ? "issue" : "issue issue-judge") + (m.fix ? "" : " no-fix") + (meter.includes("confidence-none") ? " has-note" : " has-confidence");
+        const cls = (styleOnly ? "issue issue-style" : m.fix ? "issue" : "issue issue-judge") + (m.fix ? "" : " no-fix") + (meter.includes("confidence-none") ? " has-note" : " has-confidence");
         // show the whole word around the change, so «ي ← ی» reads «رييس ← رئیس»
         const [ws, we] = wordAround(text, Math.min(m.range[0], m.fix?.range[0] ?? m.range[0]), Math.max(m.range[1], m.fix?.range[1] ?? m.range[1]));
         const original = text.slice(ws, we);
@@ -342,7 +362,7 @@ function renderList(text: string) {
             mode: mode.value,
             at: ""
         });
-        li.innerHTML = `
+        const html = `
             ${meter}
             <div class="issue-head">
                 ${labels.map((l) => `<span class="chip">${esc(l)}</span>`).join("")}
@@ -359,17 +379,19 @@ function renderList(text: string) {
                 <button type="button" class="btn btn-small btn-quiet" data-ignore="${i}">نادیده</button>
                 <button type="button" class="btn btn-small btn-report" data-report="${i}">این پیشنهاد غلط است</button>
             </div>`;
-        list.appendChild(li);
+        cards.push({ cls, html });
     });
-    const styleCount = messages.filter((m, i) => [m, ...extras[i]].every(isStyle)).length;
-    const fixable = messages.filter((m, i) => m.fix && ![m, ...extras[i]].every(isStyle)).length;
-    const judge = messages.length - fixable - styleCount;
-    summary.textContent =
-        messages.length === 0
-            ? "پیشنهادی نیست. متن با قواعدی که این ابزار می‌شناسد سازگار است."
-            : `${messages.length.toLocaleString("fa-IR")} پیشنهاد: ${fixable.toLocaleString("fa-IR")} اصلاح خودکار، ${judge.toLocaleString("fa-IR")} نیازمند تشخیص` +
-              (styleCount ? `، ${styleCount.toLocaleString("fa-IR")} ویرایش زبانی` : "");
-    applyAllBtn.disabled = fixable === 0;
+    const red = spans.filter((sp) => sp.red).length;
+    const yellow = spans.length - red;
+    const fa = (n: number) => n.toLocaleString("fa-IR");
+    summary.innerHTML =
+        spans.length === 0
+            ? "ایرادی پیدا نشد. متن با قواعدی که این ابزار می‌شناسد سازگار است."
+            : `<span>${fa(spans.length)} واژه یا عبارت</span>` +
+              `<span class="key"><span class="swatch swatch-red"></span>${fa(red)} غلط قطعی</span>` +
+              `<span class="key"><span class="swatch swatch-yellow"></span>${fa(yellow)} شاید غلط</span>`;
+    applyAllBtn.disabled = red === 0;
+    reviewBtn.disabled = spans.length === 0;
 }
 
 let ignored = new Set<string>();
@@ -396,8 +418,10 @@ async function check() {
     );
     messages = merged.primary;
     extras = merged.extra;
-    renderPreview(text);
-    renderList(text);
+    closePopover();
+    renderBackdrop(text);
+    buildCards(text);
+    autosize();
     status.textContent = "";
     try {
         localStorage.setItem("dorostnevis:draft", text);
@@ -418,16 +442,123 @@ function applyFix(m: Msg) {
     check();
 }
 
-list.addEventListener("click", (ev) => {
+// ---- the note that opens on a marked word ----
+const editor = $<HTMLDivElement>("editor");
+const reviewBtn = $<HTMLButtonElement>("review");
+let openK = -1;
+
+function markRects(k: number): DOMRect[] {
+    const el = document.getElementById(`mk-${k}`);
+    return el ? [...el.getClientRects()] : [];
+}
+
+/** The marked span under a point, if any (marks sit under the transparent textarea). */
+function spanAt(x: number, y: number): number {
+    for (let k = 0; k < spans.length; k++) {
+        if (markRects(k).some((r) => x >= r.left - 2 && x <= r.right + 2 && y >= r.top && y <= r.bottom)) return k;
+    }
+    return -1;
+}
+
+function closePopover() {
+    pop.hidden = true;
+    if (openK >= 0) document.getElementById(`mk-${openK}`)?.classList.remove("is-open");
+    openK = -1;
+}
+
+function openPopover(k: number, x?: number, y?: number) {
+    const sp = spans[k];
+    if (!sp) return closePopover();
+    if (openK >= 0) document.getElementById(`mk-${openK}`)?.classList.remove("is-open");
+    openK = k;
+    document.getElementById(`mk-${k}`)?.classList.add("is-open");
+    const fa = (n: number) => n.toLocaleString("fa-IR");
+    pop.innerHTML =
+        `<div class="pop-nav">
+            <button type="button" data-nav="-1" ${k === 0 ? "disabled" : ""} aria-label="ایراد قبلی">→ قبلی</button>
+            <span>${fa(k + 1)} از ${fa(spans.length)}</span>
+            <button type="button" data-nav="1" ${k === spans.length - 1 ? "disabled" : ""} aria-label="ایراد بعدی">بعدی ←</button>
+            <span class="grow"></span>
+            <button type="button" class="pop-close" data-close aria-label="بستن">×</button>
+        </div>` + sp.items.map((i) => `<div class="${cards[i].cls}">${cards[i].html}</div>`).join("");
+    pop.hidden = false;
+    place(k, x, y);
+}
+
+/** Under the word (above it if there is no room below), its right edge on the word's right edge. */
+function place(k: number, x?: number, y?: number) {
+    const rects = markRects(k);
+    if (!rects.length) return;
+    let r = rects[0];
+    if (y !== undefined) r = rects.reduce((best, c) => (Math.abs((c.top + c.bottom) / 2 - y) < Math.abs((best.top + best.bottom) / 2 - y) ? c : best));
+    const pw = pop.offsetWidth;
+    const ph = pop.offsetHeight;
+    const vw = document.documentElement.clientWidth;
+    let left = Math.min(Math.max(8, r.right - pw), vw - pw - 8);
+    let top = r.bottom + 10;
+    const above = top + ph > window.innerHeight - 8 && r.top - ph - 10 > 8;
+    if (above) top = r.top - ph - 10;
+    pop.classList.toggle("above", above);
+    const arrow = Math.min(Math.max(16, (x ?? (r.left + r.right) / 2) - left), pw - 16);
+    pop.style.setProperty("--arrow-x", `${arrow}px`);
+    pop.style.left = `${left + window.scrollX}px`;
+    pop.style.top = `${top + window.scrollY}px`;
+}
+
+function goTo(k: number) {
+    const el = document.getElementById(`mk-${k}`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center" });
+    openPopover(k);
+}
+
+input.addEventListener("click", (ev) => {
+    if (input.selectionStart !== input.selectionEnd) return;
+    const k = spanAt(ev.clientX, ev.clientY);
+    if (k < 0) return closePopover();
+    openPopover(k, ev.clientX, ev.clientY);
+});
+// a pointer over a marked word says it can be clicked
+input.addEventListener("mousemove", (ev) => {
+    input.style.cursor = spanAt(ev.clientX, ev.clientY) >= 0 ? "pointer" : "";
+});
+document.addEventListener("click", (ev) => {
+    const t = ev.target as Node;
+    if (pop.hidden || pop.contains(t) || t === input) return;
+    closePopover();
+});
+document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && !pop.hidden) {
+        closePopover();
+        input.focus();
+    }
+});
+window.addEventListener("resize", () => {
+    autosize();
+    if (openK >= 0) place(openK);
+});
+reviewBtn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    goTo(0);
+});
+
+pop.addEventListener("click", (ev) => {
     const target = ev.target as HTMLElement;
+    const nav = target.closest("[data-nav]") as HTMLElement | null;
+    if (nav) return goTo(openK + Number(nav.dataset.nav));
+    if (target.closest("[data-close]")) return closePopover();
     const a = target.closest("[data-apply]") as HTMLElement | null;
     const ig = target.closest("[data-ignore]") as HTMLElement | null;
     const rp = target.closest("[data-report]") as HTMLElement | null;
-    if (a) applyFix(messages[Number(a.dataset.apply)]);
+    if (a) {
+        applyFix(messages[Number(a.dataset.apply)]);
+        status.textContent = "اصلاح شد.";
+    }
     if (rp) {
         const i = Number(rp.dataset.report);
         const members = [messages[i], ...extras[i]];
         const text = input.value;
+        closePopover();
         void openReport(reports[i]).then((ok) => {
             if (!ok || input.value !== text) return;
             // a reported card goes away like an ignored one
@@ -444,15 +575,39 @@ list.addEventListener("click", (ev) => {
     }
 });
 
-preview.addEventListener("click", (ev) => {
-    const mark = (ev.target as HTMLElement).closest(".mark") as HTMLElement | null;
-    if (!mark) return;
-    ev.preventDefault();
-    const li = document.getElementById(`issue-${mark.dataset.i}`);
-    li?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    li?.classList.add("flash");
-    window.setTimeout(() => li?.classList.remove("flash"), 900);
+/** The textarea grows with its text, so it never scrolls apart from the marks under it. */
+function autosize() {
+    input.style.height = "auto";
+    input.style.height = `${input.scrollHeight}px`;
+}
+
+// ---- theme: light unless the reader picks dark ----
+const themeBtn = $<HTMLButtonElement>("theme");
+function showTheme() {
+    themeBtn.textContent = document.documentElement.dataset.theme === "dark" ? "روشن" : "تیره";
+}
+themeBtn.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try {
+        localStorage.setItem("dorostnevis:theme", next);
+    } catch {
+        /* storage may be unavailable */
+    }
+    showTheme();
 });
+showTheme();
+
+// ---- the Kahroba face, served beside the page; Vazirmatn until it arrives ----
+fetch("kahroba.woff2")
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+    .then((buf) => new FontFace("Kahroba", buf, { weight: "100 900", stretch: "87.5% 125%" }).load())
+    .then((face) => {
+        document.fonts.add(face);
+        autosize();
+        if (openK >= 0) place(openK);
+    })
+    .catch(() => undefined);
 
 applyAllBtn.addEventListener("click", async () => {
     status.textContent = "در حال اعمال…";
@@ -465,7 +620,7 @@ applyAllBtn.addEventListener("click", async () => {
     }
     input.value = text;
     await check();
-    status.textContent = "همهٔ اصلاح‌های خودکار اعمال شد.";
+    status.textContent = "همهٔ اصلاح‌های قطعی اعمال شد.";
 });
 
 copyBtn.addEventListener("click", async () => {
@@ -490,7 +645,14 @@ $<HTMLButtonElement>("clear").addEventListener("click", () => {
     input.focus();
 });
 
-input.addEventListener("input", schedule);
+input.addEventListener("input", () => {
+    closePopover();
+    // the old marks would sit on shifted text: plain text until the check is done
+    spans = [];
+    backdrop.innerHTML = show(input.value) + "\u200b";
+    autosize();
+    schedule();
+});
 [showZwnj, pluralMode, ezafeStyle].forEach((el) => el.addEventListener("change", check));
 // which language-editing rules are on: remembered per browser
 try {

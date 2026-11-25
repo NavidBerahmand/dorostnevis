@@ -2,158 +2,150 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&family=Noto+Naskh+Arabic:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&display=swap">
+<script>
+  // Light unless the reader chose dark on this page before.
+  try { document.documentElement.dataset.theme = localStorage.getItem("dorostnevis:theme") || "light"; }
+  catch (e) { document.documentElement.dataset.theme = "light"; }
+</script>
 <style>
-  /* Layout: a proofreader's desk — the manuscript on the right, the margin notes on the left (RTL); stacked on phones. */
+  /* Layout: one sheet of paper. The text is the page; errors are marked on it with a highlighter
+     (red: certain, yellow: possible) and explained in a note that opens on the word itself. */
   :root {
-    --bg: #f5f6f8;
-    --surface: #ffffff;
-    --ink: #1b2433;
-    --muted: #5b6577;
-    --line: #dde2ea;
+    --bg: #f3f4f1;
+    --paper: #ffffff;
+    --ink: #1d2230;
+    --muted: #5d6474;
+    --line: #dfe2e6;
     --lapis: #1f4e9c;
-    --lapis-soft: #e6edf8;
-    --saffron: #f2c14e;
-    --saffron-soft: #fcf0cf;
-    --judge: #8a5a00;
+    --lapis-soft: #e7edf8;
     --ok: #1d7a4f;
-    --font-ui: "Vazirmatn", "Noto Sans Arabic", Tahoma, sans-serif;
-    --font-text: "Noto Naskh Arabic", "Vazirmatn", "Times New Roman", serif;
-    --radius: 10px;
+    --judge: #8a5a00;
+    --judge-soft: #fcf0cf;
+    --hl-red: rgb(255 92 92 / 0.34);
+    --hl-red-strong: rgb(235 64 64 / 0.55);
+    --hl-yellow: rgb(255 214 10 / 0.5);
+    --hl-yellow-strong: rgb(245 190 0 / 0.75);
+    --shadow: 0 10px 30px rgb(29 34 48 / 0.14), 0 2px 6px rgb(29 34 48 / 0.08);
+    --font: "Kahroba", "Vazirmatn", Tahoma, sans-serif;
+    --radius: 12px;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0f141c; --surface: #172030; --ink: #e7ebf2; --muted: #9aa6b8; --line: #2a3446;
-      --lapis: #8fb1f2; --lapis-soft: #1c2a44; --saffron: #e0b041; --saffron-soft: #3a3016;
-      --judge: #e9b75a; --ok: #6fcf9c; color-scheme: dark;
+      --bg: #10141b; --paper: #171d27; --ink: #e8ebf1; --muted: #9da6b6; --line: #2a3342;
+      --lapis: #91b2f0; --lapis-soft: #1d2a42; --ok: #74d0a1; --judge: #e9b75a; --judge-soft: #3a3016;
+      --hl-red: rgb(255 90 90 / 0.32); --hl-red-strong: rgb(255 90 90 / 0.5);
+      --hl-yellow: rgb(255 210 40 / 0.3); --hl-yellow-strong: rgb(255 210 40 / 0.48);
+      --shadow: 0 10px 30px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.4);
+      color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #0f141c; --surface: #172030; --ink: #e7ebf2; --muted: #9aa6b8; --line: #2a3446;
-    --lapis: #8fb1f2; --lapis-soft: #1c2a44; --saffron: #e0b041; --saffron-soft: #3a3016;
-    --judge: #e9b75a; --ok: #6fcf9c; color-scheme: dark;
+    --bg: #10141b; --paper: #171d27; --ink: #e8ebf1; --muted: #9da6b6; --line: #2a3342;
+    --lapis: #91b2f0; --lapis-soft: #1d2a42; --ok: #74d0a1; --judge: #e9b75a; --judge-soft: #3a3016;
+    --hl-red: rgb(255 90 90 / 0.32); --hl-red-strong: rgb(255 90 90 / 0.5);
+    --hl-yellow: rgb(255 210 40 / 0.3); --hl-yellow-strong: rgb(255 210 40 / 0.48);
+    --shadow: 0 10px 30px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.4);
+    color-scheme: dark;
   }
 
   * { box-sizing: border-box; }
   body {
     background: var(--bg);
     color: var(--ink);
-    font-family: var(--font-ui);
+    font-family: var(--font);
     font-size: 15px;
-    line-height: 1.7;
+    line-height: 1.75;
     direction: rtl;
   }
   .wrap {
-    max-width: 1180px;
+    max-width: 880px;
     margin: 0 auto;
     padding-block: 28px 48px;
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
     display: grid;
-    gap: 20px;
+    gap: 18px;
   }
-  header { display: grid; gap: 6px; }
-  h1 {
-    margin: 0;
-    font-weight: 800;
-    font-size: clamp(1.6rem, 3vw, 2.1rem);
-    letter-spacing: -0.01em;
-    text-wrap: balance;
-  }
+  header { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
+  .head-text { display: grid; gap: 4px; min-width: 0; }
+  h1 { margin: 0; font-weight: 800; font-size: clamp(1.7rem, 3.4vw, 2.2rem); line-height: 1.3; text-wrap: balance; }
   h1 .zwnj-demo { color: var(--lapis); }
-  .lede { margin: 0; color: var(--muted); max-width: 62ch; }
-  .lede a { color: var(--lapis); }
-
-  .desk {
-    display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-    gap: 20px;
-    align-items: start;
+  .lede { margin: 0; color: var(--muted); max-width: 64ch; }
+  .lede a, footer a { color: var(--lapis); }
+  .theme-btn {
+    flex: none; font: inherit; font-size: 0.85rem; color: var(--muted);
+    background: var(--paper); border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 12px; cursor: pointer;
   }
-  @media (max-width: 860px) { .desk { grid-template-columns: minmax(0, 1fr); } }
 
-  .panel {
-    background: var(--surface);
+  /* the sheet */
+  .sheet {
+    background: var(--paper);
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: 16px;
+    padding: 14px clamp(12px, 3vw, 22px) 18px;
     display: grid;
     gap: 12px;
     min-width: 0;
   }
-  .panel-title {
-    margin: 0;
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--muted);
-    letter-spacing: 0.02em;
-  }
-
-  textarea {
-    width: 100%;
-    min-height: 220px;
-    resize: vertical;
-    font-family: var(--font-text);
-    font-size: 1.15rem;
-    line-height: 2;
-    color: var(--ink);
-    background: var(--bg);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 12px 14px;
-    direction: rtl;
-  }
-  textarea:focus-visible, select:focus-visible, button:focus-visible, input:focus-visible, a:focus-visible {
-    outline: 2px solid var(--lapis);
-    outline-offset: 2px;
-  }
-
-  .preview {
-    font-family: var(--font-text);
-    font-size: 1.15rem;
-    line-height: 2.2;
-    padding: 12px 14px;
-    border-radius: 8px;
-    background: var(--bg);
-    border: 1px dashed var(--line);
-    overflow-wrap: anywhere;
-    min-height: 4em;
-  }
-  .mark {
-    color: inherit;
-    text-decoration: none;
-    background: var(--saffron-soft);
-    border-bottom: 2px solid var(--saffron);
-    border-radius: 3px;
-    padding: 0 1px;
-  }
-  .mark-judge { background: transparent; border-bottom: 2px dotted var(--judge); }
-  .mark-style { background: transparent; border-bottom: 2px dotted var(--ok); }
-  .zw {
-    display: inline-block;
-    width: 2px;
-    height: 0.9em;
-    margin: 0 1px;
-    vertical-align: -0.1em;
-    background: var(--lapis);
-    border-radius: 1px;
-  }
-
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+  .summary { margin: 0; font-weight: 500; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+  .key { display: inline-flex; gap: 6px; align-items: center; font-size: 0.85rem; color: var(--muted); font-weight: 400; }
+  .swatch { width: 22px; height: 12px; border-radius: 3px 6px 4px 5px; }
+  .swatch-red { background: var(--hl-red-strong); }
+  .swatch-yellow { background: var(--hl-yellow-strong); }
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .btn {
-    font: inherit;
-    font-weight: 700;
-    border: 1px solid var(--lapis);
-    background: var(--lapis);
-    color: var(--surface);
-    border-radius: 8px;
-    padding: 6px 14px;
-    cursor: pointer;
+  .status { color: var(--ok); font-size: 0.85rem; min-height: 1.4em; margin: 0; }
+
+  /* the editor: a transparent textarea over a copy of the text that carries the highlights.
+     Both use exactly the same font, size, padding and wrapping, so the marks sit under the words. */
+  .editor { display: grid; position: relative; }
+  .editor > * {
+    grid-area: 1 / 1;
+    margin: 0;
+    font-family: var(--font);
+    font-size: 1.3rem;
+    line-height: 2.3;
+    padding: 6px 2px;
+    border: 0;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    direction: rtl;
+    text-align: right;
+    letter-spacing: normal;
+    font-variant-ligatures: normal;
+    tab-size: 4;
   }
-  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-  .btn-quiet { background: transparent; color: var(--lapis); }
-  .btn-small { padding: 2px 10px; font-size: 0.85rem; }
-  .status { color: var(--ok); font-size: 0.85rem; }
+  .backdrop { color: transparent; pointer-events: none; user-select: none; }
+  #text {
+    width: 100%;
+    min-height: 12em;
+    resize: none;
+    overflow: hidden;
+    background: transparent;
+    color: var(--ink);
+    caret-color: var(--lapis);
+    outline: none;
+  }
+  .editor:focus-within { box-shadow: 0 2px 0 -1px var(--lapis); }
+  .hl {
+    color: transparent;
+    /* a marker stroke: uneven ends, not a box */
+    border-radius: 0.25em 0.7em 0.3em 0.6em / 0.6em 0.3em 0.7em 0.35em;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+  .hl-red { background: var(--hl-red); box-shadow: 0.12em 0 0 var(--hl-red), -0.12em 0 0 var(--hl-red); }
+  .hl-yellow { background: var(--hl-yellow); box-shadow: 0.12em 0 0 var(--hl-yellow), -0.12em 0 0 var(--hl-yellow); }
+  .hl-red.is-open { background: var(--hl-red-strong); box-shadow: 0.12em 0 0 var(--hl-red-strong), -0.12em 0 0 var(--hl-red-strong); }
+  .hl-yellow.is-open { background: var(--hl-yellow-strong); box-shadow: 0.12em 0 0 var(--hl-yellow-strong), -0.12em 0 0 var(--hl-yellow-strong); }
+  .zw { position: relative; }
+  .zw::after {
+    content: ""; position: absolute; top: 0.45em; bottom: 0.45em; inset-inline-start: -1px;
+    width: 2px; border-radius: 1px; background: var(--lapis);
+  }
 
   .options {
     display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
@@ -162,191 +154,185 @@
   }
   .options label { display: inline-flex; gap: 6px; align-items: center; }
   select {
-    font: inherit; color: var(--ink); background: var(--bg);
+    font: inherit; color: var(--ink); background: var(--paper);
     border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px;
   }
-
-  .summary { margin: 0; font-weight: 500; }
-  .issues {
-    list-style: none; margin: 0; padding: 0;
-    display: grid; gap: 10px;
-    max-height: 72vh; overflow-y: auto;
-  }
-  .issue {
-    border: 1px solid var(--line);
-    border-inline-start: 3px solid var(--saffron);
-    border-radius: 8px;
-    padding: 10px 12px;
-    display: grid;
-    gap: 4px;
-    transition: background-color 0.4s;
-  }
-  .issue-judge { border-inline-start-color: var(--judge); }
-  .issue-style { border-inline-start-color: var(--ok); }
-  .style-rules { border-top: 1px solid var(--line); padding-top: 10px; font-size: 0.85rem; color: var(--muted); }
+  .style-rules { font-size: 0.85rem; color: var(--muted); }
   .style-rules summary { cursor: pointer; color: var(--ink); font-weight: 700; }
   .style-hint { font-weight: 400; color: var(--muted); font-size: 0.78rem; margin-inline-start: 6px; }
   .style-note { margin: 8px 0; font-size: 0.8rem; }
   .style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 6px 14px; }
   .style-grid label { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; color: var(--ink); }
   .style-grid small { color: var(--muted); font-size: 0.75rem; }
-  /* model confidence: top-left corner of the card (the end side in RTL) */
-  .issue { position: relative; }
-  .issue.has-confidence .issue-head { padding-inline-end: 96px; min-height: 30px; }
-  .confidence {
-    position: absolute;
-    top: 8px;
-    inset-inline-end: 12px;
-    display: grid;
-    justify-items: center;
-    gap: 2px;
+
+  .btn {
+    font: inherit; font-weight: 700;
+    border: 1px solid var(--lapis); background: var(--lapis); color: var(--paper);
+    border-radius: 8px; padding: 5px 14px; cursor: pointer;
   }
-  .confidence-label { font-size: 0.66rem; color: var(--muted); line-height: 1.2; white-space: nowrap; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-quiet { background: transparent; color: var(--lapis); }
+  .btn-small { padding: 2px 10px; font-size: 0.85rem; }
+  .btn-report { margin-inline-start: auto; background: transparent; color: var(--muted); border-color: transparent; font-weight: 500; }
+  .btn-report:hover { color: var(--judge); border-color: var(--line); }
+  textarea:focus-visible, select:focus-visible, button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--lapis); outline-offset: 2px;
+  }
+
+  /* the note that opens on a marked word */
+  .pop {
+    position: absolute;
+    z-index: 20;
+    width: min(400px, calc(100vw - 24px));
+    background: var(--paper);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 10px 12px 12px;
+    display: grid;
+    gap: 10px;
+  }
+  .pop::before {
+    content: ""; position: absolute; width: 12px; height: 12px;
+    background: var(--paper); border: 1px solid var(--line); border-width: 1px 0 0 1px;
+    transform: rotate(45deg);
+    top: -7px; left: var(--arrow-x, 50%); margin-left: -6px;
+  }
+  .pop.above::before { top: auto; bottom: -7px; border-width: 0 1px 1px 0; }
+  .pop-nav { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); }
+  .pop-nav .grow { flex: 1; }
+  .pop-nav button {
+    font: inherit; color: var(--lapis); background: transparent; border: 1px solid var(--line);
+    border-radius: 6px; padding: 0 8px; cursor: pointer; line-height: 1.6;
+  }
+  .pop-nav button:disabled { opacity: 0.4; cursor: default; }
+  .pop-close { border: 0 !important; font-size: 1.1rem !important; color: var(--muted) !important; }
+
+  .issue { position: relative; display: grid; gap: 4px; padding-top: 2px; }
+  .issue + .issue { border-top: 1px solid var(--line); padding-top: 10px; }
+  .issue.has-confidence .issue-head { padding-inline-end: 96px; min-height: 30px; }
   .issue.has-note .issue-head { padding-inline-end: 132px; min-height: 30px; }
+  .confidence { position: absolute; top: 2px; inset-inline-end: 0; display: grid; justify-items: center; gap: 2px; }
+  .issue + .issue .confidence { top: 10px; }
+  .confidence-label { font-size: 0.66rem; color: var(--muted); line-height: 1.2; white-space: nowrap; }
   .confidence-none { width: 120px; text-align: center; }
   .confidence-why { font-size: 0.66rem; line-height: 1.35; color: var(--muted); border: 1px dashed var(--line); border-radius: 6px; padding: 1px 6px; }
   .dots { display: flex; gap: 3px; direction: ltr; }
-  .dot {
-    width: 9px; height: 9px; border-radius: 50%;
-    border: 1.5px solid var(--line);
-    background: transparent;
-  }
-  .issue.flash { background: var(--lapis-soft); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--line); background: transparent; }
   .issue-head { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chip {
-    font-size: 0.72rem; font-weight: 700;
-    color: var(--lapis); background: var(--lapis-soft);
-    border-radius: 999px; padding: 0 8px;
-  }
-  .chip-judge { color: var(--judge); background: var(--saffron-soft); }
+  .chip { font-size: 0.72rem; font-weight: 700; color: var(--lapis); background: var(--lapis-soft); border-radius: 999px; padding: 0 8px; }
+  .chip-judge { color: var(--judge); background: var(--judge-soft); }
   .chip-style { color: var(--ok); background: var(--bg); border: 1px solid var(--line); }
-  .change { margin: 0; font-family: var(--font-text); font-size: 1.1rem; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+  .change { margin: 0; font-size: 1.15rem; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
   .from { text-decoration: line-through; text-decoration-color: var(--muted); color: var(--muted); }
   .issue-judge .from, .no-fix .from { text-decoration: none; color: var(--ink); }
-  .to { font-weight: 600; color: var(--ok); }
+  .to { font-weight: 700; color: var(--ok); }
   .arrow { color: var(--muted); }
-  .msg { margin: 0; font-size: 0.9rem; }
-  .source { margin: 0; font-size: 0.78rem; color: var(--muted); }
+  .msg { margin: 0; font-size: 0.92rem; }
+  .source { margin: 0; font-size: 0.76rem; color: var(--muted); }
   .cite-link { color: var(--muted); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
   .cite-link:hover, .cite-link:focus-visible { color: var(--lapis); text-decoration-color: currentColor; }
-  .actions { display: flex; gap: 6px; margin-top: 2px; }
+  .actions { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
 
-  footer { color: var(--muted); font-size: 0.8rem; max-width: 70ch; }
+  footer { color: var(--muted); font-size: 0.8rem; max-width: 72ch; }
   footer p { margin: 0 0 6px; }
-  footer a { color: var(--lapis); }
-
-  .actions { align-items: center; }
-  .btn-report {
-    margin-inline-start: auto;
-    background: transparent; color: var(--muted);
-    border-color: transparent; font-weight: 500;
-  }
-  .btn-report:hover { color: var(--judge); border-color: var(--line); }
 
   .report-dialog {
-    width: min(560px, calc(100vw - 32px));
-    max-height: calc(100vh - 48px);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: var(--surface);
-    color: var(--ink);
-    padding: 18px;
-    direction: rtl;
-    font-family: var(--font-ui);
+    width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--paper); color: var(--ink); padding: 18px; direction: rtl; font-family: var(--font);
   }
   .report-dialog::backdrop { background: rgb(10 15 25 / 0.45); }
   .report-dialog h2 { margin: 0 0 6px; font-size: 1.1rem; }
   .report-dialog form { display: grid; gap: 10px; }
   .report-intro, .report-note { margin: 0; font-size: 0.85rem; color: var(--muted); }
   .report-preview {
-    margin: 0; padding: 10px 12px; border-radius: 8px;
-    background: var(--bg); border: 1px solid var(--line);
-    display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px;
-    font-size: 0.9rem;
+    margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line);
+    display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; font-size: 0.9rem;
   }
   .report-preview dt { color: var(--muted); }
-  .report-preview dd { margin: 0; font-family: var(--font-text); overflow-wrap: anywhere; }
+  .report-preview dd { margin: 0; overflow-wrap: anywhere; }
   .report-dialog label { display: grid; gap: 4px; font-size: 0.85rem; color: var(--muted); }
-  .report-dialog textarea { min-height: 72px; font-size: 1rem; line-height: 1.8; }
+  .report-dialog textarea {
+    min-height: 72px; font: inherit; font-size: 1rem; line-height: 1.8; color: var(--ink);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+  }
   .report-result { margin: 0; font-size: 0.85rem; color: var(--judge); min-height: 1.2em; }
-
   .reports-panel { border-top: 1px solid var(--line); padding-top: 10px; }
   .reports-panel summary { cursor: pointer; color: var(--ink); font-weight: 700; }
   .reports-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
-  .report-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+  .report-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--paper); }
   .report-item p { margin: 0 0 4px; }
   .report-head { font-weight: 500; color: var(--ink); }
-  .report-context { font-family: var(--font-text); color: var(--ink); }
-
-  @media (prefers-reduced-motion: reduce) { .issue { transition: none; } }
+  .report-context { color: var(--ink); }
 </style>
 
 <div class="wrap">
   <header>
-    <h1>درست<span class="zwnj-demo">‌</span>نویس</h1>
-    <p class="lede">متن فارسی را بنویسید یا بچسبانید. هر پیشنهاد با بند و صفحهٔ <a href="https://apll.ir/wp-content/uploads/2023/07/Dastour-e-Khat-17.04.1402.pdf" target="_blank" rel="noopener"><strong>دستور خطّ فارسی</strong> (ویراست جدید، فرهنگستان زبان و ادب فارسی)</a>، <strong>فرهنگ املایی خطّ فارسی</strong> یا، برای گفت‌وگوی داستان، <strong>اصول شکسته‌نویسی</strong> همراه است. متن از این صفحه بیرون نمی‌رود، مگر جمله‌ای که خودتان با «این پیشنهاد غلط است» گزارش کنید.</p>
+    <div class="head-text">
+      <h1>درست<span class="zwnj-demo">‌</span>نویس</h1>
+      <p class="lede">بنویسید یا بچسبانید. واژه‌هایی که ایراد دارند <strong>ماژیک می‌خورند</strong>: قرمز یعنی طبق کتاب غلط است، زرد یعنی شاید. روی هر کدام بزنید تا توضیح و اصلاحش همان‌جا باز شود. هر پیشنهاد به بند و صفحهٔ <a href="https://apll.ir/wp-content/uploads/2023/07/Dastour-e-Khat-17.04.1402.pdf" target="_blank" rel="noopener">دستور خطّ فارسی</a> یا فرهنگ املایی فرهنگستان پیوند دارد. متن از این صفحه بیرون نمی‌رود، مگر جمله‌ای که خودتان با «این پیشنهاد غلط است» گزارش کنید.</p>
+    </div>
+    <button type="button" class="theme-btn" id="theme" aria-label="تغییر رنگ صفحه">تیره</button>
   </header>
 
-  <main class="desk">
-    <section class="panel" aria-labelledby="text-title">
-      <h2 class="panel-title" id="text-title">متن</h2>
-      <textarea id="text" spellcheck="false" aria-label="متن برای بررسی"></textarea>
+  <main class="sheet" aria-label="ویرایشگر">
+    <div class="bar">
+      <p class="summary" id="summary" aria-live="polite">در حال بارگذاری قواعد…</p>
       <div class="toolbar">
-        <button type="button" class="btn" id="apply-all">اعمال همهٔ اصلاح‌های خودکار</button>
-        <button type="button" class="btn btn-quiet" id="copy">رونوشت متن</button>
-        <button type="button" class="btn btn-quiet" id="sample">متن نمونه</button>
+        <button type="button" class="btn" id="apply-all">اعمال همهٔ اصلاح‌های قطعی</button>
+        <button type="button" class="btn btn-quiet" id="review">مرور ایرادها</button>
+        <button type="button" class="btn btn-quiet" id="copy">رونوشت</button>
+        <button type="button" class="btn btn-quiet" id="sample">نمونه</button>
         <button type="button" class="btn btn-quiet" id="clear">پاک کردن</button>
-        <span class="status" id="status" role="status"></span>
       </div>
-      <h2 class="panel-title">پیش‌نمایش</h2>
-      <div class="preview" id="preview" aria-live="polite"></div>
-      <div class="options">
-        <label>نوع متن
-          <select id="mode">
-            <option value="formal">متن رسمی</option>
-            <option value="dialogue">گفت‌وگوی داستان (شکسته)</option>
-          </select>
-        </label>
-        <label><input type="checkbox" id="show-zwnj"> نمایش نیم‌فاصله‌ها</label>
-        <label>«ها»ی جمع
-          <select id="plural-mode">
-            <option value="recommended">همیشه جدا (توصیهٔ کتاب)</option>
-            <option value="required-only">فقط موارد الزامی</option>
-          </select>
-        </label>
-        <label>نشانهٔ اضافه
-          <select id="ezafe-style">
-            <option value="he-yeh">ۀ</option>
-            <option value="he-hamza">هٔ</option>
-          </select>
-        </label>
+    </div>
+    <div class="editor" id="editor">
+      <div class="backdrop" id="backdrop" aria-hidden="true"></div>
+      <textarea id="text" spellcheck="false" aria-label="متن برای بررسی" placeholder="متن فارسی را اینجا بنویسید یا بچسبانید…"></textarea>
+    </div>
+    <p class="status" id="status" role="status"></p>
+    <div class="options">
+      <label>نوع متن
+        <select id="mode">
+          <option value="formal">متن رسمی</option>
+          <option value="dialogue">گفت‌وگوی داستان (شکسته)</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="show-zwnj"> نمایش نیم‌فاصله‌ها</label>
+      <label>«ها»ی جمع
+        <select id="plural-mode">
+          <option value="recommended">همیشه جدا (توصیهٔ کتاب)</option>
+          <option value="required-only">فقط موارد الزامی</option>
+        </select>
+      </label>
+      <label>نشانهٔ اضافه
+        <select id="ezafe-style">
+          <option value="he-yeh">ۀ</option>
+          <option value="he-hamza">هٔ</option>
+        </select>
+      </label>
+    </div>
+    <details class="style-rules" id="style-rules">
+      <summary>ویرایش زبانی <span class="style-hint">فقط پیشنهاد؛ در متن رسمی</span></summary>
+      <p class="style-note">این‌ها توصیه‌های رایج ویراستاران‌اند، نه قاعدهٔ دستور خط. هیچ‌کدام خودکار اعمال نمی‌شوند؛ هر کدام را می‌شود خاموش کرد.</p>
+      <div class="style-grid">
+        <label><input type="checkbox" data-rule="redundant-verbs" checked> فعل زائد <small>«می‌باشد»، «مورد بررسی قرار گرفت»</small></label>
+        <label><input type="checkbox" data-rule="arabic-plurals" checked> جمع عربی <small>«اساتید»، «مسئولین»</small></label>
+        <label><input type="checkbox" data-rule="prepositions" checked> حرف اضافه <small>«جهت اطلاع»، «توسط» در مجهول</small></label>
+        <label><input type="checkbox" data-rule="calques" checked> ترجمه‌زدگی <small>«در رابطه با»، «به چالش کشیدن»</small></label>
+        <label><input type="checkbox" data-rule="redundancy" checked> حشو <small>«بازگشت مجدد»، «سایر … دیگر»</small></label>
+        <label><input type="checkbox" data-rule="repeated-words" checked> تکرار <small>«را را»، «و و»</small></label>
+        <label><input type="checkbox" data-rule="long-sentences" checked> جملهٔ بلند <small>بیش از ۴۰ کلمه، «که»ی پی‌درپی</small></label>
       </div>
-      <details class="style-rules" id="style-rules">
-        <summary>ویرایش زبانی <span class="style-hint">فقط پیشنهاد؛ در متن رسمی</span></summary>
-        <p class="style-note">این‌ها توصیه‌های رایج ویراستاران‌اند، نه قاعدهٔ دستور خط. هیچ‌کدام خودکار اعمال نمی‌شوند؛ هر کدام را می‌شود خاموش کرد.</p>
-        <div class="style-grid">
-          <label><input type="checkbox" data-rule="redundant-verbs" checked> فعل زائد <small>«می‌باشد»، «مورد بررسی قرار گرفت»</small></label>
-          <label><input type="checkbox" data-rule="arabic-plurals" checked> جمع عربی <small>«اساتید»، «مسئولین»</small></label>
-          <label><input type="checkbox" data-rule="prepositions" checked> حرف اضافه <small>«جهت اطلاع»، «توسط» در مجهول</small></label>
-          <label><input type="checkbox" data-rule="calques" checked> ترجمه‌زدگی <small>«در رابطه با»، «به چالش کشیدن»</small></label>
-          <label><input type="checkbox" data-rule="redundancy" checked> حشو <small>«بازگشت مجدد»، «سایر … دیگر»</small></label>
-          <label><input type="checkbox" data-rule="repeated-words" checked> تکرار <small>«را را»، «و و»</small></label>
-          <label><input type="checkbox" data-rule="long-sentences" checked> جملهٔ بلند <small>بیش از ۴۰ کلمه، «که»ی پی‌درپی</small></label>
-        </div>
-      </details>
-    </section>
-
-    <section class="panel" aria-labelledby="issues-title">
-      <h2 class="panel-title" id="issues-title">پیشنهادها</h2>
-      <p class="summary" id="summary">در حال بارگذاری قواعد…</p>
-      <ol class="issues" id="issues"></ol>
-    </section>
+    </details>
   </main>
 
   <footer>
     <p>نسخهٔ آزمایشی. قواعد: دستور خطّ فارسی، ویراست جدید؛ فرهنگ املایی خطّ فارسی (۱۳۹۴)، با برتری ویراست جدید در تعارض‌ها؛ در حالت گفت‌وگو، اصول شکسته‌نویسی (علی صلح‌جو)؛ واژه‌نامهٔ Hazm برای تشخیص کلمه‌های شناخته‌شده. کسرهٔ اضافهٔ جاافتاده («خانه قبلی» ← «خانۀ قبلی») و «را»ی چسبیده («کتابرا» ← «کتاب را») را دو مدل آماری کوچک حدس می‌زنند که روی متن ویکی‌پدیای فارسی (CC BY-SA) آموزش دیده‌اند؛ اصلاح خودکار فقط وقتی است که مدل دست‌کم ۹۰٪ مطمئن باشد.</p>
-    <p>پیشنهادهای «نیازمند تشخیص» به معنا بستگی دارند و اصلاح خودکار ندارند. پیشنهادهای «ویرایش زبانی» (فعل زائد، جمع عربی، ترجمه‌زدگی و…) توصیه‌های رایج ویراستاران‌اند، نه قاعدهٔ دستور خط، و هرگز خودکار اعمال نمی‌شوند. اگر پیشنهادی غلط بود، دکمهٔ «این پیشنهاد غلط است» را بزنید: پیش از فرستادن، دقیقاً همان چیزی را که فرستاده می‌شود می‌بینید.</p>
-    <p><strong>منابع و مجوز.</strong> قواعد و فهرست‌ها از «<a href="https://apll.ir/wp-content/uploads/2023/07/Dastour-e-Khat-17.04.1402.pdf" target="_blank" rel="noopener">دستور خطّ فارسی</a>» (ویراست جدید، چاپ اول ۱۴۰۱؛ در چاپ‌های بعد «ویراست دوم» نام گرفته) و «<a href="https://apll.ir/wp-content/uploads/2018/10/F-E-1394.pdf" target="_blank" rel="noopener">فرهنگ املایی خطّ فارسی</a>» (۱۳۹۴)، هر دو از <a href="https://apll.ir">فرهنگستان زبان و ادب فارسی</a>، برای استفادهٔ رایگان و غیرتجاری و با ذکر منبع. واژه‌نامهٔ غلط‌یاب و دو مدل آماری از متن <a href="https://fa.wikipedia.org">ویکی‌پدیای فارسی</a> ساخته شده‌اند، به قلم ویرایشگران ویکی‌پدیا، با مجوز <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.fa">CC BY-SA 4.0</a>؛ همین داده‌ها با همان مجوز منتشر می‌شوند. واژه‌نامهٔ <a href="https://github.com/roshan-research/hazm">Hazm</a> (MIT). «اصول شکسته‌نویسی»، علی صلح‌جو. کد ابزار: MIT.</p>
+    <p>ماژیک قرمز: قاعدهٔ صریح کتاب یا فهرست‌ها، که «اعمال همهٔ اصلاح‌های قطعی» آن‌ها را اعمال می‌کند. ماژیک زرد: حدس مدل، غلط تایپی احتمالی، مواردی که به معنای جمله بستگی دارد، و «ویرایش زبانی» (توصیهٔ رایج ویراستاران، نه قاعدهٔ دستور خط)؛ این‌ها هرگز خودکار اعمال نمی‌شوند. اگر پیشنهادی غلط بود، دکمهٔ «این پیشنهاد غلط است» را بزنید: پیش از فرستادن، دقیقاً همان چیزی را که فرستاده می‌شود می‌بینید.</p>
+    <p><strong>منابع و مجوز.</strong> قواعد و فهرست‌ها از «<a href="https://apll.ir/wp-content/uploads/2023/07/Dastour-e-Khat-17.04.1402.pdf" target="_blank" rel="noopener">دستور خطّ فارسی</a>» (ویراست جدید، چاپ اول ۱۴۰۱؛ در چاپ‌های بعد «ویراست دوم» نام گرفته) و «<a href="https://apll.ir/wp-content/uploads/2018/10/F-E-1394.pdf" target="_blank" rel="noopener">فرهنگ املایی خطّ فارسی</a>» (۱۳۹۴)، هر دو از <a href="https://apll.ir">فرهنگستان زبان و ادب فارسی</a>، برای استفادهٔ رایگان و غیرتجاری و با ذکر منبع. واژه‌نامهٔ غلط‌یاب و دو مدل آماری از متن <a href="https://fa.wikipedia.org">ویکی‌پدیای فارسی</a> ساخته شده‌اند، به قلم ویرایشگران ویکی‌پدیا، با مجوز <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.fa">CC BY-SA 4.0</a>؛ همین داده‌ها با همان مجوز منتشر می‌شوند. واژه‌نامهٔ <a href="https://github.com/roshan-research/hazm">Hazm</a> (MIT). «اصول شکسته‌نویسی»، علی صلح‌جو. قلم: کهربا، امین عابدی (<a href="https://fontiran.com">فونت ایران</a>). کد ابزار: MIT.</p>
     <details class="reports-panel" id="reports-panel" hidden>
       <summary>گزارش‌های «پیشنهاد غلط» (<span id="reports-count">بارگذاری با باز کردن</span>)</summary>
       <p>فقط شما و ویراستاران این صفحه این بخش را می‌بینید.</p>
@@ -371,5 +357,7 @@
     </form>
   </dialog>
 </div>
+
+<div class="pop" id="popover" role="dialog" aria-label="توضیح ایراد" hidden></div>
 
 <script src="app.js" charset="utf-8"></script>

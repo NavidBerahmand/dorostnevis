@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { copyFileSync } from "node:fs";
+import { copyFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // The spelling lexicon (3 MB) is not bundled: the page fetches it after it loads.
@@ -26,3 +26,9 @@ await build({
     logLevel: "info"
 });
 copyFileSync(new URL("../textlint-rule-preset-farhangestan/src/dict/spelling-lexicon.json", import.meta.url), new URL("./dist/spelling-lexicon.json", import.meta.url));
+
+// The Kahroba typeface is licensed (fontiran.com), so it is not in the repository: put
+// Kahroba-VF.woff2 in packages/web/fonts/ (git-ignored) and the build serves it beside the page.
+const font = new URL("./fonts/Kahroba-VF.woff2", import.meta.url);
+if (existsSync(font)) copyFileSync(font, new URL("./dist/kahroba.woff2", import.meta.url));
+else console.warn("fonts/Kahroba-VF.woff2 not found: the page falls back to Vazirmatn");
