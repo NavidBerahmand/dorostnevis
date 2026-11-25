@@ -102,8 +102,15 @@ function show(s: string): string {
 }
 
 function splitMessage(m: Msg): { text: string; source: string } {
-    const match = m.message.match(/^(.*)\s\(([^()]*)\)\s*$/s);
-    return match ? { text: match[1], source: match[2] } : { text: m.message, source: "" };
+    // the source is the last parenthesis, which may itself contain one: «… (غلط‌یاب (واژه‌نامهٔ …))»
+    const msg = m.message.trimEnd();
+    if (!msg.endsWith(")")) return { text: m.message, source: "" };
+    let depth = 0;
+    for (let i = msg.length - 1; i >= 0; i--) {
+        if (msg[i] === ")") depth++;
+        else if (msg[i] === "(" && --depth === 0) return { text: msg.slice(0, i).trimEnd(), source: msg.slice(i + 1, -1) };
+    }
+    return { text: m.message, source: "" };
 }
 
 /**
@@ -170,6 +177,32 @@ function confidenceMeter(p: number): string {
             </div>`;
 }
 
+/** A book rule applied as written: five full green circles. */
+function bookMeter(): string {
+    const dots = Array.from({ length: DOTS }, () => '<span class="dot" style="background:hsl(120 70% 45%);border-color:hsl(120 70% 45%)"></span>').join("");
+    return `<div class="confidence" role="img" aria-label="قاعدهٔ صریح کتاب" title="این اصلاح را قاعدهٔ صریح کتاب می‌گوید؛ احتمالی در کار نیست.">
+                <span class="confidence-label">قاعدهٔ کتاب</span>
+                <span class="dots">${dots}</span>
+            </div>`;
+}
+
+/** Why a card has no circles, in a few words. */
+function noMeterReason(m: Msg): string {
+    if (m.ruleId === "spelling") return "حدس غلط‌یاب است، نه قاعده";
+    if (m.ruleId === "may-break") return "پیشنهاد سبکی است، نه غلط";
+    if (m.ruleId === "punctuation") return "قرارداد رایج است، نه کتاب";
+    return "به معنای جمله بستگی دارد";
+}
+
+function meterFor(m: Msg, p: number | null): string {
+    if (p !== null) return confidenceMeter(p);
+    if (m.fix && m.ruleId !== "punctuation") return bookMeter();
+    return `<div class="confidence confidence-none" title="این کارت درجهٔ اطمینان ندارد: ${noMeterReason(m)}.">
+                <span class="confidence-label">درجه ندارد</span>
+                <span class="confidence-why">${noMeterReason(m)}</span>
+            </div>`;
+}
+
 function renderList(text: string) {
     list.innerHTML = "";
     messages.forEach((m, i) => {
@@ -178,13 +211,14 @@ function renderList(text: string) {
         const { msg, p } = takeConfidence(split.text);
         const li = document.createElement("li");
         li.id = `issue-${i}`;
-        li.className = (m.fix ? "issue" : "issue issue-judge") + (p !== null ? " has-confidence" : "");
+        const meter = meterFor(m, p);
+        li.className = (m.fix ? "issue" : "issue issue-judge") + (meter.includes("confidence-none") ? " has-note" : " has-confidence");
         // show the whole word around the change, so «ي ← ی» reads «رييس ← رئیس»
         const [ws, we] = wordAround(text, Math.min(m.range[0], m.fix?.range[0] ?? m.range[0]), Math.max(m.range[1], m.fix?.range[1] ?? m.range[1]));
         const original = text.slice(ws, we);
         const fixed = m.fix ? text.slice(ws, m.fix.range[0]) + m.fix.text + text.slice(m.fix.range[1], we) : "";
         li.innerHTML = `
-            ${p !== null ? confidenceMeter(p) : ""}
+            ${meter}
             <div class="issue-head">
                 <span class="chip">${esc(RULE_LABELS[m.ruleId] ?? m.ruleId)}</span>
                 ${m.fix ? "" : m.ruleId === "may-break" ? '<span class="chip chip-style">پیشنهاد سبکی</span>' : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
