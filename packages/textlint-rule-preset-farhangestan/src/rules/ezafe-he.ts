@@ -53,6 +53,7 @@ import { verbForm } from "./mi-prefix";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 import commonNouns from "../dict/hazm-common-nouns.json";
 import { ezafeCandidates, EzafeCandidate } from "../util/ezafe-model";
+import { accepted, spellingReady } from "../util/speller";
 
 /**
  * Thresholds on the calibrated probability (scripts/ezafe-model/calibrate.py).
@@ -188,6 +189,8 @@ export default createPatternRule<Options>((options) => {
                     if (options.model === false || EZAFE_PRONOUNS.includes(m[2])) return null;
                     const c = candidateAt(m.input, m.index);
                     if (!c || c.p < MODEL_SUGGEST) return null;
+                    // a typo («طایقه») is the spelling rule's: no ezafe advice on it
+                    if (!isKnown(m[1]) && spellingReady() && !accepted(m[1])) return null;
                     // a compound written with a space: suggest the compound, not an ezafe
                     const compound = spacedCompound(m[1], m[2]);
                     if (compound) {

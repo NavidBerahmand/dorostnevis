@@ -5,6 +5,7 @@
 import { TextlintKernel } from "@textlint/kernel";
 import textPlugin from "@textlint/textlint-plugin-text";
 import preset from "../../textlint-rule-preset-farhangestan/src/index";
+import { loadSpellingLexicon } from "../../textlint-rule-preset-farhangestan/src/util/speller";
 import shekaste from "../../textlint-rule-preset-shekaste/src/index";
 
 type Msg = {
@@ -44,6 +45,7 @@ const RULE_LABELS: Record<string, string> = {
     "arabic-prefixes": "سوء/ضد/غیر",
     dictionary: "فرهنگ املایی",
     "word-spacing": "فاصله‌گذاری",
+    spelling: "غلط تایپی",
     punctuation: "نشانه‌گذاری",
     "over-broken": "شکستن بی‌جا",
     "may-break": "شکستن روا"
@@ -78,7 +80,8 @@ let timer: number | undefined;
 
 function options() {
     const all = { ...preset.rules, ...(mode.value === "dialogue" ? shekaste.rules : {}) };
-    const rules = Object.entries(all).map(([ruleId, rule]) => {
+    // spoken forms («می‌رم»، «خونه») are not typos: no spelling check in dialogue
+    const rules = Object.entries(all).filter(([ruleId]) => !(ruleId === "spelling" && mode.value === "dialogue")).map(([ruleId, rule]) => {
         let opts: object | boolean = true;
         if (ruleId === "plural-ha") opts = { mode: pluralMode.value };
         if (ruleId === "ezafe-he") opts = { style: ezafeStyle.value, formal: mode.value !== "dialogue" };
@@ -183,6 +186,17 @@ function renderList(text: string) {
 
 let ignored = new Set<string>();
 const key = (m: Msg, text: string) => `${m.ruleId}|${text.slice(m.range[0], m.range[1])}|${m.range[0]}`;
+
+// the spelling lexicon is loaded after the page; until then the rule stays quiet
+fetch("spelling-lexicon.json")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+        if (data?.buckets) {
+            loadSpellingLexicon(data);
+            void check();
+        }
+    })
+    .catch(() => undefined);
 
 async function check() {
     const text = input.value;
