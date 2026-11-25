@@ -6,6 +6,8 @@
  *   (ص ۷۳ و ۸۲). از روی کتاب با scripts/extract_multi_spelling.py ساخته می‌شود.
  * - compounds: فهرست‌های بستهٔ کتاب برای «هیچ، همین، همان، این، آن، هر، را»،
  *   استثناهای «هم-»، حروف اضافه و ربط مرکّب (ص ۳۴–۴۰ و ۶۹–۷۱).
+ * - arabic: «زکوة ← زکات»، الف مقصوره («تقوی ← تقوا»)، «طاوس ← طاووس» و
+ *   عبارت‌های عربیِ اصطلاح‌شده (ب-۹: «ان شاء الله ← ان‌شاءالله»). (ص ۵۴–۵۷، ۶۴)
  * - hamza: نمونه‌های جدول ۳ «کتابت همزه» و غلط‌های رایجی که خود کتاب نام
  *   برده (رییس، ارایه، جزیی، قرایت).
  *
@@ -17,12 +19,14 @@ import { START, END, escapeRegExp } from "../util/persian";
 import multiSpelling from "../dict/multi-spelling.json";
 import compounds from "../dict/compounds.json";
 import hamza from "../dict/hamza.json";
+import arabic from "../dict/arabic.json";
 
 export interface Options {
     dictionaries?: {
         multiSpelling?: boolean;
         compounds?: boolean;
         hamza?: boolean;
+        arabic?: boolean;
     };
 }
 
@@ -30,12 +34,15 @@ interface Entry {
     from: string[];
     to: string;
     source: string;
+    /** false: report only (the right form depends on meaning) */
+    fix?: boolean;
 }
 
 const DICTIONARIES: Record<keyof NonNullable<Options["dictionaries"]>, { entries: Entry[] }> = {
     multiSpelling,
     compounds,
-    hamza
+    hamza,
+    arabic
 };
 
 /** Collapse runs of spaces so «هیچ  کس» matches the entry «هیچ کس». */
@@ -70,6 +77,13 @@ export default createPatternRule<Options>((options) => {
                 check: (m) => {
                     const entry = map.get(key(m[0]));
                     if (!entry) return null;
+                    if (entry.fix === false) {
+                        return {
+                            message: `اگر در معنای اصطلاحی است، «${entry.to}» نوشته می‌شود`,
+                            fix: false,
+                            source: entry.source
+                        };
+                    }
                     return {
                         message: `املای مرجّح «${entry.to}» است`,
                         replacement: entry.to,

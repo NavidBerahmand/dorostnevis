@@ -1,0 +1,25 @@
+import TextLintTester from "textlint-tester";
+import rule from "../src/rules/joined-words";
+import { inv, z } from "./helpers";
+
+new TextLintTester().run("joined-words", rule, {
+    valid: [
+        z("پیش‹بینی، آیین‹نامه، خسته‹ام، خانه‹مان، هم‹کلاسی"),
+        "کتابخانه، دانشنامه، همکار، همسایه، هرکس، هرچند، پیشرفت، پیشنهاد", // book-joined words
+        "نامهربان، دانشگاه، همه، تکلیف، میانه، هرات، بستنی",               // ordinary words
+        "دریای آرام و اولیای مدرسه",                                        // «دریا» + ezafe, not «دری‌ای»
+        "سمیرا آمد.",                                                       // name ending in «را»
+        "غیرهشیار، هرون، اعلیحضرت"                                          // two splits / name / book exception
+    ],
+    invalid: [
+        inv("باید پیشبینی کرد", z("باید پیش‹بینی کرد")),
+        inv("من خیلی خستهام", z("من خیلی خسته‹ام")),
+        inv("خانهمان کوچک است", z("خانه‹مان کوچک است")),
+        inv("هوا خستهاست", "هوا خسته است"),
+        inv("آدمی بهانهگیر", z("آدمی بهانه‹گیر")),
+        inv("زیستفناوری", z("زیست‹فناوری")),
+        { text: "هرنفر", errors: [{}] },         // «هر»: suggestion only (the book's list is open)
+        inv("بسادگی حل شد", z("به‹سادگی حل شد")),
+        { text: "کتابرا آورد", errors: [{}] } // «را»: suggestion only, no automatic fix
+    ]
+});

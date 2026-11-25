@@ -35,6 +35,14 @@ EXTRA_NOT_VERBS = ["میدانی", "میانی", "میانجی", "میگساری
 
 ADJECTIVE_MIN_FREQ = 1000
 
+# Suffixes the book writes joined to the stem (ترکیب‌ها، الف-۱). «-دان» and
+# «-کار» are left out: they are also present stems (ریاضی‌دان) or
+# pseudo-suffixes the book leaves to the dictionary.
+JOINED_SUFFIXES = {
+    "گر", "گری", "گران", "مند", "مندی", "مندان", "ستان", "زار", "ناک", "گین", "کده",
+    "بان", "بانی", "چی", "سار", "لاخ", "گار", "گاری", "واره", "گاه", "گاهی", "وند",
+}
+
 
 def read(z: zipfile.ZipFile, name: str) -> list[str]:
     return z.read(name).decode("utf-8").splitlines()
@@ -115,6 +123,42 @@ def main(wheel: str) -> None:
         with open(os.path.join(OUT, name), "w", encoding="utf-8") as fh:
             json.dump(data, fh, ensure_ascii=False, indent=0)
             fh.write("\n")
+
+    # --- known words ------------------------------------------------------------
+    known = sorted(w for w in words if real(w))
+
+    # --- compounds Hazm writes with ZWNJ ------------------------------------------
+    book_joined_path = os.path.join(OUT, "book-joined.json")
+    with open(book_joined_path, encoding="utf-8") as fh:
+        book_joined = {w for g in json.load(fh)["groups"] for w in g["words"]}
+
+    def tidy(w: str) -> str:
+        """Drop ZWNJ after non-joining letters (the book's «بی‌فاصله»)."""
+        return "".join(c for i, c in enumerate(w) if not (c == ZWNJ and i > 0 and w[i - 1] in NON_JOINING))
+
+    compounds = {}
+    for w, (f, _) in words.items():
+        if ZWNJ not in w or f <= 0:
+            continue
+        joined = w.replace(ZWNJ, "")
+        form = tidy(w)
+        if form == joined or real(joined) or joined in book_joined:
+            continue
+        if joined.startswith(("بی", "می", "نمی")):
+            continue  # handled by the بی-/می- rules
+        first, last = form.split(ZWNJ)[0], form.split(ZWNJ)[-1]
+        # The book writes suffix compounds joined (الف-۱), except after a
+        # silent ه, ط or ظ, or when the letters on both sides are the same.
+        if last in JOINED_SUFFIXES and first[-1] not in "هطظ" and first[-1] != last[0]:
+            continue
+        compounds[joined] = form
+
+    dump(
+        "hazm-words.json",
+        {"source": "Hazm words.dat (MIT), frequency > 0", "words": known},
+    )
+    dump("hazm-compounds.json", {"source": "Hazm words.dat (MIT)", "pairs": dict(sorted(compounds.items()))})
+    print(f"known words: {len(known)}; compounds: {len(compounds)}", file=sys.stderr)
 
     dump("hazm-verbs.json", verbs)
     dump("hazm-bi.json", {"source": "Hazm words.dat (MIT)", "pairs": dict(sorted(bi.items()))})

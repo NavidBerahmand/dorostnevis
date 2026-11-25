@@ -14,6 +14,7 @@
  */
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, NON_JOINING, ZWNJ, joinWithHalfSpace } from "../util/persian";
+import { isKnown } from "../util/words";
 
 export interface Options {
     mode?: "recommended" | "required-only";
@@ -59,6 +60,20 @@ export default createPatternRule<Options>((options) => ({
                 const suffix = m[2] ?? "";
                 if (NOT_PLURAL.has(stem + "ها")) return null;
                 if (stem.length < 2) return null;
+                // «خانهای» = «خانه» + «ای», «خستهایم» = «خسته» + «ایم», not a plural
+                if ((suffix === "ی" || suffix === "یم") && isKnown(stem + "ه")) {
+                    const copula = stem + "ه" + ZWNJ + "ا" + suffix;
+                    if (!isKnown(stem)) {
+                        return {
+                            message: `«ا${suffix}» پس از «ه» با نیم‌فاصله نوشته می‌شود: «${copula}»`,
+                            replacement: copula
+                        };
+                    }
+                    return {
+                        message: `این کلمه دو خوانش دارد: «${copula}» یا «${stem + ZWNJ}ها${suffix}»؛ هر دو با نیم‌فاصله`,
+                        fix: false
+                    };
+                }
                 const endsWithHe = stem.endsWith("ه");
                 if (options.mode === "required-only" && !endsWithHe) return null;
                 return {

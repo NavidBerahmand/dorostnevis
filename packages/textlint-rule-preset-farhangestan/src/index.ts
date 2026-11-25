@@ -7,6 +7,12 @@ import tarTarin from "./rules/tar-tarin";
 import ezafeHe from "./rules/ezafe-he";
 import copulaAttachment from "./rules/copula-attachment";
 import lexicon from "./rules/lexicon";
+import joinedWords from "./rules/joined-words";
+import compoundVerbs from "./rules/compound-verbs";
+import numbers from "./rules/numbers";
+import verbPrefixAlef from "./rules/verb-prefix-alef";
+import hamzaTanvin from "./rules/hamza-tanvin";
+import arabicPrefixes from "./rules/arabic-prefixes";
 
 export default {
     rules: {
@@ -18,7 +24,13 @@ export default {
         "tar-tarin": tarTarin,
         "ezafe-he": ezafeHe,
         "copula-attachment": copulaAttachment,
-        lexicon
+        lexicon,
+        "joined-words": joinedWords,
+        "compound-verbs": compoundVerbs,
+        "numbers": numbers,
+        "verb-prefix-alef": verbPrefixAlef,
+        "hamza-tanvin": hamzaTanvin,
+        "arabic-prefixes": arabicPrefixes
     },
     rulesConfig: {
         "normalize-characters": true,
@@ -29,6 +41,12 @@ export default {
         "tar-tarin": true,
         "ezafe-he": true,
         "copula-attachment": true,
-        lexicon: true
+        lexicon: true,
+        "joined-words": true,
+        "compound-verbs": true,
+        "numbers": true,
+        "verb-prefix-alef": true,
+        "hamza-tanvin": true,
+        "arabic-prefixes": true
     }
 };

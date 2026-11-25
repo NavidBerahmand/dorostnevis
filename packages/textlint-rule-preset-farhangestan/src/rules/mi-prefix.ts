@@ -9,6 +9,10 @@
  * - «میرود»، «نمیدانم»، «برمیگردد» (پیوسته) ← «می‌رود»، «نمی‌دانم»، «برمی‌گردد».
  *   فقط وقتی باقی کلمه یک صورت صرفی از فهرست فعل‌های Hazm است و خود کلمه
  *   واژهٔ دیگری نیست (میدان، میز، میوه، میانجی دست نمی‌خورند).
+ * - «بر می‌گردد»، «فرو می‌ریزد» (پیشوند فعل جدا) ← «برمی‌گردد»، «فرومی‌ریزد».
+ *   دستور خط، ترکیب‌ها، ب-۷ (ص ۶۴): افعال پیشوندی با نیم‌فاصله/بی‌فاصله
+ *   نوشته می‌شوند: درمی‌گرفت، فرامی‌گیرد، ورمی‌آید. «در» و «باز» کنار
+ *   گذاشته شده‌اند، چون «در می‌زند» و «باز می‌کند» پیشوند نیستند.
  *
  * «همی» عمداً کنار گذاشته شده: تبصرهٔ همین بند می‌گوید «همی» در نقش تأکید
  * با فاصلهٔ کامل نوشته می‌شود (همی نیست اندر دوزخ…) و تشخیص این دو خودکار نیست.
@@ -36,6 +40,10 @@ const NOT_VERBS = new Set(hazmVerbs.notVerbs);
 /** Present stems used bare after «می» in impersonal constructions: «می‌توان»، «نمی‌توان». */
 const BARE_PRESENT = new Set(["توان"]);
 
+export function isPresentStem(s: string): boolean {
+    return PRESENT.has(s);
+}
+
 export function verbForm(rest: string): string | null {
     const candidates = rest.startsWith("ا") ? [rest, "آ" + rest.slice(1)] : [rest];
     for (const form of candidates) {
@@ -51,11 +59,26 @@ export function verbForm(rest: string): string | null {
 }
 
 // optional preverb (برمی‌گردد، درمی‌گرفت…), then می/نمی, then the verb, all joined
-const JOINED = new RegExp(`${START}(بر|در|باز|فرا|فرو|ور|وا)?(ن?می)(${LETTER}+)${END}`, "g");
+// (not after a separated preverb: «فرو میریزد» is handled as a whole below)
+const JOINED = new RegExp(`(?<!(?:بر|فرا|فرو|ور|وا) +)${START}(بر|در|باز|فرا|فرو|ور|وا)?(ن?می)(${LETTER}+)${END}`, "g");
 
 export default createPatternRule(() => ({
     source: SOURCE,
     checks: [
+        {
+            // preverb written separately: «بر می‌گردد» → «برمی‌گردد»
+            pattern: new RegExp(`${START}(بر|فرا|فرو|ور|وا) +(ن?می[ ${ZWNJ}]?)(${LETTER}+)${END}`, "g"),
+            check: (m) => {
+                const form = verbForm(m[3]);
+                if (!form) return null;
+                const fixed = m[1] + m[2].replace(/[ \u200C]/g, "") + ZWNJ + form;
+                return {
+                    message: `پیشوند فعل «${m[1]}» به «${m[2].trim()}» می‌چسبد: «${fixed}»`,
+                    replacement: fixed,
+                    source: "دستور خط، ترکیب‌ها، ب-۷، ص ۶۴"
+                };
+            }
+        },
         {
             pattern: JOINED,
             check: (m) => {

@@ -11,6 +11,7 @@
  * - کشیده (ـ) میان حروف ← حذف
  * - RLM/LRM میان دو حرف (به‌جای نیم‌فاصله) ← نیم‌فاصله
  * - ارقام عربی (٠–٩) ← ارقام فارسی (۰–۹)
+ * - «ی» + همزهٔ بالا (یٔ) ← «ئ»
  */
 import { createPatternRule, visible } from "../util/pattern-rule";
 import { LETTER, ZWNJ } from "../util/persian";
@@ -72,6 +73,10 @@ export default createPatternRule<Options>((options) => {
             })
         }
     ];
+    checks.push({
+        pattern: /[\u06CC\u064A]\u0654/g,
+        check: () => ({ message: "«ی» با همزهٔ جدا به‌جای «ئ»", replacement: "ئ" })
+    });
     if (options.digits !== false) {
         checks.push({
             pattern: /[٠-٩]/g,
