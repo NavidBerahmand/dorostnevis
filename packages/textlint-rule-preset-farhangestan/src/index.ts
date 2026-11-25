@@ -14,6 +14,7 @@ import verbPrefixAlef from "./rules/verb-prefix-alef";
 import hamzaTanvin from "./rules/hamza-tanvin";
 import arabicPrefixes from "./rules/arabic-prefixes";
 import dictionary from "./rules/dictionary";
+import wordSpacing from "./rules/word-spacing";
 
 export default {
     rules: {
@@ -32,6 +33,7 @@ export default {
         "verb-prefix-alef": verbPrefixAlef,
         "hamza-tanvin": hamzaTanvin,
         "arabic-prefixes": arabicPrefixes,
+        "word-spacing": wordSpacing,
         dictionary
     },
     rulesConfig: {
@@ -50,6 +52,7 @@ export default {
         "verb-prefix-alef": true,
         "hamza-tanvin": true,
         "arabic-prefixes": true,
+        "word-spacing": true,
         dictionary: true
     }
 };

@@ -160,6 +160,13 @@ def main(wheel: str) -> None:
     dump("hazm-compounds.json", {"source": "Hazm words.dat (MIT)", "pairs": dict(sorted(compounds.items()))})
     print(f"known words: {len(known)}; compounds: {len(compounds)}", file=sys.stderr)
 
+    # --- frequent nouns: safe to split off a joined «این/آن» («آنروز» → «آن روز») --------
+    common_nouns = sorted(
+        w for w, (f, pos) in words.items()
+        if f >= 1_000_000 and ZWNJ not in w and len(w) >= 2 and "N" in pos
+    )
+    dump("hazm-common-nouns.json", {"source": "Hazm words.dat (MIT): nouns with frequency >= 1,000,000", "words": common_nouns})
+
     dump("hazm-verbs.json", verbs)
     dump("hazm-bi.json", {"source": "Hazm words.dat (MIT)", "pairs": dict(sorted(bi.items()))})
     dump(

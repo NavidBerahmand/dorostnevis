@@ -36,6 +36,8 @@ interface Entry {
     source: string;
     /** false: report only (the right form depends on meaning) */
     fix?: boolean;
+    /** overrides the default message */
+    message?: string;
 }
 
 const DICTIONARIES: Record<keyof NonNullable<Options["dictionaries"]>, { entries: Entry[] }> = {
@@ -80,13 +82,14 @@ export default createPatternRule<Options>((options) => {
                     if (!entry) return null;
                     if (entry.fix === false) {
                         return {
-                            message: `اگر در معنای اصطلاحی است، «${entry.to}» نوشته می‌شود`,
+                            message: entry.message ?? `اگر در معنای اصطلاحی است، «${entry.to}» نوشته می‌شود`,
+                            replacement: entry.to,
                             fix: false,
                             source: entry.source
                         };
                     }
                     return {
-                        message: `املای مرجّح «${entry.to}» است`,
+                        message: entry.message ?? `املای مرجّح «${entry.to}» است`,
                         replacement: entry.to,
                         source: entry.source
                     };

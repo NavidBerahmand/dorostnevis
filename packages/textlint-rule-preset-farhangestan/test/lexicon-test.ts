@@ -40,6 +40,15 @@ new TextLintTester().run("lexicon", rule, {
         inv("بخصوص", z("به‹خصوص")),
         inv("آنروز", "آن روز"),
         inv("چکار کنم", "چه کار کنم"),
-        { text: "رفت و آمد", errors: [{}] }  // idiomatic only in some senses: no automatic fix
+        { text: "رفت و آمد", errors: [{}] },  // idiomatic only in some senses: no automatic fix
+        inv("بمحض رسیدن", z("به‹محض رسیدن")), // p. 38
+        inv("چه طور شد؟", "چطور شد؟"), // p. 34
+        inv("همین طور شد.", z("همین‹طور شد.")),
+        inv("هدف اینست که", "هدف این است که"),
+        inv("ابن سینا", z("ابن‹سینا")),
+        // «این‌که» is right in the sense «این کسی که»: suggestion only
+        { text: z("این‹که آمد"), output: z("این‹که آمد"), errors: [{}] },
+        // «آن چه بسا»: suggestion only
+        { text: "آن چه بسا", output: "آن چه بسا", errors: [{}] }
     ]
 });
