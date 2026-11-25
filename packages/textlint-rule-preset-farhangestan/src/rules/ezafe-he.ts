@@ -29,8 +29,26 @@
  * { "model": false } خاموش می‌شود.
  */
 import { createPatternRule } from "../util/pattern-rule";
-import { START, END, LETTER, ZWNJ } from "../util/persian";
-import { isKnown, endsWithSilentHe } from "../util/words";
+import { START, END, LETTER, ZWNJ, toPersianDigits } from "../util/persian";
+import { isKnown, isDictionaryWord, endsWithSilentHe } from "../util/words";
+import hazmCompounds from "../dict/hazm-compounds.json";
+
+const COMPOUNDS: Record<string, string> = hazmCompounds.pairs;
+
+/**
+ * «رشته کوه»، «جامعه شناسان»: a compound written with a space, not an ezafe.
+ * Returns the compound as it should be written, if the two words form one.
+ */
+function spacedCompound(w0: string, w1: string): string | null {
+    for (const end of ["", "ها", "های", "ان", "انی", "ی", "ای"]) {
+        if (end && !w1.endsWith(end)) continue;
+        const stem = end ? w1.slice(0, -end.length) : w1;
+        if (stem.length < 2) continue;
+        const joined = w0 + ZWNJ + stem;
+        if (isDictionaryWord(joined) || isKnown(joined) || COMPOUNDS[w0 + stem] === joined) return w0 + ZWNJ + w1;
+    }
+    return null;
+}
 import { verbForm } from "./mi-prefix";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 import commonNouns from "../dict/hazm-common-nouns.json";
@@ -170,10 +188,21 @@ export default createPatternRule<Options>((options) => {
                     if (options.model === false || EZAFE_PRONOUNS.includes(m[2])) return null;
                     const c = candidateAt(m.input, m.index);
                     if (!c || c.p < MODEL_SUGGEST) return null;
+                    // a compound written with a space: suggest the compound, not an ezafe
+                    const compound = spacedCompound(m[1], m[2]);
+                    if (compound) {
+                        return {
+                            message: `اگر «${m[1]} ${m[2]}» یک ترکیب است، با نیم‌فاصله نوشته می‌شود: «${compound}»`,
+                            replacement: compound,
+                            end: m[1].length + 1 + m[2].length,
+                            fix: false,
+                            source: "دستور خط، ترکیب‌ها، ب-۱۱، ص ۶۶"
+                        };
+                    }
                     const fixed = m[1].slice(0, -1) + target;
                     const sure = c.p >= MODEL_FIX && isKnown(m[1]);
                     return {
-                        message: `اگر «${m[1]}» در حالت اضافه است (احتمال ${Math.round(c.p * 100)}٪)، «${fixed}» نوشته می‌شود`,
+                        message: `اگر «${m[1]}» در حالت اضافه است (احتمال ${toPersianDigits(Math.round(c.p * 100))}٪)، «${fixed}» نوشته می‌شود`,
                         replacement: fixed,
                         fix: sure ? undefined : false
                     };

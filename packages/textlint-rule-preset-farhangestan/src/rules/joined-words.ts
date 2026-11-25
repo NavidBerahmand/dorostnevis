@@ -22,7 +22,7 @@
  *    اطراف تصمیم می‌گیرد: از ۹۰٪ اطمینان اصلاح خودکار، از ۵۰٪ پیشنهاد. (ص ۳۵)
  */
 import { createPatternRule, PatternResult } from "../util/pattern-rule";
-import { START, END, LETTER, LETTER_RANGE, ZWNJ, isNonJoining } from "../util/persian";
+import { START, END, LETTER, LETTER_RANGE, ZWNJ, isNonJoining, toPersianDigits } from "../util/persian";
 import { isKnown, isDictionaryWord, endsWithSilentHe, BOOK_JOINED } from "../util/words";
 import { verbForm } from "./mi-prefix";
 import hazmCompounds from "../dict/hazm-compounds.json";
@@ -297,7 +297,7 @@ export default createPatternRule(() => ({
                 if (!c || c.p < RA_SUGGEST) return null;
                 const fixed = m[1] + " را";
                 return {
-                    message: `«را» با فاصلهٔ کامل نوشته می‌شود: «${fixed}» (احتمال ${Math.round(c.p * 100)}٪)`,
+                    message: `«را» با فاصلهٔ کامل نوشته می‌شود: «${fixed}» (احتمال ${toPersianDigits(Math.round(c.p * 100))}٪)`,
                     replacement: fixed,
                     // a rare first part may be a place or a name («نوشرا»): suggest only
                     fix: c.p >= RA_FIX && COMMON_NOUNS.has(m[1]) ? undefined : false,

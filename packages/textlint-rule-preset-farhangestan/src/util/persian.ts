@@ -55,3 +55,8 @@ export function joinWithHalfSpace(left: string, right: string): string {
 export function escapeRegExp(s: string): string {
     return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+/** «96» → «۹۶» */
+export function toPersianDigits(n: number | string): string {
+    return String(n).replace(/[0-9]/g, (d) => String.fromCharCode(0x06f0 + Number(d)));
+}
