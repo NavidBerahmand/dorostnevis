@@ -190,33 +190,45 @@ function bookMeter(): string {
 }
 
 const BOOK_PDF = "https://apll.ir/wp-content/uploads/2023/07/Dastour-e-Khat-17.04.1402.pdf";
+const FARHANG_PDF = "https://apll.ir/wp-content/uploads/2018/10/F-E-1394.pdf";
+const ACADEMY = "فرهنگستان زبان و ادب فارسی";
+// In both PDFs the page index is the printed page number, so «#page=N» opens page N.
 const BOOKS: Array<{ prefix: RegExp; name: string; url?: string }> = [
-    {
-        prefix: /^دستور خط(?: \(ویراست جدید\))?\s*[،؛:]?\s*/,
-        name: "دستور خطّ فارسی (ویراست جدید)، فرهنگستان زبان و ادب فارسی، ۱۴۰۱",
-        url: BOOK_PDF
-    },
-    { prefix: /^فرهنگ املایی(?: خطّ فارسی)?\s*[،؛]?\s*/, name: "فرهنگ املایی خطّ فارسی، فرهنگستان زبان و ادب فارسی، ۱۳۹۴" },
+    { prefix: /^دستور خط(?: \(ویراست جدید\))?\s*[،؛:]?\s*/, name: `دستور خطّ فارسی، ${ACADEMY}`, url: BOOK_PDF },
+    { prefix: /^فرهنگ املایی(?: خطّ فارسی)?\s*[،؛]?\s*/, name: `فرهنگ املایی خطّ فارسی، ${ACADEMY}`, url: FARHANG_PDF },
     { prefix: /^اصول شکسته‌نویسی\s*[،؛]?\s*/, name: "اصول شکسته‌نویسی، علی صلح‌جو" }
 ];
 const faDigits = (s: string) => Number(s.replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0)));
+const PAGES = /ص ([۰-۹]+(?:–[۰-۹]+)?)/g;
 
 /**
- * «دستور خط، «تنوین»، ص ۵۶» → the full name of the book, the section, and a
- * link to that page of the published PDF (its page index is the printed page).
+ * One small line: «دستور خطّ فارسی، فرهنگستان زبان و ادب فارسی، ص ۵۵», linked
+ * to that page of the book's PDF. The section («واژه‌های برگرفته از عربی»)
+ * goes in the tooltip.
  */
 function citation(source: string): string {
     for (const b of BOOKS) {
         const m = source.match(b.prefix);
         if (!m) continue;
-        const rest = source.slice(m[0].length);
-        const where = rest ? `<span class="cite-where">${esc(rest)}</span>` : "";
-        if (!b.url) return `<span class="cite-book">${esc(b.name)}</span>${where}`;
-        // a page after «فرهنگ املایی» is the dictionary's page, not the book's
-        const page = /فرهنگ املایی/.test(rest) ? null : rest.match(/ص ([۰-۹]+)/);
-        const href = page ? `${b.url}#page=${faDigits(page[1])}` : b.url;
-        const title = page ? `باز کردن صفحهٔ ${page[1]} کتاب (PDF، سایت فرهنگستان)` : "باز کردن کتاب (PDF، سایت فرهنگستان)";
-        return `<a class="cite-link" href="${href}" target="_blank" rel="noopener" title="${title}"><span class="cite-book">${esc(b.name)}</span>${where}</a>`;
+        let rest = source.slice(m[0].length);
+        let book = b;
+        // «دستور خط (ویراست جدید)؛ فرهنگ املایی، ص ۱۲۹، «…» دارد»: the book's rule,
+        // and the page is the dictionary's: cite the dictionary page, note the rest
+        let note = "";
+        const farhang = rest.match(/^فرهنگ املایی،\s*/);
+        if (book.url === BOOK_PDF && farhang) {
+            book = BOOKS[1];
+            note = "فرهنگ شکل دیگری دارد؛ در تعارض، دستور خط (ویراست جدید) مقدّم است";
+            rest = rest.slice(farhang[0].length);
+        }
+        const pages = [...rest.matchAll(PAGES)].map((p) => p[1]);
+        const text = book.name + (pages.length ? `، ص ${pages.join(" و ")}` : "");
+        const section = rest.replace(PAGES, "").replace(/\s{2,}/g, " ").replace(/[،؛\s]+$/, "").replace(/^[،؛\s]+/, "");
+        const tip = [section, note].filter(Boolean).join(" — ");
+        const title = tip ? ` title="${esc(tip)}"` : "";
+        if (!book.url) return `<span${title}>${esc(text)}</span>`;
+        const href = pages.length ? `${book.url}#page=${faDigits(pages[0].split("–")[0])}` : book.url;
+        return `<a class="cite-link" href="${href}" target="_blank" rel="noopener"${title}>${esc(text)}</a>`;
     }
     return esc(source);
 }

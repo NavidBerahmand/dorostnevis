@@ -11,7 +11,7 @@ allows **free, non-commercial use with attribution** only.
 
 | فایل | منبع | شرایط |
 | --- | --- | --- |
-| `src/dict/farhang-emlaei.json`، `src/dict/farhang-v2-overrides.json` | فرهنگ املایی خطّ فارسی، فرهنگستان زبان و ادب فارسی، ۱۳۹۴ | استفادهٔ رایگان و غیرتجاری با ذکر منبع، به اجازهٔ فرهنگستان |
+| `src/dict/farhang-emlaei.json`، `src/dict/farhang-v2-overrides.json` | [فرهنگ املایی خطّ فارسی](https://apll.ir/wp-content/uploads/2018/10/F-E-1394.pdf)، فرهنگستان زبان و ادب فارسی، ۱۳۹۴ | استفادهٔ رایگان و غیرتجاری با ذکر منبع، به اجازهٔ فرهنگستان |
 | `src/dict/multi-spelling.json`، `book-joined.json`، `compounds.json`، `arabic.json`، `hamza.json`، و مثال‌ها و ارجاع‌های قاعده‌ها | [دستور خطّ فارسی (ویراست جدید)](https://apll.ir/wp-content/uploads/2023/07/Dastour-e-Khat-17.04.1402.pdf)، فرهنگستان زبان و ادب فارسی، ۱۴۰۱ | همان |
 | `src/dict/spelling-lexicon.json` (بسامد واژه‌ها)، `src/dict/ezafe-model.json` و `src/dict/ra-model.json` (وزن‌های مدل)، `scripts/ezafe-model/hand-labels*.jsonl` (جمله‌های برچسب‌خورده) | ویکی‌پدیای فارسی (fa.wikipedia.org)، به قلم ویرایشگرانش | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)؛ این فایل‌ها با همین مجوز منتشر می‌شوند |
 | `src/dict/hazm-*.json`، `src/dict/ezafe-pos.json` | [Hazm](https://github.com/roshan-research/hazm) | MIT (متن زیر) |
