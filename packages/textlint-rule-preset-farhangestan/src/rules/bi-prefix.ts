@@ -14,14 +14,23 @@
  * - استثناهای فهرست بسته ← پیوسته. سه استثنایی که معنایشان در کتاب قید شده
  *   (بیجا، بیخود، بیهوش) خودکار اصلاح نمی‌شوند، چون «بی‌هوش» و «بی‌خود»
  *   در معنای دیگر درست‌اند.
+ * - «بیدلیل» (پیوسته) ← «بی‌دلیل»، فقط وقتی واژه‌نامهٔ Hazm شکل پیوسته را
+ *   نمی‌شناسد و شکل جدا را می‌شناسد. «بیمار»، «بیرون»، «بیگانه» دست نمی‌خورند.
+ *   استثناهای کتاب بر داده‌های Hazm مقدّم‌اند (Hazm «بی‌هوش» و «بی‌عار» دارد).
  */
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, WORD, ZWNJ } from "../util/persian";
+import hazmBi from "../dict/hazm-bi.json";
 
 const SOURCE = "دستور خط، «بی»، ص ۳۹";
 
 /** Closed exception list whose meaning is unambiguous → always joined. */
 export const JOINED_EXCEPTIONS = ["بیچاره", "بیداد", "بیدل", "بیراه", "بیزار", "بیعار", "بیکار", "بینوا"];
+
+/** Every exception in the book, including the three whose sense is noted: never separated. */
+const ALL_EXCEPTIONS = new Set([...JOINED_EXCEPTIONS, "بیجا", "بیخود", "بیهوش"]);
+
+const JOINED_TO_SEPARATED: Record<string, string> = hazmBi.pairs;
 
 /** Words after which «بی» is most likely the preposition, not the prefix. */
 const PREPOSITION_FOLLOWERS = new Set([
@@ -40,6 +49,18 @@ export default createPatternRule(() => ({
                 message: `«بی${m[1]}» از استثناهای قاعده است و پیوسته نوشته می‌شود`,
                 replacement: "بی" + m[1]
             })
+        },
+        {
+            // joined: «بیدلیل» → «بی‌دلیل»
+            pattern: new RegExp(`${START}بی${WORD}`, "g"),
+            check: (m) => {
+                const separated = JOINED_TO_SEPARATED[m[0]];
+                if (!separated || ALL_EXCEPTIONS.has(m[0])) return null;
+                return {
+                    message: `پیشوند «بی» با نیم‌فاصله نوشته می‌شود: «${separated}»`,
+                    replacement: separated
+                };
+            }
         },
         {
             pattern: new RegExp(`${START}بی +(${WORD})`, "g"),

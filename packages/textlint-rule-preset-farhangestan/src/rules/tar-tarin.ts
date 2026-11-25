@@ -11,12 +11,15 @@
  *   برای همین فقط وقتی «از» بعدش آمده اصلاح می‌شود.
  * - استثناها با نیم‌فاصله/فاصله («بیش‌تر»، «کم تر») ← پیوسته.
  *
- * حالت پیوستهٔ غیرمجاز («بزرگتر») به فهرست صفت‌ها نیاز دارد (دفتر، کبوتر،
- * دختر…) و بعداً با واژه‌نامه اضافه می‌شود. «کلانتر» هم عمداً کنار گذاشته
- * شده، چون «کلان‌تر» (بزرگ‌تر) درست است.
+ * - «بزرگتر»، «سریعترین» (پیوسته) ← «بزرگ‌تر»، «سریع‌ترین»، فقط وقتی پایهٔ
+ *   کلمه در فهرست صفت‌های Hazm است و «Xتر» خودش واژهٔ دیگری نیست (دفتر،
+ *   دکتر، بستر، مستتر دست نمی‌خورند).
+ *
+ * «کلانتر» عمداً کنار گذاشته شده، چون «کلان‌تر» (بزرگ‌تر) هم درست است.
  */
 import { createPatternRule } from "../util/pattern-rule";
-import { START, END, WORD, ZWNJ, joinWithHalfSpace } from "../util/persian";
+import { START, END, LETTER, WORD, ZWNJ, joinWithHalfSpace } from "../util/persian";
+import hazmAdjectives from "../dict/hazm-adjectives.json";
 
 const SOURCE = "دستور خط، «تر و ترین»، ص ۴۰";
 
@@ -25,9 +28,22 @@ const EXCEPTION_STEMS = ["به", "که", "مه", "بیش", "کم"];
 /** Function words never take -تر/-ترین; seeing one means «تر» is meant literally («تر و ترین»). */
 const NOT_A_STEM = new Set(["و", "یا", "از", "با", "در", "را", "تا", "هم", "نه", "که", "چه", "این", "آن"]);
 
+const ADJECTIVES = new Set(hazmAdjectives.adjectives);
+const BLOCKED = new Set([...hazmAdjectives.blocked, ...EXCEPTION_STEMS, "کلان"]);
+
 export default createPatternRule(() => ({
     source: SOURCE,
     checks: [
+        {
+            // joined: «بزرگتر»، «بزرگترین»، «بزرگتری»، «بزرگترها»
+            pattern: new RegExp(`${START}(${LETTER}+?)(ترین|تر)(ها|های|هایی|ی)?${END}`, "g"),
+            check: (m) => {
+                const stem = m[1];
+                if (!ADJECTIVES.has(stem) || BLOCKED.has(stem)) return null;
+                const fixed = stem + ZWNJ + m[2] + (m[3] ?? "");
+                return { message: `«${m[2]}» با نیم‌فاصله به صفت می‌چسبد: «${fixed}»`, replacement: fixed };
+            }
+        },
         {
             pattern: new RegExp(`${START}(${EXCEPTION_STEMS.join("|")})[ ${ZWNJ}](ترین|تر)${END}`, "g"),
             check: (m) => ({

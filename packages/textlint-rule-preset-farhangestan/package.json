@@ -30,7 +30,8 @@
   },
   "files": [
     "lib",
-    "src"
+    "src",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "peerDependencies": {
     "textlint": ">=14.0.0"
