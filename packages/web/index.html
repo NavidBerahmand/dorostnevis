@@ -180,6 +180,24 @@
     transition: background-color 0.4s;
   }
   .issue-judge { border-inline-start-color: var(--judge); }
+  /* model confidence: top-left corner of the card (the end side in RTL) */
+  .issue { position: relative; }
+  .issue.has-confidence .issue-head { padding-inline-end: 96px; min-height: 30px; }
+  .confidence {
+    position: absolute;
+    top: 8px;
+    inset-inline-end: 12px;
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+  }
+  .confidence-label { font-size: 0.66rem; color: var(--muted); line-height: 1.2; white-space: nowrap; }
+  .dots { display: flex; gap: 3px; direction: ltr; }
+  .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1.5px solid var(--line);
+    background: transparent;
+  }
   .issue.flash { background: var(--lapis-soft); }
   .issue-head { display: flex; gap: 6px; flex-wrap: wrap; }
   .chip {

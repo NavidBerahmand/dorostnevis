@@ -147,18 +147,44 @@ function wordAround(text: string, start: number, end: number): [number, number] 
     return [start, end];
 }
 
+/** «(احتمال ۸۲٪)» in a model's message → 82, and the message without it. */
+function takeConfidence(msg: string): { msg: string; p: number | null } {
+    const m = msg.match(/ ?\(احتمال ([۰-۹0-9]+)٪\)/);
+    if (!m) return { msg, p: null };
+    const p = Number(m[1].replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0)));
+    return { msg: msg.replace(m[0], ""), p };
+}
+
+const DOTS = 5;
+/** Five circles: as many filled as the confidence (in fifths); red at 50% to green at 100%. */
+function confidenceMeter(p: number): string {
+    const filled = Math.max(1, Math.round(p / (100 / DOTS)));
+    const hue = Math.round(Math.min(120, Math.max(0, ((p - 50) / 50) * 120)));
+    const pct = p.toLocaleString("fa-IR");
+    const dots = Array.from({ length: DOTS }, (_, i) =>
+        i < filled ? `<span class="dot" style="background:hsl(${hue} 70% 45%);border-color:hsl(${hue} 70% 45%)"></span>` : '<span class="dot"></span>'
+    ).join("");
+    return `<div class="confidence" role="img" aria-label="اطمینان مدل: ${pct}٪" title="اطمینان مدل آماری: ${pct}٪. هرچه دایره‌های پر بیشتر و سبزتر، مدل مطمئن‌تر است.">
+                <span class="confidence-label">اطمینان مدل</span>
+                <span class="dots">${dots}</span>
+            </div>`;
+}
+
 function renderList(text: string) {
     list.innerHTML = "";
     messages.forEach((m, i) => {
-        const { text: msg, source } = splitMessage(m);
+        const split = splitMessage(m);
+        const source = split.source;
+        const { msg, p } = takeConfidence(split.text);
         const li = document.createElement("li");
         li.id = `issue-${i}`;
-        li.className = m.fix ? "issue" : "issue issue-judge";
+        li.className = (m.fix ? "issue" : "issue issue-judge") + (p !== null ? " has-confidence" : "");
         // show the whole word around the change, so «ي ← ی» reads «رييس ← رئیس»
         const [ws, we] = wordAround(text, Math.min(m.range[0], m.fix?.range[0] ?? m.range[0]), Math.max(m.range[1], m.fix?.range[1] ?? m.range[1]));
         const original = text.slice(ws, we);
         const fixed = m.fix ? text.slice(ws, m.fix.range[0]) + m.fix.text + text.slice(m.fix.range[1], we) : "";
         li.innerHTML = `
+            ${p !== null ? confidenceMeter(p) : ""}
             <div class="issue-head">
                 <span class="chip">${esc(RULE_LABELS[m.ruleId] ?? m.ruleId)}</span>
                 ${m.fix ? "" : m.ruleId === "may-break" ? '<span class="chip chip-style">پیشنهاد سبکی</span>' : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
