@@ -41,12 +41,22 @@ function basePresentationForm(ch: string): string {
         .join("");
 }
 
+/** What each foreign letter is, for the message. */
+const FOREIGN: Record<string, string> = {
+    "ي": "حرف عربی",
+    "ى": "حرف عربی (الف مقصوره)",
+    "ك": "حرف عربی",
+    "ہ": "حرف اردو",
+    "ە": "حرف کردی",
+    "ھ": "حرف عربی (هاء دوچشم)"
+};
+
 export default createPatternRule<Options>((options) => {
     const checks = [
         {
             pattern: /[يىكہەھ]/g,
             check: (m: RegExpExecArray) => ({
-                message: `نویسهٔ عربی «${m[0]}» به‌جای «${ARABIC_TO_PERSIAN[m[0]]}» فارسی`,
+                message: `«${m[0]}» ${FOREIGN[m[0]]} است؛ باید «${ARABIC_TO_PERSIAN[m[0]]}» فارسی نوشته شود`,
                 replacement: ARABIC_TO_PERSIAN[m[0]]
             })
         },
@@ -56,33 +66,33 @@ export default createPatternRule<Options>((options) => {
                 const base = basePresentationForm(m[0]);
                 if (base === m[0]) return null;
                 return {
-                    message: `شکل نمایشی «${m[0]}» به‌جای نویسهٔ پایه «${base}»`,
+                    message: `«${m[0]}» شکل نمایشیِ حرف است و در جست‌وجو پیدا نمی‌شود؛ باید «${base}» نوشته شود`,
                     replacement: base
                 };
             }
         },
         {
             pattern: new RegExp(`(?<=${LETTER})\\u0640+(?=${LETTER})`, "g"),
-            check: () => ({ message: "کشیده (ـ) در میان کلمه", replacement: "" })
+            check: () => ({ message: "کشیده (ـ) در میان کلمه آمده است؛ باید حذف شود", replacement: "" })
         },
         {
             pattern: new RegExp(`(?<=${LETTER})[\\u200E\\u200F]+(?=${LETTER})`, "g"),
             check: (m: RegExpExecArray) => ({
-                message: `${visible(m[0])} به‌جای نیم‌فاصله؛ در بسیاری از نرم‌افزارها حروف دو طرف به هم می‌چسبند`,
+                message: `اینجا ${visible(m[0])} آمده است که در بسیاری از نرم‌افزارها حروف دو طرفش را به هم می‌چسباند؛ باید نیم‌فاصله باشد`,
                 replacement: ZWNJ
             })
         }
     ];
     checks.push({
         pattern: /[\u06CC\u064A]\u0654/g,
-        check: () => ({ message: "«ی» با همزهٔ جدا به‌جای «ئ»", replacement: "ئ" })
+        check: () => ({ message: "«ی» و همزه جدا تایپ شده است؛ باید «ئ» نوشته شود", replacement: "ئ" })
     });
     if (options.digits !== false) {
         checks.push({
             pattern: /[٠-٩]/g,
             check: (m: RegExpExecArray) => {
                 const persian = String.fromCharCode(m[0].charCodeAt(0) - 0x0660 + 0x06f0);
-                return { message: `رقم عربی «${m[0]}» به‌جای رقم فارسی «${persian}»`, replacement: persian };
+                return { message: `«${m[0]}» رقم عربی است؛ باید رقم فارسی «${persian}» نوشته شود`, replacement: persian };
             }
         });
     }
