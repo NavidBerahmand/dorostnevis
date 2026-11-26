@@ -10,6 +10,7 @@ new TextLintTester().run("lexicon", rule, {
         "آخر کار غرق شد.",            // «آخُر/غُرُق» in the book are vowel-marked; never matched
         "این خطا بود.",
         "توام",                       // تو + ـَم (you are), not توأم
+        z("رایانه، رایانه‹ای، رایانه‹ها، جزئی، سوئیت، شیئی"), // base + suffix is another word: not «رأیانه»
         "من بعد می‌آیم",              // not «من‌بعد»               // «خطا» is a word, not a variant of «ختا»
         z("هیچ‹کس، همین‹جا، هرکس، آنچه، بلکه"),
         {
@@ -22,6 +23,7 @@ new TextLintTester().run("lexicon", rule, {
         inv("ماموران آمدند", "مأموران آمدند"),
         inv("متاسفانه", "متأسفانه"),
         inv("مسایل مهم", "مسائل مهم"),
+        inv("جزییات کار", "جزئیات کار"),
         { text: "رویا دیدم", errors: [{}] },
         inv("اطاق", "اتاق"),
         inv("بلیط قطار", "بلیت قطار"),

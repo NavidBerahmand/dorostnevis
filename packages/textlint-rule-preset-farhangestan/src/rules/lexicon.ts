@@ -23,6 +23,7 @@ import multiSpelling from "../dict/multi-spelling.json";
 import compounds from "../dict/compounds.json";
 import hamza from "../dict/hamza.json";
 import arabic from "../dict/arabic.json";
+import { isKnown } from "../util/words";
 
 export interface Options {
     dictionaries?: {
@@ -93,6 +94,8 @@ export default createPatternRule<Options>((options) => {
                     const suffix = m[2] ?? "";
                     if (suffix && !HAMZA_ENTRIES.has(entry)) return null;
                     const to = entry.to + suffix;
+                    // the base plus the suffix can be another word: «رای» + «انه» is «رایانه», «جزئ» + «ی» is «جزئی»
+                    if (suffix && isKnown(m[1] + suffix) && !isKnown(to)) return null;
                     if (entry.wholeWordOnly && m.input[m.index + m[0].length] === ZWNJ) return null;
                     if (entry.fix === false) {
                         return {
