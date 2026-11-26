@@ -3,7 +3,8 @@
   "private": true,
   "description": "صفحهٔ واج‌بان: textlint و قواعد فرهنگستان در مرورگر",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "build:site": "node build-site.mjs"
   },
   "license": "MIT",
   "devDependencies": {

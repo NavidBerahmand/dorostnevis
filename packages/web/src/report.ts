@@ -5,8 +5,10 @@
  * and pressing «فرستادن». Inside claude.ai the report is saved with the
  * artifact's `db` capability under `reports/<viewer id>/items/<id>`: the
  * reader can write only their own subtree and only the owner (and editors)
- * can read them all. Elsewhere (a copy of the page on another host, a viewer
- * who may not write), the same report is copied to the clipboard instead.
+ * can read them all. On the site's own host (vajban.com, Cloudflare Pages) it
+ * is posted to /api/report, which keeps it in a D1 database. Elsewhere (a
+ * file opened locally, a viewer who may not write), the same report is copied
+ * to the clipboard instead.
  */
 
 export type Report = {
@@ -22,7 +24,7 @@ export type Report = {
     at: string;
 };
 
-type Store = { db: any; uid: string } | null;
+type Store = { db: any; uid: string } | { server: true } | null;
 
 const claude = (window as unknown as { claude?: { use?: (name: string) => Promise<any> } }).claude;
 let storePromise: Promise<Store> | null = null;
@@ -31,7 +33,8 @@ let storePromise: Promise<Store> | null = null;
 function store(): Promise<Store> {
     if (!storePromise) {
         storePromise = (async () => {
-            if (!claude?.use) return null;
+            // the site's own host: the Pages Function at /api/report
+            if (!claude?.use) return /^https?:$/.test(location.protocol) && !/claude/.test(location.hostname) ? { server: true } : null;
             try {
                 const [db, user] = await Promise.all([claude.use("db"), claude.use("user")]);
                 if (!db || !user) return null;
@@ -94,7 +97,10 @@ export async function openReport(report: Report): Promise<boolean> {
 
     const st = await store();
     send.disabled = false;
-    if (st) {
+    if (st && "server" in st) {
+        send.textContent = "فرستادن گزارش";
+        note.textContent = "همین موارد و توضیح شما برای سازندهٔ ابزار فرستاده می‌شود؛ نام، نشانی یا هیچ شناسه‌ای از شما فرستاده نمی‌شود. بقیهٔ متن شما فرستاده نمی‌شود و دیگران گزارش را نمی‌بینند.";
+    } else if (st) {
         send.textContent = "فرستادن گزارش";
         note.textContent = "همین موارد و توضیح شما برای سازندهٔ ابزار ذخیره می‌شود، با شناسهٔ حسابتان (نه نام یا ایمیل). بقیهٔ متن شما فرستاده نمی‌شود و دیگر بازدیدکنندگان گزارش را نمی‌بینند.";
     } else {
@@ -114,7 +120,18 @@ export async function openReport(report: Report): Promise<boolean> {
             ev.preventDefault();
             const full: Report = { ...report, comment: comment.value.trim().slice(0, 1000), at: new Date().toISOString() };
             send.disabled = true;
-            if (st) {
+            if (st && "server" in st) {
+                try {
+                    const res = await fetch("/api/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(full) });
+                    if (res.ok) {
+                        done(true);
+                        return;
+                    }
+                    result.textContent = "گزارش فرستاده نشد. گزارش رونوشت می‌شود.";
+                } catch {
+                    result.textContent = "گزارش فرستاده نشد. گزارش رونوشت می‌شود.";
+                }
+            } else if (st) {
                 try {
                     const mine = st.db.doc(`reports/${st.uid}`);
                     await mine.collection("items").add(full);
@@ -165,7 +182,7 @@ export async function setupOwnerPanel(): Promise<void> {
 
     const load = async () => {
         const st = await store();
-        if (!st) {
+        if (!st || "server" in st) {
             countEl.textContent = "در دسترس نیست";
             return;
         }
