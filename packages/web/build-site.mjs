@@ -21,7 +21,11 @@ if (key && existsSync(here("./assets/kahroba.woff2.enc"))) {
     console.warn("FONT_KEY not set: the page falls back to Vazirmatn");
 }
 
-const page = readFileSync(here("./index.html"), "utf8");
+// a new name for app.js on every build, so a cached old script never runs with a new page
+const { createHash } = await import("node:crypto");
+const version = createHash("sha256").update(readFileSync(here("./dist/app.js"))).digest("hex").slice(0, 10);
+const page = readFileSync(here("./index.html"), "utf8").replace(/src="app\.js"/, `src="app.js?v=${version}"`);
+if (!page.includes(`app.js?v=${version}`)) throw new Error("index.html: the app.js script tag was not found");
 const head = `<!doctype html>
 <html lang="fa" dir="rtl">
 <head>
@@ -39,7 +43,7 @@ const head = `<!doctype html>
 `;
 writeFileSync(here("./dist/index.html"), head + page + "\n</html>\n");
 writeFileSync(here("./dist/_headers"), `/app.js
-  Cache-Control: public, max-age=3600
+  Cache-Control: public, max-age=31536000, immutable
 /spelling-lexicon.json
   Cache-Control: public, max-age=86400
 /kahroba.woff2
