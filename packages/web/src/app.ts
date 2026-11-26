@@ -58,7 +58,8 @@ const RULE_LABELS: Record<string, string> = {
     calques: "ترجمه‌زدگی",
     redundancy: "حشو",
     "repeated-words": "تکرار",
-    "long-sentences": "جملهٔ بلند"
+    "long-sentences": "جملهٔ بلند",
+    invisible: "فاصله و نویسهٔ نادیدنی"
 };
 
 const SAMPLE_DIALOGUE = [
@@ -244,7 +245,8 @@ function renderBackdrop(text: string) {
     backdrop.innerHTML = out + "\u200b";
 }
 
-const WORD_CHAR = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\u200C\u200F\u0640]/;
+// invisible characters inside a word (ZWNJ, ZWSP, ZWJ, RLM, word joiner) belong to it
+const WORD_CHAR = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\u200B-\u200F\u2060\u0640]/;
 function wordAround(text: string, start: number, end: number): [number, number] {
     while (start > 0 && WORD_CHAR.test(text[start - 1])) start--;
     while (end < text.length && WORD_CHAR.test(text[end])) end++;
@@ -290,7 +292,11 @@ const ACADEMY = "فرهنگستان زبان و ادب فارسی";
 const BOOKS: Array<{ prefix: RegExp; name: string; url?: string }> = [
     { prefix: /^دستور خط(?: \(ویراست جدید\))?\s*[،؛:]?\s*/, name: `دستور خطّ فارسی، ${ACADEMY}`, url: BOOK_PDF },
     { prefix: /^فرهنگ املایی(?: خطّ فارسی)?\s*[،؛]?\s*/, name: `فرهنگ املایی خطّ فارسی، ${ACADEMY}`, url: FARHANG_PDF },
-    { prefix: /^اصول شکسته‌نویسی\s*[،؛]?\s*/, name: "اصول شکسته‌نویسی، علی صلح‌جو" }
+    { prefix: /^اصول شکسته‌نویسی\s*[،؛]?\s*/, name: "اصول شکسته‌نویسی، علی صلح‌جو" },
+    {
+        prefix: /^شیوه‌نامهٔ حروف‌نگاری و بهنجارسازی متن فارسی، فرهنگستان \(پیش‌نویس ۱۴۰۵\)\s*[،]?\s*/,
+        name: `شیوه‌نامهٔ حروف‌نگاری و بهنجارسازی متن فارسی، ${ACADEMY} (پیش‌نویس ۱۴۰۵)`
+    }
 ];
 const faDigits = (s: string) => Number(s.replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0)));
 const PAGES = /ص ([۰-۹]+(?:–[۰-۹]+)?)/g;
@@ -316,7 +322,9 @@ function citation(source: string): string {
             rest = rest.slice(farhang[0].length);
         }
         const pages = [...rest.matchAll(PAGES)].map((p) => p[1]);
-        const text = book.name + (pages.length ? `، ص ${pages.join(" و ")}` : "");
+        // a page («ص ۵۵») or, for the شیوه‌نامه, its article («مادهٔ ۹، بند ۵»)
+        const article = /^مادهٔ/.test(rest) ? rest : "";
+        const text = book.name + (pages.length ? `، ص ${pages.join(" و ")}` : article ? `، ${article}` : "");
         const section = rest.replace(PAGES, "").replace(/\s{2,}/g, " ").replace(/[،؛\s]+$/, "").replace(/^[،؛\s]+/, "");
         const tip = [section, note].filter(Boolean).join(" — ");
         const title = tip ? ` title="${esc(tip)}"` : "";
@@ -331,6 +339,7 @@ function citation(source: string): string {
 function noMeterReason(m: Msg): string {
     if (m.ruleId === "spelling") return "حدس غلط‌یاب است، نه قاعده";
     if (m.ruleId === "may-break") return "پیشنهاد سبکی است، نه غلط";
+    if (/^شیوه‌نامهٔ/.test(splitMessage(m).source)) return "شیوه‌نامهٔ فرهنگستان (پیش‌نویس)، نه کتاب";
     if (m.ruleId === "punctuation") return "قرارداد رایج است، نه کتاب";
     if (isStyle(m)) return "توصیهٔ ویرایشی است، نه قاعدهٔ کتاب";
     return "به معنای جمله بستگی دارد";
@@ -338,7 +347,7 @@ function noMeterReason(m: Msg): string {
 
 function meterFor(m: Msg, p: number | null): string {
     if (p !== null) return confidenceMeter(p);
-    if (m.fix && m.ruleId !== "punctuation" && !isStyle(m)) return bookMeter();
+    if (m.fix && m.ruleId !== "punctuation" && m.ruleId !== "invisible" && !isStyle(m) && !/^شیوه‌نامهٔ/.test(splitMessage(m).source)) return bookMeter();
     return `<div class="confidence confidence-none" title="این کارت درجهٔ اطمینان ندارد: ${noMeterReason(m)}.">
                 <span class="confidence-label">درجه ندارد</span>
                 <span class="confidence-why">${noMeterReason(m)}</span>
@@ -359,7 +368,9 @@ function buildCards(text: string) {
         const labels = [...new Set(members.map((x) => RULE_LABELS[x.ruleId] ?? x.ruleId))];
         const { msg, p } = takeConfidence(split.text);
         // a book rule agreeing with a model's guess: the book's certainty
-        const bookAgrees = [m, ...extras[i]].some((x) => x.fix && !/احتمال/.test(x.message) && x.ruleId !== "punctuation" && !isStyle(x));
+        const bookAgrees = [m, ...extras[i]].some(
+            (x) => x.fix && !/احتمال/.test(x.message) && x.ruleId !== "punctuation" && x.ruleId !== "invisible" && !isStyle(x) && !/^شیوه‌نامهٔ/.test(splitMessage(x).source)
+        );
         const meter = bookAgrees ? bookMeter() : meterFor(m, p);
         const styleOnly = members.every(isStyle);
         const cls = (styleOnly ? "issue issue-style" : m.fix ? "issue" : "issue issue-judge") + (m.fix ? "" : " no-fix") + (meter.includes("confidence-none") ? " has-note" : " has-confidence");
@@ -452,8 +463,32 @@ function schedule() {
     timer = window.setTimeout(check, 350);
 }
 
+/**
+ * Every automatic change can be undone (شیوه‌نامه، مادهٔ ۳۳، بند ۳: «تغییرات
+ * خودکار باید تا حد امکان قابل بازبینی و برگشت‌پذیر باشند»).
+ */
+const history: string[] = [];
+const undoBtn = $<HTMLButtonElement>("undo");
+const changesEl = $<HTMLDetailsElement>("changes");
+function remember() {
+    history.push(input.value);
+    if (history.length > 50) history.shift();
+    undoBtn.disabled = false;
+}
+undoBtn.addEventListener("click", () => {
+    const prev = history.pop();
+    if (prev === undefined) return;
+    input.value = prev;
+    undoBtn.disabled = history.length === 0;
+    changesEl.hidden = true;
+    void check().then(() => {
+        status.textContent = "تغییر برگشت داده شد.";
+    });
+});
+
 function applyFix(m: Msg) {
     if (!m.fix) return;
+    remember();
     const t = input.value;
     input.value = t.slice(0, m.fix.range[0]) + m.fix.text + t.slice(m.fix.range[1]);
     check();
@@ -628,6 +663,12 @@ fetch("kahroba.woff2")
 
 applyAllBtn.addEventListener("click", async () => {
     status.textContent = "در حال اعمال…";
+    // what is about to change, for the list after (شیوه‌نامه، مادهٔ ۳۳، بند ۵)
+    const planned = spans
+        .filter((sp) => sp.red)
+        .map((sp) => reports[sp.items.find((i) => messages[i].fix && !isStyle(messages[i])) ?? sp.items[0]])
+        .filter((r) => r && r.suggestion && r.suggestion !== r.original);
+    remember();
     // one fix can make another possible («همه دفترهارا» → «همه دفترها را» → «همۀ دفترها را»)
     let text = input.value;
     for (let round = 0; round < 3; round++) {
@@ -637,7 +678,16 @@ applyAllBtn.addEventListener("click", async () => {
     }
     input.value = text;
     await check();
-    status.textContent = "همهٔ اصلاح‌های قطعی اعمال شد.";
+    status.textContent = `${planned.length.toLocaleString("fa-IR")} اصلاح قطعی اعمال شد.`;
+    const list = changesEl.querySelector("ol")!;
+    list.replaceChildren(
+        ...planned.map((r) => {
+            const li = document.createElement("li");
+            li.textContent = `${r.original} ← ${r.suggestion}`;
+            return li;
+        })
+    );
+    changesEl.hidden = planned.length === 0;
 });
 
 copyBtn.addEventListener("click", async () => {
@@ -664,6 +714,7 @@ $<HTMLButtonElement>("clear").addEventListener("click", () => {
 
 input.addEventListener("input", () => {
     closePopover();
+    changesEl.hidden = true;
     // the old marks would sit on shifted text: plain text until the check is done
     spans = [];
     backdrop.innerHTML = show(input.value) + "\u200b";

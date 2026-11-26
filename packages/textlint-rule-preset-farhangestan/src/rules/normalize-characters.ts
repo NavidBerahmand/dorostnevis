@@ -12,6 +12,11 @@
  * - RLM/LRM میان دو حرف (به‌جای نیم‌فاصله) ← نیم‌فاصله
  * - ارقام عربی (٠–٩) ← ارقام فارسی (۰–۹)
  * - «ی» + همزهٔ بالا (یٔ) ← «ئ»
+ *
+ * نقل‌قول عربی: شیوه‌نامهٔ حروف‌نگاری فرهنگستان (پیش‌نویس ۱۴۰۵)، مادهٔ ۴، بند ۴:
+ * «در متن‌های عربی، گفتاوردهای (نقل‌قول‌های) دقیق … تبدیل خودکار نویسه‌های
+ * عربی به فارسی نباید بدون بررسی انجام شود.» پس «ي/ك» در عبارتی که عربی به
+ * نظر می‌رسد (چند واژهٔ «ال‌»دار، یا «ة»، تنوین، «ى») فقط پیشنهاد می‌شود.
  */
 import { createPatternRule, visible } from "../util/pattern-rule";
 import { LETTER, ZWNJ } from "../util/persian";
@@ -59,14 +64,53 @@ const FOREIGN: Record<string, string> = {
     "ۃ": "حرف اردو"
 };
 
+/** Persian words that start with «ال»: not a sign of Arabic. */
+const PERSIAN_AL = new Set(["البته", "الان", "الآن", "الگو", "الگوی", "الماس", "الهام", "الف", "الزام", "الزامی", "الکترونیک", "الکترونیکی", "الوار", "الک", "الاغ", "الو", "الیاف", "الهی"]);
+
+/**
+ * Is the phrase around index Arabic? The phrase is the quotation it sits in,
+ * else its sentence. Arabic: three words with the article «ال‌», or two plus a
+ * letter or mark Persian does not write («ة»، «ى»، tanvin, «إ»).
+ */
+function arabicPhrase(text: string, index: number): boolean {
+    const open = text.lastIndexOf("«", index);
+    const close = text.indexOf("»", index);
+    let a: number;
+    let b: number;
+    if (open >= 0 && close > index && text.lastIndexOf("»", index) < open) {
+        a = open + 1;
+        b = close;
+    } else {
+        a = Math.max(0, ...[".", "!", "؟", "?", "\n", ":"].map((c) => text.lastIndexOf(c, index) + 1));
+        const ends = [".", "!", "؟", "?", "\n"].map((c) => text.indexOf(c, index)).filter((i) => i >= 0);
+        b = ends.length ? Math.min(...ends) : text.length;
+    }
+    const phrase = text.slice(a, b);
+    const words = phrase.split(/[\s،؛,()«»]+/).filter(Boolean);
+    const al = words.filter((w) => w.startsWith("ال") && w.length >= 4 && !PERSIAN_AL.has(w)).length;
+    const marks = /[ةىإ\u064B-\u064D]/.test(phrase);
+    return al >= 3 || (al >= 2 && marks);
+}
+
 export default createPatternRule<Options>((options) => {
     const checks = [
         {
             pattern: /[يىكہەھےۍڪۃ]/g,
-            check: (m: RegExpExecArray) => ({
-                message: `«${m[0]}» ${FOREIGN[m[0]]} است؛ باید «${ARABIC_TO_PERSIAN[m[0]]}» فارسی نوشته شود`,
-                replacement: ARABIC_TO_PERSIAN[m[0]]
-            })
+            check: (m: RegExpExecArray) => {
+                const to = ARABIC_TO_PERSIAN[m[0]];
+                if ("يىك".includes(m[0]) && arabicPhrase(m.input, m.index)) {
+                    return {
+                        message: `این عبارت عربی به نظر می‌رسد؛ اگر نقل‌قول عربی است «${m[0]}» عربی را نگه دارید، وگرنه «${to}» فارسی`,
+                        replacement: to,
+                        fix: false,
+                        source: "شیوه‌نامهٔ حروف‌نگاری و بهنجارسازی متن فارسی، فرهنگستان (پیش‌نویس ۱۴۰۵)، مادهٔ ۴، بند ۴"
+                    };
+                }
+                return {
+                    message: `«${m[0]}» ${FOREIGN[m[0]]} است؛ باید «${to}» فارسی نوشته شود`,
+                    replacement: to
+                };
+            }
         },
         {
             pattern: /[ﭐ-﷿ﹰ-ﻼ]/g,

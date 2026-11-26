@@ -16,6 +16,7 @@ import arabicPrefixes from "./rules/arabic-prefixes";
 import dictionary from "./rules/dictionary";
 import wordSpacing from "./rules/word-spacing";
 import punctuation from "./rules/punctuation";
+import invisible from "./rules/invisible";
 import spelling from "./rules/spelling";
 export { loadSpellingLexicon, spellingReady } from "./util/speller";
 
@@ -38,6 +39,7 @@ export default {
         "arabic-prefixes": arabicPrefixes,
         "word-spacing": wordSpacing,
         punctuation,
+        invisible,
         spelling,
         dictionary
     },
@@ -59,6 +61,7 @@ export default {
         "arabic-prefixes": true,
         "word-spacing": true,
         punctuation: true,
+        invisible: true,
         spelling: true,
         dictionary: true
     }

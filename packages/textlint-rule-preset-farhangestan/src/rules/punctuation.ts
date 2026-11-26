@@ -12,7 +12,11 @@
  * - فاصله پیش از نشانه‌ها حذف، پس از آن‌ها یک فاصله؛ فاصلهٔ داخل پرانتز و گیومه حذف
  * - «؟؟؟» ← «؟»، «!!!» ← «!»، «!؟»/«?!» ← «؟!»
  * - چند فاصلهٔ پشت سر هم ← یک فاصله
- * - «--» و «---» ← «–» و «—»؛ کشیده‌ای که به‌جای خط فاصله آمده («ـ که») ← «–»
+ * - «--» و «---» ← «–» و «—»؛ کشیده‌ای که به‌جای خط فاصله آمده («ـ که») ← «–»؛
+ *   خط فاصلهٔ تکی میان دو واژهٔ فارسی («تهران - مشهد») ← «–» (شیوه‌نامه، مادهٔ ۱۶)
+ * - «((…))» و «<<…>>» ← «…» (شیوه‌نامه، مادهٔ ۱۴: «(( )) صورت معیاری برای گیومه نیست»)
+ * - گیومهٔ “…” درون «…» دست نمی‌خورد (شیوه‌نامه، مادهٔ ۱۷: الگوی «“ ”» برای نقل‌قول تودرتو)
+ * - گیومه و کمانک بی‌جفت: فقط گزارش (شیوه‌نامه، مادهٔ ۱۷، بند ۵ و پیوست ۲)
  * - رقم انگلیسی در متن فارسی ← رقم فارسی («12%» ← «۱۲٪»، «4.7» ← «۴٫۷»، «12,543» ← «۱۲٬۵۴۳»)
  *
  * هر بخش را می‌شود خاموش کرد: { "digits": false }، { "quotes": false }…
@@ -28,9 +32,45 @@ export interface Options {
     spacing?: boolean;
     repeated?: boolean;
     digits?: boolean;
+    /** Report quotes and brackets that are opened and not closed (or the reverse). */
+    pairs?: boolean;
 }
 
 const SOURCE = "قراردادهای رایج نشانه‌گذاری فارسی (در دستور خط نیامده)";
+const SHIVE = (n: string) => `شیوه‌نامهٔ حروف‌نگاری و بهنجارسازی متن فارسی، فرهنگستان (پیش‌نویس ۱۴۰۵)، مادهٔ ${n}`;
+
+/** Inside an open «…» on the same line: “…” there is a nested quotation (مادهٔ ۱۷، بند ۴). */
+function insideGuillemets(text: string, index: number): boolean {
+    const lineStart = text.lastIndexOf("\n", index) + 1;
+    const before = text.slice(lineStart, index);
+    return (before.match(/«/g) ?? []).length > (before.match(/»/g) ?? []).length;
+}
+
+/** Unmatched «» () [] in a text, by position (memoized per text). */
+let pairText = "";
+let unmatched = new Set<number>();
+const OPEN: Record<string, string> = { "«": "»", "(": ")", "[": "]" };
+const CLOSE: Record<string, string> = { "»": "«", ")": "(", "]": "[" };
+function unmatchedAt(text: string, index: number): boolean {
+    if (text !== pairText) {
+        pairText = text;
+        unmatched = new Set();
+        const stack: number[] = [];
+        for (let i = 0; i < text.length; i++) {
+            const c = text[i];
+            if (OPEN[c]) stack.push(i);
+            else if (CLOSE[c]) {
+                // «۱)»، «الف)»: a list marker; «:)»: a smiley
+                if (c === ")" && (/(^|\n)\s*\S{1,3}$/.test(text.slice(0, i)) || /[:;]$/.test(text.slice(0, i)))) continue;
+                const top = stack[stack.length - 1];
+                if (top !== undefined && text[top] === CLOSE[c]) stack.pop();
+                else unmatched.add(i);
+            }
+        }
+        for (const i of stack) unmatched.add(i);
+    }
+    return unmatched.has(index);
+}
 const FA = "\\u0600-\\u06FF";
 const FA_LETTER = "[\\u0621-\\u063A\\u0641-\\u064A\\u0671-\\u06D3\\u06CC\\u06A9\\u06AF\\u067E\\u0686\\u0698]";
 
@@ -105,7 +145,36 @@ export default createPatternRule<Options>((options) => {
                 // a single «'» is also an apostrophe: only short, all-Persian quotations
                 if (open === "'" && (inner.length > 40 || /[A-Za-z]/.test(inner))) return null;
                 if (inForeignToken(m.input, m.index) && !/[؀-ۿ]/.test(inner)) return null;
+                // a quotation inside «…» keeps its own marks: «او گفت “نه”»
+                if (insideGuillemets(m.input, m.index)) return null;
                 return { message: "در متن فارسی گیومهٔ فارسی «» به کار می‌رود", replacement: `«${inner.trim()}»`, source: SOURCE };
+            }
+        });
+    }
+
+    if (on("quotes")) {
+        checks.push({
+            // «((…))»، «<<…>>» used as quotation marks
+            pattern: new RegExp(`\\(\\(([^()\\n]*${FA_LETTER}[^()\\n]*)\\)\\)|<<([^<>\\n]*${FA_LETTER}[^<>\\n]*)>>`, "g"),
+            check: (m) => ({
+                message: "«(( ))» و «<< >>» گیومه نیستند؛ گیومهٔ فارسی «» به کار می‌رود",
+                replacement: `«${(m[1] ?? m[2]).trim()}»`,
+                source: SHIVE("۱۴، بند ۱")
+            })
+        });
+    }
+
+    if (on("pairs")) {
+        checks.push({
+            pattern: /[«»()\[\]]/g,
+            check: (m) => {
+                if (!persianContext(m.input, m.index) || !unmatchedAt(m.input, m.index)) return null;
+                const open = OPEN[m[0]] !== undefined;
+                return {
+                    message: open ? `«${m[0]}» باز شده و بسته نشده است` : `«${m[0]}» بسته شده ولی باز نشده است`,
+                    fix: false,
+                    source: SHIVE("۱۷، بند ۵")
+                };
             }
         });
     }
@@ -142,6 +211,8 @@ export default createPatternRule<Options>((options) => {
                 pattern: new RegExp(`(?<=[${FA}»)\\]…!؟]) +(?=(?:[،؛:!؟…]|\\.(?!\\.))(?![0-9۰-۹]))`, "g"),
                 check: (m) => {
                     if (inForeignToken(m.input, m.index - 1)) return null;
+                    // «:)»، «;(»: a smiley, not a colon
+                    if (/^[:;][()DP]/.test(m.input.slice(m.index + m[0].length, m.index + m[0].length + 2))) return null;
                     return { message: "پیش از نشانه فاصله نمی‌آید", replacement: "", source: SOURCE };
                 }
             },
@@ -206,6 +277,11 @@ export default createPatternRule<Options>((options) => {
                 }
             },
             {
+                // one hyphen between two Persian words: «تهران - مشهد» → «تهران – مشهد»
+                pattern: new RegExp(`(?<=${FA_LETTER} )-(?= ${FA_LETTER})`, "g"),
+                check: () => ({ message: "خط فاصله (-) با خط تیره فرق دارد؛ میان دو واژه «–» به کار می‌رود", replacement: "–", source: SHIVE("۱۶، بند ۲") })
+            },
+            {
                 // a kashida used as a dash: «ـ که …» → «– که …»
                 pattern: /(?<=\s|^)ـ(?=\s|$)/gm,
                 check: (m) => {
@@ -245,7 +321,7 @@ export default createPatternRule<Options>((options) => {
     // nothing inside a URL, an e-mail address or an HTML tag
     const guarded = checks.map(({ pattern, check }) => ({
         pattern,
-        check: (m: RegExpExecArray) => (isProtected(m.input, m.index, m.index + m[0].length) ? null : check(m))
+        check: (m: RegExpExecArray) => (!m[0].startsWith("<<") && isProtected(m.input, m.index, m.index + m[0].length) ? null : check(m))
     }));
     return { source: SOURCE, checks: guarded };
 });
