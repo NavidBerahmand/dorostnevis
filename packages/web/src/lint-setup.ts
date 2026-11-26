@@ -158,6 +158,12 @@ export function splitMessage(m: Msg): { text: string; source: string } {
     return { text: m.message, source: "" };
 }
 
+/**
+ * A guess or a reading, not a verdict: a model's «(احتمال ۸۲٪)», or «اگر … یک واژه است، …»
+ * («خانه دار» may be «خانهٔ دار»). Never red, never an objection to another rule's fix.
+ */
+export const TENTATIVE = /احتمال|^اگر /;
+
 /** A common convention the book has no rule for: no book meter, never «قطعی». */
 export const NOT_IN_BOOK = /در دستور خط نیامده/;
 
@@ -176,7 +182,7 @@ export function rank(m: Msg): number {
     const source = splitMessage(m).source;
     if (NOT_IN_BOOK.test(source)) return 3;
     if (SHEKASTE_RULES.has(m.ruleId)) return 1;
-    if (/^(دستور خط|فرهنگ املایی)/.test(source) && !/احتمال/.test(m.message)) return 0;
+    if (/^(دستور خط|فرهنگ املایی)/.test(source) && !TENTATIVE.test(m.message)) return 0;
     return 1;
 }
 
@@ -262,7 +268,9 @@ const OPTIONAL = new Set(["may-break", "long-sentences", "ra-placement", "repeat
  * فاصله می‌آید» objects; «می‌شود» → «در گفت‌وگو: می‌شه» does not.
  */
 export function objects(d: Msg): boolean {
-    if (OPTIONAL.has(d.ruleId) || isStyle(d) || /احتمال/.test(d.message)) return false;
+    if (OPTIONAL.has(d.ruleId) || isStyle(d) || TENTATIVE.test(d.message)) return false;
+    // a recommendation without a fix: both forms are correct («گوئی» / «گویی»، «آنها» / «آن‌ها»)
+    if (!d.fix && /توصیه/.test(d.message)) return false;
     return true;
 }
 /**
