@@ -222,6 +222,19 @@ export default createPatternRule<Options>((options) => {
                 check: (m) => ({ message: "پس از نشانه یک فاصله می‌آید", replacement: m[1] + " ", source: SOURCE })
             },
             {
+                // no space after a period between two words: «است.این» → «است. این»
+                // (abbreviations stay: «ه.ق»، «ق.م»، «ج.ا.ا»)
+                pattern: new RegExp(`(?<=${FA_LETTER})\\.(?=${FA_LETTER})`, "g"),
+                check: (m) => {
+                    const before = m.input.slice(0, m.index).match(/[^\s.]*$/)![0];
+                    const after = m.input.slice(m.index + 1).match(/^[^\s.]*/)![0];
+                    // an earlier dot in the same token: an abbreviation («ج.ا.ا»)
+                    const token = m.input.slice(0, m.index).split(/\s/).pop() ?? "";
+                    if (before.length < 2 || after.length < 2 || token.includes(".")) return null;
+                    return { message: "پس از نقطه یک فاصله می‌آید", replacement: ". ", source: SHIVE("۱۵، بند ۵") };
+                }
+            },
+            {
                 // spaces inside brackets and quotes: «( متن )» → «(متن)»
                 pattern: new RegExp(`([(\\[{«]) +(?=\\S)|(?<=\\S) +([)\\]}»])`, "g"),
                 check: (m) => {
@@ -262,6 +275,27 @@ export default createPatternRule<Options>((options) => {
             check: (m) => {
                 const fixed = m[0] === "," ? "٬" : "٫";
                 return { message: `جداکنندهٔ ${m[0] === "," ? "هزارگان" : "اعشار"} در عدد فارسی «${fixed}» است`, replacement: fixed, source: SOURCE };
+            }
+        });
+    }
+
+    if (on("spacing")) {
+        checks.push({
+            // a number glued to the next word: «۵سال» → «۵ سال»
+            pattern: /(?<![A-Za-z0-9۰-۹_\-/.:#])([0-9۰-۹]+)([آ-ی][آ-ی\u200c]*)/g,
+            check: (m) => {
+                const word = m[2];
+                // suffixes and number compounds the book writes joined (ب-۱۰، ص ۶۵: «۴۷سالگی»):
+                // «۵م»، «۲۰امین»، «۳تایی»، «۵ساله»، «۴۷سالگی»، «۵گانه»; one letter: «۱۳۰۰ق»، «۲۰۰۰م»
+                if (word.length <= 1 || /^(ام|امین|امی|مین|ین|ها|های|تا|تایی|ای|یی|ی)$/.test(word)) return null;
+                if (/(ساله|سالگی|گانه|روزه|ماهه|ساعته|نفره|طبقه|متری|تایی)$/.test(word)) return null;
+                return {
+                    message: "میان عدد و کلمهٔ پس از آن یک فاصله می‌آید",
+                    replacement: m[1] + " " + word,
+                    // an adjective made with the number («۵کیلویی») may be meant: only a suggestion
+                    fix: /(ی|ه|گی)$/.test(word) ? false : undefined,
+                    source: SHIVE("۹، بند ۱")
+                };
             }
         });
     }

@@ -142,6 +142,19 @@ export default createPatternRule(() => ({
     source: S_PREFIX,
     checks: [
         {
+            // «و» glued to the next function word: «ودر» → «و در»، «واز» → «و از»
+            // (left out because the joined form is a word: «وبا» (cholera)، «وهم»، «ونیز» (Venice)، «وبر»)
+            pattern: new RegExp(`${START}و(در|از|به|یا|این|آن|که|تا|برای|اگر|اما|سپس|همچنین|دیگر|هر|همه)${END}`, "g"),
+            check: (m) => {
+                if (isKnown(m[0]) || isDictionaryWord(m[0])) return null;
+                return {
+                    message: `«و» کلمهٔ جداست: «و ${m[1]}»`,
+                    replacement: `و ${m[1]}`,
+                    source: "شیوه‌نامهٔ حروف‌نگاری و بهنجارسازی متن فارسی، فرهنگستان (پیش‌نویس ۱۴۰۵)، مادهٔ ۹، بند ۱"
+                };
+            }
+        },
+        {
             // «باز آفرینی»، «زیست فناوری»
             pattern: new RegExp(`${START}(${PREFIXES.join("|")}) +(${LETTER}{2,})${END}`, "g"),
             check: (m) => spacedPrefix(m[1], m[2])

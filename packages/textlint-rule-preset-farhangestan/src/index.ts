@@ -17,6 +17,7 @@ import dictionary from "./rules/dictionary";
 import wordSpacing from "./rules/word-spacing";
 import punctuation from "./rules/punctuation";
 import invisible from "./rules/invisible";
+import spacedCompounds from "./rules/spaced-compounds";
 import spelling from "./rules/spelling";
 export { loadSpellingLexicon, spellingReady } from "./util/speller";
 
@@ -40,6 +41,7 @@ export default {
         "word-spacing": wordSpacing,
         punctuation,
         invisible,
+        "spaced-compounds": spacedCompounds,
         spelling,
         dictionary
     },
@@ -62,6 +64,7 @@ export default {
         "word-spacing": true,
         punctuation: true,
         invisible: true,
+        "spaced-compounds": true,
         spelling: true,
         dictionary: true
     }

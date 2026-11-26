@@ -18,6 +18,7 @@
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, WORD, ZWNJ, NON_JOINING, toPersianDigits } from "../util/persian";
 import { FARHANG, FARHANG_OVERRIDES, BOOK_JOINED } from "../util/words";
+import { PRODUCTIVE_STEMS } from "./joined-words";
 
 const SOURCE = "فرهنگ املایی خطّ فارسی";
 
@@ -52,7 +53,20 @@ export default createPatternRule(() => ({
                 const target = override ?? preferred;
                 const seen = visibleForm(word);
                 if (target && seen === visibleForm(target)) return null;
-                if (!override && [preferred ?? "", ...others].some((f) => visibleForm(f) === seen)) return null;
+                if (!override && [preferred ?? "", ...others].some((f) => visibleForm(f) === seen)) {
+                    // the farhang accepts this form too, with one that has a ZWNJ: «زندگینامه» / «زندگی‌نامه».
+                    // The book requires the ZWNJ when the second part is «-نامه/-خانه» (الف-۱، تبصرهٔ ۵، ص ۶۰)
+                    // or a present stem (ب-۲، ص ۶۲). Otherwise both stand (the farhang may list them as equals).
+                    if (!preferred || !preferred.includes(ZWNJ) || word.includes(ZWNJ)) return null;
+                    const last = preferred.split(ZWNJ).pop()!;
+                    const suffixoid = /^(نامه|خانه)/.test(last);
+                    if (!suffixoid && ![...PRODUCTIVE_STEMS, "ساز"].some((st) => last === st || last.startsWith(st))) return null;
+                    return {
+                        message: `این ترکیب با نیم‌فاصله نوشته می‌شود: «${preferred}»`,
+                        replacement: preferred,
+                        source: suffixoid ? "دستور خط، ترکیب‌ها، الف-۱، تبصرهٔ ۵، ص ۶۰" : "دستور خط، ترکیب‌ها، ب-۲، ص ۶۲"
+                    };
+                }
                 const source = override
                     ? `دستور خط (ویراست جدید)؛ فرهنگ املایی، ص ${toPersianDigits(page)}، «${preferred}» دارد`
                     : `${SOURCE}، ص ${toPersianDigits(page)}`;

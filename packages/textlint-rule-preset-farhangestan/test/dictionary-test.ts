@@ -4,6 +4,7 @@ import { inv, z } from "./helpers";
 
 new TextLintTester().run("dictionary", rule, {
     valid: [
+        "روانپزشکی و سیاستمدار",
         z("نبضگاه، نبض‹گاه"),                 // «/» in the dictionary: both valid (p. 600)
         z("آب‹پاش، آبپاش"),                   // «ـ»: rule form and common form (p. 24)
         z("هم‹رأی، همرأی"),                   // «،»: both listed (p. 640)
@@ -15,6 +16,8 @@ new TextLintTester().run("dictionary", rule, {
         z("دایرة‹المعارف، دایرةالمعارف")        // ZWNJ after «ة» is invisible
     ],
     invalid: [
+        inv("زندگینامه او", z("زندگی‹نامه او")),
+        inv("فیلمسازی", z("فیلم‹سازی")),
         inv("زبانشناسی", z("زبان‹شناسی")),
         inv("نباتشناس", z("نبات‹شناس")),
         inv(z("آب‹دارخانه"), "آبدارخانه"),

@@ -59,7 +59,8 @@ const RULE_LABELS: Record<string, string> = {
     redundancy: "حشو",
     "repeated-words": "تکرار",
     "long-sentences": "جملهٔ بلند",
-    invisible: "فاصله و نویسهٔ نادیدنی"
+    invisible: "فاصله و نویسهٔ نادیدنی",
+    "spaced-compounds": "ترکیب‌ها"
 };
 
 const SAMPLE_DIALOGUE = [

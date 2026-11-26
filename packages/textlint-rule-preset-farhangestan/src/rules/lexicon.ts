@@ -11,6 +11,9 @@
  * - hamza: نمونه‌های جدول ۳ «کتابت همزه» و غلط‌های رایجی که خود کتاب نام
  *   برده (رییس، ارایه، جزیی، قرایت).
  *
+ * همزه در شکل‌های ساخته‌شده هم گرفته می‌شود: «تاثیرات» ← «تأثیرات»، «ماموران» ← «مأموران»،
+ * «متاسفانه» ← «متأسفانه» (پسوندهای پیوسته پس از کلمهٔ فهرست).
+ *
  * هر فهرست را می‌شود با گزینه خاموش کرد:
  *   { "dictionaries": { "hamza": false } }
  */
@@ -54,6 +57,10 @@ function key(s: string): string {
     return s.replace(/ +/g, " ");
 }
 
+/** Joined suffixes after a hamza word: «تاثیرات»، «ماموران»، «متاسفانه»، «تاثیرگذار». */
+const HAMZA_SUFFIX = "(ات|ها|های|ی|ای|یی|ان|انه|ش|شان|تر|ترین|گذار|گذاری|پذیر|پذیری|آمیز|یت)?";
+const HAMZA_ENTRIES = new Set<Entry>(hamza.entries as Entry[]);
+
 function buildIndex(enabled: Options["dictionaries"]) {
     const map = new Map<string, Entry>();
     for (const [name, dict] of Object.entries(DICTIONARIES)) {
@@ -68,7 +75,7 @@ function buildIndex(enabled: Options["dictionaries"]) {
     const forms = [...map.keys()].sort((a, b) => b.length - a.length);
     const alternation = forms.map((f) => escapeRegExp(f).replace(/ /g, " +")).join("|");
     // the word may continue after a ZWNJ: «بلیط‌ها», «اطاق‌ها»
-    const pattern = new RegExp(`${START}(?:${alternation})(?=${ZWNJ}|${END})`, "g");
+    const pattern = new RegExp(`${START}(${alternation})${HAMZA_SUFFIX}(?=${ZWNJ}|${END})`, "g");
     return { map, pattern };
 }
 
@@ -80,20 +87,24 @@ export default createPatternRule<Options>((options) => {
             {
                 pattern,
                 check: (m) => {
-                    const entry = map.get(key(m[0]));
+                    const entry = map.get(key(m[1]));
                     if (!entry) return null;
+                    // a suffix only after a hamza word («تاثیرات»); other lists match the word alone
+                    const suffix = m[2] ?? "";
+                    if (suffix && !HAMZA_ENTRIES.has(entry)) return null;
+                    const to = entry.to + suffix;
                     if (entry.wholeWordOnly && m.input[m.index + m[0].length] === ZWNJ) return null;
                     if (entry.fix === false) {
                         return {
-                            message: entry.message ?? `اگر در معنای اصطلاحی است، «${entry.to}» نوشته می‌شود`,
-                            replacement: entry.to,
+                            message: entry.message ?? `اگر در معنای اصطلاحی است، «${to}» نوشته می‌شود`,
+                            replacement: to,
                             fix: false,
                             source: entry.source
                         };
                     }
                     return {
-                        message: entry.message ?? `املای مرجّح «${entry.to}» است`,
-                        replacement: entry.to,
+                        message: entry.message ?? `املای مرجّح «${to}» است`,
+                        replacement: to,
                         source: entry.source
                     };
                 }

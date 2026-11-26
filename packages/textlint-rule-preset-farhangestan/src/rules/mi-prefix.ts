@@ -19,14 +19,17 @@
  */
 import { isKnown } from "../util/words";
 import { createPatternRule } from "../util/pattern-rule";
-import { START, END, LETTER, WORD_CHAR, ZWNJ } from "../util/persian";
+import { START, END, LETTER, LETTER_RANGE, WORD_CHAR, ZWNJ } from "../util/persian";
 import hazmVerbs from "../dict/hazm-verbs.json";
 
 const SOURCE = "دستور خط، «می و همی»، ص ۳۹";
 
 // «می»/«نمی» + space(s) + a word that ends like a verb form
 // (present: -م -ی -د -یم -ید -ند ; past stems end in -د/-ت).
-const PATTERN = new RegExp(`${START}(ن?می) +(?=${WORD_CHAR}*[مدیت](?!${WORD_CHAR}))`, "g");
+// «می توان» (a bare present stem) is the one form that ends otherwise
+const PATTERN = new RegExp(`${START}(ن?می) +(?=(?:${WORD_CHAR}*[مدیت]|توان)(?!${WORD_CHAR}))`, "g");
+// «می شده»، «می کرده»: «می» + a past participle (past stem + «ه»)
+const PARTICIPLE = new RegExp(`${START}(ن?می) +(?=(${LETTER}+)ه(?!${WORD_CHAR}))`, "g");
 
 const PRESENT_ENDINGS = ["یم", "ید", "ند", "م", "ی", "د"];
 const PAST_ENDINGS = ["یم", "ید", "ند", "م", "ی", ""];
@@ -63,9 +66,61 @@ export function verbForm(rest: string): string | null {
 // (not after a separated preverb: «فرو میریزد» is handled as a whole below)
 const JOINED = new RegExp(`(?<!(?:بر|فرا|فرو|ور|وا) +)${START}(بر|در|باز|فرا|فرو|ور|وا)?(ن?می)(${LETTER}+)${END}`, "g");
 
+/**
+ * Prefix verbs written apart without «می» (ب-۷، ص ۶۳): only pairs that cannot be
+ * a preposition and a noun. A bare past stem is often also a noun: «در ساخت این
+ * بنا»، «در گذشت زمان»؛ and «در گذشته» is «in the past». Those stay out.
+ */
+const PREFIX_VERBS: Record<string, string[]> = {
+    در: ["آمد", "آمدند", "آمده", "آمده‌اند", "آید", "آیند", "نیامد", "نیامدند", "آورد", "آوردند", "آورده", "آورده‌اند", "نیاورد",
+        "گرفت", "گرفتند", "نگرفت", "افتاد", "افتادند", "ربود", "ربودند"],
+    بر: ["آمد", "آمدند", "آمده", "آورد", "آوردند", "آورده", "خاست", "خاستند", "خیزد", "انگیخت", "انگیزد", "افراشت", "افروخت",
+        "شمرد", "شمردند", "گزید", "گزیدند", "نهاد"],
+    فرا: ["گرفت", "گرفتند", "رسید", "رسیدند", "خواند", "خواندند"],
+    فرو: ["ریخت", "ریختند", "رفت", "رفتند", "پاشید", "نشست", "نشستند", "افتاد"]
+};
+/** Could be the prefix verb or a preposition/adverb and a verb: report only. */
+const MAYBE_PREFIX: Record<string, string[]> = { در: ["گذشت", "گذشتند"] };
+const S_PREFIX = "دستور خط، ترکیب‌ها، ب-۷، ص ۶۳–۶۴";
+/** «در» + «می»: verbs that take «در» as a prefix (not «در می‌زند», knocks on the door). */
+const DAR_STEMS = /^(?:آی|آور|گیر|افت|رو|ربا|ماند|مان)/;
+/** «باز» as a verb prefix («بازمی‌گردد»، «بازمی‌دارد»), not the adjective of «باز می‌کند» (opens). */
+const BAZ_STEMS = /^(?:ن?می)?(?:گرد|گشت|دار|داشت|گو|گفت|یاب|یافت|ستان|ستاند|مان|ماند|شناس|شناخت)/;
+
 export default createPatternRule(() => ({
     source: SOURCE,
     checks: [
+        {
+            // «در می‌آورد» → «درمی‌آورد»؛ «باز می‌گردد»: «باز» is also «again», so a suggestion
+            pattern: new RegExp(`${START}(در|باز) +(ن?می)[ ${ZWNJ}]?(${LETTER}+)${END}`, "g"),
+            check: (m) => {
+                const form = verbForm(m[3]);
+                if (!form) return null;
+                if (m[1] === "باز" && !BAZ_STEMS.test(form)) return null;
+                // «در» is also «door»: «در می‌زند» (knocks). Only prefix verbs: «درمی‌آید، درمی‌آورد، درمی‌گیرد…»
+                if (m[1] === "در" && !DAR_STEMS.test(form)) return null;
+                const fixed = m[1] + m[2] + ZWNJ + form;
+                if (m[1] === "باز") {
+                    return { message: `اگر «باز» پیشوند فعل است (نه «دوباره»)، به فعل می‌چسبد: «${fixed}»`, replacement: fixed, fix: false, source: S_PREFIX };
+                }
+                return { message: `پیشوند فعل «${m[1]}» به «${m[2]}» می‌چسبد: «${fixed}»`, replacement: fixed, source: S_PREFIX };
+            }
+        },
+        {
+            // «در آمد» → «درآمد»، «بر خاست» → «برخاست»
+            pattern: new RegExp(`${START}(در|بر|فرا|فرو|باز) +(${LETTER}[${LETTER_RANGE}${ZWNJ}]*)${END}`, "g"),
+            check: (m) => {
+                const [, pre, verb] = m;
+                const fixed = pre + verb;
+                if (PREFIX_VERBS[pre]?.includes(verb)) {
+                    return { message: `فعل پیشوندی پیوسته نوشته می‌شود: «${fixed}»`, replacement: fixed, source: S_PREFIX };
+                }
+                if (MAYBE_PREFIX[pre]?.includes(verb) || (pre === "باز" && verbForm(verb) && BAZ_STEMS.test(verb) && !verb.startsWith("می"))) {
+                    return { message: `اگر فعل پیشوندی است، پیوسته نوشته می‌شود: «${fixed}»`, replacement: fixed, fix: false, source: S_PREFIX };
+                }
+                return null;
+            }
+        },
         {
             // preverb written separately: «بر می‌گردد» → «برمی‌گردد»
             pattern: new RegExp(`${START}(بر|فرا|فرو|ور|وا) +(ن?می[ ${ZWNJ}]?)(${LETTER}+)${END}`, "g"),
@@ -91,6 +146,10 @@ export default createPatternRule(() => ({
                 const fixed = (m[1] ?? "") + m[2] + ZWNJ + form;
                 return { message: `«${m[2]}» با نیم‌فاصله به فعل می‌چسبد: «${fixed}»`, replacement: fixed };
             }
+        },
+        {
+            pattern: PARTICIPLE,
+            check: (m) => (PAST.has(m[2]) ? { message: `«${m[1]}» با نیم‌فاصله به فعل می‌چسبد`, replacement: m[1] + ZWNJ } : null)
         },
         {
             pattern: PATTERN,
