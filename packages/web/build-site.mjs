@@ -23,25 +23,45 @@ if (key && existsSync(here("./assets/kahroba.woff2.enc"))) {
 
 // a new name for app.js on every build, so a cached old script never runs with a new page
 const { createHash } = await import("node:crypto");
-const version = createHash("sha256").update(readFileSync(here("./dist/app.js"))).digest("hex").slice(0, 10);
-const page = readFileSync(here("./index.html"), "utf8").replace(/src="app\.js"/, `src="app.js?v=${version}"`);
-if (!page.includes(`app.js?v=${version}`)) throw new Error("index.html: the app.js script tag was not found");
-const head = `<!doctype html>
+const hash = createHash("sha256").update(readFileSync(here("./dist/app.js"))).digest("hex").slice(0, 10);
+// the version shown at the foot of every page (package.json), in Persian digits
+const pkg = JSON.parse(readFileSync(here("./package.json"), "utf8"));
+const version = pkg.version.replace(/[0-9]/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
+
+/** A page as a full HTML document (claude.ai used to add this wrapper itself). */
+function writePage(src, out, { description, url }) {
+    let page = readFileSync(here(src), "utf8").replaceAll("{{VERSION}}", version);
+    if (src === "./index.html") {
+        page = page.replace(/src="app\.js"/, `src="app.js?v=${hash}"`);
+        if (!page.includes(`app.js?v=${hash}`)) throw new Error("index.html: the app.js script tag was not found");
+    }
+    const title = page.match(/<title>([^<]*)<\/title>/)?.[1] ?? "واج‌بان";
+    const head = `<!doctype html>
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="واج‌بان، نگهبان سخن: املا و نگارش فارسی را طبق دستور خط فرهنگستان بررسی و درست می‌کند.">
-<meta property="og:title" content="واج‌بان، نگهبان سخن">
-<meta property="og:description" content="املا و نگارش فارسی را طبق دستور خط فرهنگستان بررسی و درست می‌کند.">
-<meta property="og:url" content="https://vajban.com/">
+<meta name="description" content="${description}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${description}">
+<meta property="og:url" content="${url}">
 <meta property="og:locale" content="fa_IR">
 <meta name="theme-color" content="#f5f2e8">
-<link rel="canonical" href="https://vajban.com/">
+<link rel="canonical" href="${url}">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%235f6549'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle' fill='%23f5f2e8' font-family='Tahoma'%3E%D9%88%3C/text%3E%3C/svg%3E">
 <style>html,body{margin:0}</style>
 `;
-writeFileSync(here("./dist/index.html"), head + page + "\n</html>\n");
+    writeFileSync(here(out), head + page + "\n</html>\n");
+    console.log(`${out} written (version ${pkg.version})`);
+}
+writePage("./index.html", "./dist/index.html", {
+    description: "واج‌بان، نگهبان سخن: املا و نگارش فارسی را طبق دستور خط فرهنگستان بررسی و درست می‌کند.",
+    url: "https://vajban.com/"
+});
+writePage("./about.html", "./dist/about.html", {
+    description: "واج‌بان چیست، رنگ‌ها یعنی چه، متن شما کجا می‌رود، و منابع و مجوزها.",
+    url: "https://vajban.com/about"
+});
 writeFileSync(here("./dist/_headers"), `/app.js
   Cache-Control: public, max-age=31536000, immutable
 /spelling-lexicon.json
@@ -52,4 +72,3 @@ writeFileSync(here("./dist/_headers"), `/app.js
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
 `);
-console.log("dist/index.html written");

@@ -1,0 +1,131 @@
+<title>دربارهٔ واج‌بان</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap">
+<script>
+  try { document.documentElement.dataset.theme = localStorage.getItem("vajban:theme") || "light"; }
+  catch (e) { document.documentElement.dataset.theme = "light"; }
+</script>
+<style>
+  @font-face { font-family: "Kahroba"; src: url(kahroba.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
+  :root {
+    --bg: #f5f2e8; --paper: #ffffff; --surface-2: #ebe8db; --ink: #2b2e22; --muted: #666a56; --line: #e2dfd0;
+    --accent: #5f6549; --red: rgb(255 92 92 / 0.34); --yellow: rgb(255 214 10 / 0.5);
+    --shadow: 0 1px 2px rgb(60 66 45 / .06), 0 8px 24px rgb(60 66 45 / .07);
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --bg: #1a1c15; --paper: #23261d; --surface-2: #2c2f25; --ink: #e9e7dc; --muted: #94977f; --line: #34372b;
+    --accent: #b3b996; --red: rgb(255 90 90 / 0.32); --yellow: rgb(255 210 40 / 0.3);
+    --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 8px 24px rgb(0 0 0 / .35);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  *, *::before, *::after { font-variation-settings: "CNTR" 50, "wdth" 100; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 350 1.08rem/2 "Kahroba", "Vazirmatn", Tahoma, sans-serif; letter-spacing: -0.01em;
+    direction: rtl; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-right, 0px)) 56px max(16px, env(safe-area-inset-left, 0px)); }
+  .back { display: inline-block; color: var(--accent); text-decoration: none; font-weight: 450; margin-bottom: 18px; }
+  h1 { margin: 0; font-weight: 500; font-size: clamp(1.8rem, 4vw, 2.3rem); line-height: 1.4; }
+  .motto { margin: 0 0 24px; color: var(--muted); font-weight: 450; }
+  .sheet { background: var(--paper); border: 1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow); padding: 8px clamp(18px, 4vw, 36px) 24px; }
+  section + section { border-top: 1px solid var(--line); }
+  section { padding: 18px 0 6px; }
+  h2 { margin: 0 0 8px; font-size: 1.25rem; font-weight: 500; line-height: 1.6; }
+  p { margin: 0 0 12px; }
+  ul { margin: 0 0 12px; padding-inline-start: 1.2em; }
+  li { margin: 0 0 8px; }
+  li::marker { color: var(--muted); }
+  strong { font-weight: 500; }
+  a { color: var(--accent); }
+  .mark { padding: 0 6px; border-radius: 6px; }
+  .mark-red { background: var(--red); }
+  .mark-yellow { background: var(--yellow); }
+  .books li { margin-bottom: 12px; }
+  .books .who { color: var(--muted); }
+  .foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 22px; color: var(--muted); font-size: 0.9rem; }
+  .foot a { text-decoration: none; }
+</style>
+
+<div class="wrap">
+  <a class="back" href="/">→ بازگشت به واج‌بان</a>
+  <h1>دربارهٔ واج‌بان</h1>
+  <p class="motto">واج‌بان، نگهبان سخن</p>
+
+  <main class="sheet">
+    <section>
+      <h2>واج‌بان چیست؟</h2>
+      <p>واج‌بان متن فارسی را می‌خواند و غلط‌های املایی و نگارشی‌اش را نشان می‌دهد: نیم‌فاصله‌ها، «ی» و «ک» عربی، همزه، کلمه‌هایی که باید سرهم یا جدا نوشته شوند، فاصله‌گذاری نشانه‌ها و مانند این‌ها.</p>
+      <p>پایهٔ کار، کتاب <strong>دستور خطّ فارسی</strong> (ویرایش جدید) از فرهنگستان زبان و ادب فارسی است. واج‌بان متن شما را بازنویسی نمی‌کند؛ فقط غلط‌ها را نشان می‌دهد و برای هر کدام اصلاح پیشنهاد می‌کند.</p>
+    </section>
+
+    <section>
+      <h2>رنگ‌ها یعنی چه؟</h2>
+      <ul>
+        <li><span class="mark mark-red">قرمز</span>: طبق قاعدهٔ صریح کتاب غلط است. دکمهٔ «اعمال همهٔ اصلاح‌های قطعی» همهٔ قرمزها را یک‌جا درست می‌کند.</li>
+        <li><span class="mark mark-yellow">زرد</span>: شاید غلط باشد. یعنی درستی‌اش به معنای جمله بستگی دارد، یا حدس یک مدل آماری است، یا احتمالاً غلط تایپی است، یا یک توصیهٔ ویرایشی است. زردها هیچ‌وقت خودکار عوض نمی‌شوند؛ تصمیمش با شماست.</li>
+        <li>روی هر کلمهٔ رنگی بزنید تا توضیح، اصلاح پیشنهادی و منبعش همان‌جا باز شود.</li>
+        <li>هر اصلاحی را با دکمهٔ «بازگشت» می‌شود برگرداند.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>ویرایش زبانی</h2>
+      <p>بخش «ویرایش زبانی» از املا فراتر می‌رود: فعل‌های زائد («می‌باشد» به‌جای «است»)، جمع عربی برای واژهٔ فارسی («اساتید»)، ترجمه‌زدگی («در رابطه با»)، حشو («بازگشت مجدد»)، جای نادرست «را» و تعبیرهای نادرست («با این وجود»).</p>
+      <p>این‌ها توصیه‌های ویراستاران‌اند، نه قاعدهٔ دستور خط. برای همین همیشه زردند و هر کدام را می‌توانید جداگانه خاموش کنید.</p>
+      <p>اگر «نوع متن» را روی «گفت‌وگو» بگذارید (برای دیالوگ داستان)، ویرایش زبانی خاموش می‌شود و شکسته‌نویسی درست («می‌رم»، «خونه») بررسی می‌شود.</p>
+    </section>
+
+    <section>
+      <h2>نشانه‌گذاری و حروف‌نگاری</h2>
+      <p>دستور خط دربارهٔ نشانه‌گذاری قاعده‌ای ندارد. واج‌بان این موارد را طبق قراردادهای رایج نگارش فارسی بررسی می‌کند: فاصلهٔ پیش و پس از نشانه‌ها، گیومهٔ فارسی «»، رقم فارسی، فاصله‌های تکراری، و نویسه‌های نادیدنی‌ای که معمولاً همراه متنِ کپی‌شده می‌آیند.</p>
+    </section>
+
+    <section>
+      <h2>دو مدل آماری</h2>
+      <p>دو چیز را قاعده به‌تنهایی نمی‌تواند تشخیص دهد: کسرهٔ اضافه‌ای که نوشته نشده («خانه قبلی» به‌جای «خانۀ قبلی») و «را»یی که به کلمهٔ قبلش چسبیده («کتابرا» به‌جای «کتاب را»). برای این دو، دو مدل آماری کوچک از روی کلمه‌های اطراف حدس می‌زنند.</p>
+      <p>این مدل‌ها روی متن ویکی‌پدیای فارسی آموزش دیده‌اند. اصلاح خودکار فقط وقتی پیشنهاد می‌شود که مدل دست‌کم ۹۰ درصد مطمئن باشد؛ در غیر این صورت کلمه زرد می‌شود و درجهٔ اطمینان مدل را هم می‌بینید.</p>
+    </section>
+
+    <section>
+      <h2>متن شما کجا می‌رود؟</h2>
+      <p>هیچ‌جا. همهٔ بررسی‌ها در همین مرورگر انجام می‌شود و متن شما به هیچ سروری فرستاده نمی‌شود.</p>
+      <p>فقط اگر روی «این پیشنهاد غلط است» بزنید و فرستادن را تأیید کنید، همان جمله و پیشنهادی که در پنجره می‌بینید برای سازندهٔ واج‌بان فرستاده می‌شود؛ بی نام و بی هیچ نشانه‌ای از شما.</p>
+    </section>
+
+    <section>
+      <h2>منابع</h2>
+      <ul class="books">
+        <li><strong><a href="https://apll.ir/wp-content/uploads/2023/07/Dastour-e-Khat-17.04.1402.pdf" target="_blank" rel="noopener">دستور خطّ فارسی</a></strong> (ویرایش جدید)<br><span class="who">فرهنگستان زبان و ادب فارسی</span></li>
+        <li><strong><a href="https://apll.ir/wp-content/uploads/2018/10/F-E-1394.pdf" target="_blank" rel="noopener">فرهنگ املایی خطّ فارسی</a></strong><br><span class="who">فرهنگستان زبان و ادب فارسی؛ هر جا با دستور خط فرق داشته باشد، دستور خط ملاک است</span></li>
+        <li><strong>نکته‌های ویرایش</strong><br><span class="who">علی صلح‌جو، نشر مرکز</span></li>
+        <li><strong>اصول شکسته‌نویسی</strong><br><span class="who">علی صلح‌جو</span></li>
+        <li><strong>نگارش و ویرایش</strong><br><span class="who">احمد سمیعی گیلانی، سمت</span></li>
+      </ul>
+      <p>داده‌ها:</p>
+      <ul>
+        <li><a href="https://fa.wikipedia.org" target="_blank" rel="noopener">ویکی‌پدیای فارسی</a>: برای واژه‌نامهٔ غلط‌یاب و آموزش دو مدل آماری</li>
+        <li>واژه‌نامهٔ <a href="https://github.com/roshan-research/hazm" target="_blank" rel="noopener">Hazm</a>: برای شناختن کلمه‌های فارسی</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>مجوزها</h2>
+      <ul>
+        <li>فرهنگستان زبان و ادب فارسی «دستور خطّ فارسی» و «فرهنگ املایی خطّ فارسی» را برای استفادهٔ رایگان و غیرتجاری، با ذکر منبع، در دسترس گذاشته است.</li>
+        <li>داده‌هایی که از ویکی‌پدیا ساخته شده‌اند، با همان مجوز ویکی‌پدیا (<a href="https://creativecommons.org/licenses/by-sa/4.0/deed.fa" target="_blank" rel="noopener">CC BY-SA 4.0</a>) منتشر می‌شوند. واژه‌نامهٔ Hazm مجوز MIT دارد.</li>
+        <li>فونت کهربا، طراحی امین عابدی، از <a href="https://fontiran.com" target="_blank" rel="noopener">فونت ایران</a>، با <a href="https://fontiran.com/license/3CP2ZTOG" target="_blank" rel="noopener">مجوز <bdi>3CP2ZTOG</bdi></a>.</li>
+        <li>کد واج‌بان با مجوز MIT <a href="https://github.com/NavidBerahmand/vajban" target="_blank" rel="noopener">در دسترس است</a>.</li>
+      </ul>
+    </section>
+  </main>
+
+  <div class="foot">
+    <a href="/">→ بازگشت به واج‌بان</a>
+    <span>نسخهٔ {{VERSION}}</span>
+  </div>
+</div>

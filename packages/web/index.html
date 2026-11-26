@@ -205,6 +205,7 @@
   }
 
   /* the note that opens on a marked word */
+  .pop[hidden] { display: none; }
   .pop {
     position: absolute;
     z-index: 20;
@@ -260,8 +261,11 @@
   .cite-link:hover, .cite-link:focus-visible { color: var(--lapis); text-decoration-color: currentColor; }
   .actions { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
 
-  footer { color: var(--muted); font-size: 0.8rem; max-width: 72ch; }
-  footer p { margin: 0 0 6px; }
+  footer { color: var(--muted); font-size: 0.95rem; }
+  .foot { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; }
+  .foot a { text-decoration: none; font-weight: 450; }
+  .foot .ver { font-size: 0.85rem; }
+  .foot .reports-panel { flex-basis: 100%; }
 
   .report-dialog {
     width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px);
@@ -363,10 +367,9 @@
     </details>
   </main>
 
-  <footer>
-    <p>نسخهٔ آزمایشی. قواعد: دستور خطّ فارسی، ویراست جدید؛ فرهنگ املایی خطّ فارسی (۱۳۹۴)، با برتری ویراست جدید در تعارض‌ها؛ در حالت گفت‌وگو، اصول شکسته‌نویسی (علی صلح‌جو)؛ چند غلط رایج و توصیهٔ ویرایشی از «نکته‌های ویرایش» (علی صلح‌جو) و «نگارش و ویرایش» (احمد سمیعی گیلانی)؛ واژه‌نامهٔ Hazm برای تشخیص کلمه‌های شناخته‌شده. کسرهٔ اضافهٔ جاافتاده («خانه قبلی» ← «خانۀ قبلی») و «را»ی چسبیده («کتابرا» ← «کتاب را») را دو مدل آماری کوچک حدس می‌زنند که روی متن ویکی‌پدیای فارسی (CC BY-SA) آموزش دیده‌اند؛ اصلاح خودکار فقط وقتی است که مدل دست‌کم ۹۰٪ مطمئن باشد.</p>
-    <p>ماژیک قرمز: قاعدهٔ صریح کتاب یا فهرست‌ها، که «اعمال همهٔ اصلاح‌های قطعی» آن‌ها را اعمال می‌کند. ماژیک زرد: حدس مدل، غلط تایپی احتمالی، مواردی که به معنای جمله بستگی دارد، و «ویرایش زبانی» (توصیهٔ رایج ویراستاران، نه قاعدهٔ دستور خط)؛ این‌ها هرگز خودکار اعمال نمی‌شوند. هر اصلاح خودکار را با «بازگشت» می‌شود برگرداند. فاصله‌ها، نویسه‌های نادیدنی، گیومه‌ها و نشانه‌ها طبق قراردادهای رایج حروف‌نگاری فارسی هم بررسی می‌شوند. اگر پیشنهادی غلط بود، دکمهٔ «این پیشنهاد غلط است» را بزنید: پیش از فرستادن، دقیقاً همان چیزی را که فرستاده می‌شود می‌بینید.</p>
-    <p><strong>منابع و مجوز.</strong> قواعد و فهرست‌ها از «<a href="https://apll.ir/wp-content/uploads/2023/07/Dastour-e-Khat-17.04.1402.pdf" target="_blank" rel="noopener">دستور خطّ فارسی</a>» (ویراست جدید، چاپ اول ۱۴۰۱؛ در چاپ‌های بعد «ویراست دوم» نام گرفته) و «<a href="https://apll.ir/wp-content/uploads/2018/10/F-E-1394.pdf" target="_blank" rel="noopener">فرهنگ املایی خطّ فارسی</a>» (۱۳۹۴)، هر دو از <a href="https://apll.ir">فرهنگستان زبان و ادب فارسی</a>، برای استفادهٔ رایگان و غیرتجاری و با ذکر منبع. واژه‌نامهٔ غلط‌یاب و دو مدل آماری از متن <a href="https://fa.wikipedia.org">ویکی‌پدیای فارسی</a> ساخته شده‌اند، به قلم ویرایشگران ویکی‌پدیا، با مجوز <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.fa">CC BY-SA 4.0</a>؛ همین داده‌ها با همان مجوز منتشر می‌شوند. واژه‌نامهٔ <a href="https://github.com/roshan-research/hazm">Hazm</a> (MIT). «اصول شکسته‌نویسی» و «نکته‌های ویرایش» (نشر مرکز)، علی صلح‌جو؛ «نگارش و ویرایش» (سمت)، احمد سمیعی گیلانی: فقط ارجاع. قلم: کهربا، امین عابدی (<a href="https://fontiran.com">فونت ایران</a>)، با <a href="https://fontiran.com/license/3CP2ZTOG" target="_blank" rel="noopener">مجوز <bdi>3CP2ZTOG</bdi></a>. کد ابزار: MIT.</p>
+  <footer class="foot">
+    <a href="/about">دربارهٔ واج‌بان، منابع و مجوزها</a>
+    <span class="ver">نسخهٔ {{VERSION}}</span>
     <details class="reports-panel" id="reports-panel" hidden>
       <summary>گزارش‌های «پیشنهاد غلط» (<span id="reports-count">بارگذاری با باز کردن</span>)</summary>
       <p>فقط شما و ویراستاران این صفحه این بخش را می‌بینید.</p>
