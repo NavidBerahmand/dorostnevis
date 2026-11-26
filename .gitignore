@@ -3,3 +3,4 @@ lib/
 *.docx
 *.pdf
 dist/
+__pycache__/
