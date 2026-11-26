@@ -60,7 +60,11 @@ const RULE_LABELS: Record<string, string> = {
     "repeated-words": "تکرار",
     "long-sentences": "جملهٔ بلند",
     invisible: "فاصله و نویسهٔ نادیدنی",
-    "spaced-compounds": "ترکیب‌ها"
+    "spaced-compounds": "ترکیب‌ها",
+    misspellings: "غلط رایج",
+    "ra-placement": "جای «را»",
+    "comma-before-va": "ویرگول پیش از «و»",
+    "word-choice": "واژه‌گزینی"
 };
 
 const SAMPLE_DIALOGUE = [
@@ -293,7 +297,8 @@ const ACADEMY = "فرهنگستان زبان و ادب فارسی";
 const BOOKS: Array<{ prefix: RegExp; name: string; url?: string }> = [
     { prefix: /^دستور خط(?: \(ویراست جدید\))?\s*[،؛:]?\s*/, name: `دستور خطّ فارسی، ${ACADEMY}`, url: BOOK_PDF },
     { prefix: /^فرهنگ املایی(?: خطّ فارسی)?\s*[،؛]?\s*/, name: `فرهنگ املایی خطّ فارسی، ${ACADEMY}`, url: FARHANG_PDF },
-    { prefix: /^اصول شکسته‌نویسی\s*[،؛]?\s*/, name: "اصول شکسته‌نویسی، علی صلح‌جو" }
+    { prefix: /^اصول شکسته‌نویسی\s*[،؛]?\s*/, name: "اصول شکسته‌نویسی، علی صلح‌جو" },
+    { prefix: /^نکته‌های ویرایش، علی صلح‌جو\s*[،؛]?\s*/, name: "نکته‌های ویرایش، علی صلح‌جو" }
 ];
 /** A common convention the book has no rule for: no book meter, never «قطعی». */
 const NOT_IN_BOOK = /در دستور خط نیامده/;
