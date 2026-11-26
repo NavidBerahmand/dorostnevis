@@ -293,12 +293,10 @@ const ACADEMY = "فرهنگستان زبان و ادب فارسی";
 const BOOKS: Array<{ prefix: RegExp; name: string; url?: string }> = [
     { prefix: /^دستور خط(?: \(ویراست جدید\))?\s*[،؛:]?\s*/, name: `دستور خطّ فارسی، ${ACADEMY}`, url: BOOK_PDF },
     { prefix: /^فرهنگ املایی(?: خطّ فارسی)?\s*[،؛]?\s*/, name: `فرهنگ املایی خطّ فارسی، ${ACADEMY}`, url: FARHANG_PDF },
-    { prefix: /^اصول شکسته‌نویسی\s*[،؛]?\s*/, name: "اصول شکسته‌نویسی، علی صلح‌جو" },
-    {
-        prefix: /^شیوه‌نامهٔ حروف‌نگاری و بهنجارسازی متن فارسی، فرهنگستان \(پیش‌نویس ۱۴۰۵\)\s*[،]?\s*/,
-        name: `شیوه‌نامهٔ حروف‌نگاری و بهنجارسازی متن فارسی، ${ACADEMY} (پیش‌نویس ۱۴۰۵)`
-    }
+    { prefix: /^اصول شکسته‌نویسی\s*[،؛]?\s*/, name: "اصول شکسته‌نویسی، علی صلح‌جو" }
 ];
+/** A common convention the book has no rule for: no book meter, never «قطعی». */
+const NOT_IN_BOOK = /در دستور خط نیامده/;
 const faDigits = (s: string) => Number(s.replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0)));
 const PAGES = /ص ([۰-۹]+(?:–[۰-۹]+)?)/g;
 
@@ -323,9 +321,7 @@ function citation(source: string): string {
             rest = rest.slice(farhang[0].length);
         }
         const pages = [...rest.matchAll(PAGES)].map((p) => p[1]);
-        // a page («ص ۵۵») or, for the شیوه‌نامه, its article («مادهٔ ۹، بند ۵»)
-        const article = /^مادهٔ/.test(rest) ? rest : "";
-        const text = book.name + (pages.length ? `، ص ${pages.join(" و ")}` : article ? `، ${article}` : "");
+        const text = book.name + (pages.length ? `، ص ${pages.join(" و ")}` : "");
         const section = rest.replace(PAGES, "").replace(/\s{2,}/g, " ").replace(/[،؛\s]+$/, "").replace(/^[،؛\s]+/, "");
         const tip = [section, note].filter(Boolean).join(" — ");
         const title = tip ? ` title="${esc(tip)}"` : "";
@@ -344,15 +340,14 @@ function noMeterReason(m: Msg): string {
     if (m.ruleId === "spelling") return "حدس غلط‌یاب است، نه قاعده";
     if (isRecommendation(m)) return "توصیهٔ کتاب است، نه الزام";
     if (m.ruleId === "may-break") return "پیشنهاد سبکی است، نه غلط";
-    if (/^شیوه‌نامهٔ/.test(splitMessage(m).source)) return "شیوه‌نامهٔ فرهنگستان (پیش‌نویس)، نه کتاب";
-    if (m.ruleId === "punctuation") return "قرارداد رایج است، نه کتاب";
+    if (m.ruleId === "punctuation" || NOT_IN_BOOK.test(splitMessage(m).source)) return "قرارداد رایج است، نه کتاب";
     if (isStyle(m)) return "توصیهٔ ویرایشی است، نه قاعدهٔ کتاب";
     return "به معنای جمله بستگی دارد";
 }
 
 function meterFor(m: Msg, p: number | null): string {
     if (p !== null) return confidenceMeter(p);
-    if (m.fix && m.ruleId !== "punctuation" && m.ruleId !== "invisible" && !isStyle(m) && !/^شیوه‌نامهٔ/.test(splitMessage(m).source)) return bookMeter();
+    if (m.fix && m.ruleId !== "punctuation" && m.ruleId !== "invisible" && !isStyle(m) && !NOT_IN_BOOK.test(splitMessage(m).source)) return bookMeter();
     return `<div class="confidence confidence-none" title="این کارت درجهٔ اطمینان ندارد: ${noMeterReason(m)}.">
                 <span class="confidence-label">درجه ندارد</span>
                 <span class="confidence-why">${noMeterReason(m)}</span>
@@ -374,7 +369,7 @@ function buildCards(text: string) {
         const { msg, p } = takeConfidence(split.text);
         // a book rule agreeing with a model's guess: the book's certainty
         const bookAgrees = [m, ...extras[i]].some(
-            (x) => x.fix && !/احتمال/.test(x.message) && x.ruleId !== "punctuation" && x.ruleId !== "invisible" && !isStyle(x) && !/^شیوه‌نامهٔ/.test(splitMessage(x).source)
+            (x) => x.fix && !/احتمال/.test(x.message) && x.ruleId !== "punctuation" && x.ruleId !== "invisible" && !isStyle(x) && !NOT_IN_BOOK.test(splitMessage(x).source)
         );
         const meter = bookAgrees ? bookMeter() : meterFor(m, p);
         const styleOnly = members.every(isStyle);
@@ -469,8 +464,7 @@ function schedule() {
 }
 
 /**
- * Every automatic change can be undone (شیوه‌نامه، مادهٔ ۳۳، بند ۳: «تغییرات
- * خودکار باید تا حد امکان قابل بازبینی و برگشت‌پذیر باشند»).
+ * Every automatic change can be undone.
  */
 const history: string[] = [];
 const undoBtn = $<HTMLButtonElement>("undo");
@@ -668,7 +662,7 @@ fetch("kahroba.woff2")
 
 applyAllBtn.addEventListener("click", async () => {
     status.textContent = "در حال اعمال…";
-    // what is about to change, for the list after (شیوه‌نامه، مادهٔ ۳۳، بند ۵)
+    // what is about to change, for the list after
     const planned = spans
         .filter((sp) => sp.red)
         .map((sp) => reports[sp.items.find((i) => messages[i].fix && !isStyle(messages[i])) ?? sp.items[0]])

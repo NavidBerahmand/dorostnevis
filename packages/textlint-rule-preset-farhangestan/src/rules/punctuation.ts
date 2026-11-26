@@ -13,10 +13,11 @@
  * - «؟؟؟» ← «؟»، «!!!» ← «!»، «!؟»/«?!» ← «؟!»
  * - چند فاصلهٔ پشت سر هم ← یک فاصله
  * - «--» و «---» ← «–» و «—»؛ کشیده‌ای که به‌جای خط فاصله آمده («ـ که») ← «–»؛
- *   خط فاصلهٔ تکی میان دو واژهٔ فارسی («تهران - مشهد») ← «–» (شیوه‌نامه، مادهٔ ۱۶)
- * - «((…))» و «<<…>>» ← «…» (شیوه‌نامه، مادهٔ ۱۴: «(( )) صورت معیاری برای گیومه نیست»)
- * - گیومهٔ “…” درون «…» دست نمی‌خورد (شیوه‌نامه، مادهٔ ۱۷: الگوی «“ ”» برای نقل‌قول تودرتو)
- * - گیومه و کمانک بی‌جفت: فقط گزارش (شیوه‌نامه، مادهٔ ۱۷، بند ۵ و پیوست ۲)
+ *   خط فاصلهٔ تکی میان دو واژهٔ فارسی («تهران - مشهد») ← «–»
+ * - «((…))» و «<<…>>» ← «…»
+ * - گیومهٔ “…” درون «…» دست نمی‌خورد (الگوی «“ ”» برای نقل‌قول تودرتو)
+ * - گیومه و کمانک بی‌جفت: فقط گزارش
+ * - پرانتز درون پرانتز: فقط پیشنهاد، توضیحِ درون کمانک در قلاب «[ ]» می‌آید
  * - رقم انگلیسی در متن فارسی ← رقم فارسی («12%» ← «۱۲٪»، «4.7» ← «۴٫۷»، «12,543» ← «۱۲٬۵۴۳»)
  *
  * هر بخش را می‌شود خاموش کرد: { "digits": false }، { "quotes": false }…
@@ -37,9 +38,8 @@ export interface Options {
 }
 
 const SOURCE = "قراردادهای رایج نشانه‌گذاری فارسی (در دستور خط نیامده)";
-const SHIVE = (n: string) => `شیوه‌نامهٔ حروف‌نگاری و بهنجارسازی متن فارسی، فرهنگستان (پیش‌نویس ۱۴۰۵)، مادهٔ ${n}`;
 
-/** Inside an open «…» on the same line: “…” there is a nested quotation (مادهٔ ۱۷، بند ۴). */
+/** Inside an open «…» on the same line: “…” there is a nested quotation. */
 function insideGuillemets(text: string, index: number): boolean {
     const lineStart = text.lastIndexOf("\n", index) + 1;
     const before = text.slice(lineStart, index);
@@ -159,7 +159,7 @@ export default createPatternRule<Options>((options) => {
             check: (m) => ({
                 message: "«(( ))» و «<< >>» گیومه نیستند؛ گیومهٔ فارسی «» به کار می‌رود",
                 replacement: `«${(m[1] ?? m[2]).trim()}»`,
-                source: SHIVE("۱۴، بند ۱")
+                source: SOURCE
             })
         });
     }
@@ -173,7 +173,23 @@ export default createPatternRule<Options>((options) => {
                 return {
                     message: open ? `«${m[0]}» باز شده و بسته نشده است` : `«${m[0]}» بسته شده ولی باز نشده است`,
                     fix: false,
-                    source: SHIVE("۱۷، بند ۵")
+                    source: SOURCE
+                };
+            }
+        });
+        checks.push({
+            // «(… (…) …)»: an explanation inside brackets goes in square brackets
+            pattern: new RegExp(`\\(([^()\\n]*)\\(([^()\\n]*${FA_LETTER}[^()\\n]*)\\)([^()\\n]*)\\)`, "g"),
+            check: (m) => {
+                if (!persianContext(m.input, m.index) || !new RegExp(FA_LETTER).test(m[1] + m[3])) return null;
+                const start = 1 + m[1].length; // relative to the match
+                return {
+                    message: `پرانتز درون پرانتز خوانا نیست؛ توضیحِ درون کمانک در قلاب می‌آید: «[${m[2]}]»`,
+                    replacement: `[${m[2]}]`,
+                    fix: false,
+                    start,
+                    end: start + m[2].length + 2,
+                    source: SOURCE
                 };
             }
         });
@@ -231,7 +247,7 @@ export default createPatternRule<Options>((options) => {
                     // an earlier dot in the same token: an abbreviation («ج.ا.ا»)
                     const token = m.input.slice(0, m.index).split(/\s/).pop() ?? "";
                     if (before.length < 2 || after.length < 2 || token.includes(".")) return null;
-                    return { message: "پس از نقطه یک فاصله می‌آید", replacement: ". ", source: SHIVE("۱۵، بند ۵") };
+                    return { message: "پس از نقطه یک فاصله می‌آید", replacement: ". ", source: SOURCE };
                 }
             },
             {
@@ -294,7 +310,7 @@ export default createPatternRule<Options>((options) => {
                     replacement: m[1] + " " + word,
                     // an adjective made with the number («۵کیلویی») may be meant: only a suggestion
                     fix: /(ی|ه|گی)$/.test(word) ? false : undefined,
-                    source: SHIVE("۹، بند ۱")
+                    source: SOURCE
                 };
             }
         });
@@ -313,7 +329,7 @@ export default createPatternRule<Options>((options) => {
             {
                 // one hyphen between two Persian words: «تهران - مشهد» → «تهران – مشهد»
                 pattern: new RegExp(`(?<=${FA_LETTER} )-(?= ${FA_LETTER})`, "g"),
-                check: () => ({ message: "خط فاصله (-) با خط تیره فرق دارد؛ میان دو واژه «–» به کار می‌رود", replacement: "–", source: SHIVE("۱۶، بند ۲") })
+                check: () => ({ message: "خط فاصله (-) با خط تیره فرق دارد؛ میان دو واژه «–» به کار می‌رود", replacement: "–", source: SOURCE })
             },
             {
                 // a kashida used as a dash: «ـ که …» → «– که …»
