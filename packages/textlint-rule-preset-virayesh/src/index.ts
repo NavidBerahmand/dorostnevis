@@ -8,6 +8,7 @@ import longSentences from "./rules/long-sentences";
 import raPlacement from "./rules/ra-placement";
 import commaBeforeVa from "./rules/comma-before-va";
 import wordChoice from "./rules/word-choice";
+import phrases from "./rules/phrases";
 
 /**
  * Language editing (ویرایش زبانی): editorial advice beyond دستور خط. Every
@@ -25,7 +26,8 @@ export default {
         "long-sentences": longSentences,
         "ra-placement": raPlacement,
         "comma-before-va": commaBeforeVa,
-        "word-choice": wordChoice
+        "word-choice": wordChoice,
+        phrases
     },
     rulesConfig: {
         "redundant-verbs": true,
@@ -37,6 +39,7 @@ export default {
         "long-sentences": true,
         "ra-placement": true,
         "comma-before-va": true,
-        "word-choice": true
+        "word-choice": true,
+        phrases: true
     }
 };

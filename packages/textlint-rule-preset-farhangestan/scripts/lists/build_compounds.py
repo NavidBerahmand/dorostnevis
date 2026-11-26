@@ -32,6 +32,21 @@ def main(path):
             entry["to"] = book
             entry["book"] = True
         entries.append(entry)
+    # Arabic compounds with «ال» (دستور خط: «قاضی‌القضات»، «آیت‌الله»): all two-part «X‌الY»
+    # forms of the farhang, whatever Wikipedia does; written with a space they are always wrong
+    # (نگارش و ویرایش، سمیعی، ص ۲۱۴–۲۱۵ agrees)
+    have = {e["spaced"] for e in entries}
+    for key, (pref, _others, page) in farhang.items():
+        form = overrides.get(key) or pref
+        if not form:
+            continue
+        parts = form.split("‌")
+        if len(parts) != 2 or not parts[1].startswith("ال") or len(parts[0]) < 2 or len(parts[1]) < 4:
+            continue
+        spaced = f"{parts[0]} {parts[1]}"
+        if spaced not in have:
+            entries.append({"spaced": spaced, "to": form, "page": page, "counts": [], "arabic": True})
+            have.add(spaced)
     entries.sort(key=lambda e: e["spaced"])
     json.dump({"source": "فرهنگ املایی خطّ فارسی (۱۳۹۴)؛ برگزیده با شمارش ویکی‌پدیای فارسی: "
                          "یکجا نوشته‌شده دست‌کم ۵۰ بار، با فاصله حداکثر ۲۰٪، کسرهٔ اضافه کمتر از ۱٪ (scripts/lists)",
