@@ -80,12 +80,128 @@ const SAMPLE_DIALOGUE = [
 const kernel = new TextlintKernel();
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-const input = $<HTMLTextAreaElement>("text");
-const backdrop = $<HTMLDivElement>("backdrop");
-// Safari on iPhone/iPad (iPadOS reports itself as a Mac with touch) insets textarea text by 3px
-if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
-    document.getElementById("editor")?.classList.add("ios");
+/*
+ * The text box is an editable <div>, and the highlighter paints the words in it
+ * directly (the CSS Custom Highlight API: Ranges over its own text), so a mark
+ * cannot drift from its word the way a copy of the text under a textarea can
+ * when the two wrap lines differently. The box is kept as plain text (one text
+ * node, «\n» for line breaks): paste and Enter insert plain text.
+ */
+const box = $<HTMLDivElement>("text");
+box.contentEditable = "plaintext-only";
+if (box.contentEditable !== "plaintext-only") box.contentEditable = "true";
+const HIGHLIGHTS = typeof CSS !== "undefined" && "highlights" in CSS && typeof (window as any).Highlight === "function";
+
+/** The box's text: text nodes as they are, <br> and block starts as «\n». */
+function readText(): string {
+    let out = "";
+    const walk = (n: Node) => {
+        n.childNodes.forEach((c) => {
+            if (c.nodeType === Node.TEXT_NODE) out += (c as Text).data;
+            else if (c.nodeName === "BR") out += "\n";
+            else {
+                if (/^(DIV|P)$/.test(c.nodeName) && out && !out.endsWith("\n")) out += "\n";
+                walk(c);
+            }
+        });
+    };
+    walk(box);
+    return out;
 }
+/** The text node and offset at string offset `pos` (the box is normalized to one text node). */
+function pointAt(pos: number): [Node, number] {
+    const t = box.firstChild;
+    if (!t || t.nodeType !== Node.TEXT_NODE) return [box, 0];
+    return [t, Math.min(pos, (t as Text).length)];
+}
+/** String offset of a DOM point inside the box. */
+function offsetOf(node: Node, off: number): number {
+    // count the way readText() does: text as it is, <br> as one «\n»
+    let n = 0;
+    let found = -1;
+    const walk = (p: Node) => {
+        for (let i = 0; i < p.childNodes.length && found < 0; i++) {
+            if (p === node && i === off) found = n;
+            const c = p.childNodes[i];
+            if (c === node && c.nodeType === Node.TEXT_NODE) {
+                found = n + off;
+                return;
+            }
+            if (c.nodeType === Node.TEXT_NODE) n += (c as Text).data.length;
+            else if (c.nodeName === "BR") n += 1;
+            else {
+                if (/^(DIV|P)$/.test(c.nodeName) && n > 0) n += 1;
+                walk(c);
+            }
+        }
+        if (p === node && found < 0 && off >= p.childNodes.length) found = n;
+    };
+    walk(box);
+    return found < 0 ? n : found;
+}
+function caret(): number | null {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !box.contains(sel.anchorNode)) return null;
+    return offsetOf(sel.focusNode!, sel.focusOffset);
+}
+function setCaret(pos: number) {
+    const [n, o] = pointAt(pos);
+    const sel = window.getSelection();
+    if (!sel) return;
+    const r = document.createRange();
+    r.setStart(n, o);
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+}
+/** One text node again (after a paste or an Enter left <br>s or <div>s), keeping the caret. */
+function normalizeBox() {
+    if (box.childNodes.length === 0 || (box.childNodes.length === 1 && box.firstChild!.nodeType === Node.TEXT_NODE)) return;
+    const pos = caret();
+    const text = readText();
+    box.textContent = text;
+    if (pos !== null) setCaret(pos);
+}
+const input = {
+    get value(): string {
+        return readText();
+    },
+    set value(t: string) {
+        box.textContent = t;
+        box.classList.toggle("is-empty", t === "");
+    },
+    focus: () => box.focus(),
+    select() {
+        const r = document.createRange();
+        r.selectNodeContents(box);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(r);
+    },
+    get collapsed(): boolean {
+        const sel = window.getSelection();
+        return !sel || sel.isCollapsed;
+    }
+};
+let composing = false;
+box.addEventListener("compositionstart", () => (composing = true));
+box.addEventListener("compositionend", () => {
+    composing = false;
+    box.dispatchEvent(new Event("input"));
+});
+// plain text only: no fonts, colours or links come in with a paste
+box.addEventListener("paste", (ev) => {
+    ev.preventDefault();
+    const t = (ev.clipboardData?.getData("text/plain") ?? "").replace(/\r\n?/g, "\n");
+    document.execCommand("insertText", false, t);
+});
+box.addEventListener("keydown", (ev) => {
+    // «plaintext-only» boxes insert a «\n» themselves; a plain contenteditable would add <div>s
+    if (ev.key === "Enter" && !ev.isComposing && box.contentEditable !== "plaintext-only") {
+        ev.preventDefault();
+        document.execCommand("insertText", false, "\n");
+    }
+});
 const pop = $<HTMLDivElement>("popover");
 const summary = $<HTMLParagraphElement>("summary");
 const showZwnj = $<HTMLInputElement>("show-zwnj");
@@ -218,14 +334,14 @@ function isCertain(i: number): boolean {
     return [messages[i], ...extras[i]].some((x) => x.fix && !isStyle(x) && !/احتمال/.test(x.message));
 }
 
+/** The Range of span k in the box (kept until the text changes). */
+let ranges: Range[] = [];
+
 /**
- * The highlighter: a copy of the text under the (transparent) textarea, with
- * each marked word in a <mark>. Marks always cover whole words: a mark around
- * one letter («ي» in «رييس») is a separate inline box, and some browsers
- * (Safari, the iOS app) then draw the letters on either side unjoined, which
- * would also shift the marks off the words above them.
+ * The highlighter: each marked span is a Range over the box's own text, painted
+ * red or yellow with ::highlight(). Marks always cover whole words.
  */
-function renderBackdrop(text: string) {
+function renderMarks(text: string) {
     const items = messages
         .map((m, i) => {
             const [s, e] = cardSpan(m, text);
@@ -243,16 +359,40 @@ function renderBackdrop(text: string) {
             spans.push({ s: it.s, e: it.e, items: [it.i], red: isCertain(it.i) });
         }
     }
-    let out = "";
-    let pos = 0;
-    spans.forEach((sp, k) => {
-        out += show(text.slice(pos, sp.s));
-        out += `<mark class="hl ${sp.red ? "hl-red" : "hl-yellow"}" id="mk-${k}">${show(text.slice(sp.s, sp.e)) || "&#8203;"}</mark>`;
-        pos = sp.e;
+    ranges = spans.map((sp) => {
+        const r = document.createRange();
+        const [a, ao] = pointAt(sp.s);
+        const [b, bo] = pointAt(Math.max(sp.e, sp.s));
+        r.setStart(a, ao);
+        r.setEnd(b, bo);
+        return r;
     });
-    out += show(text.slice(pos));
-    // a final newline needs a character after it to take up a line, as in the textarea
-    backdrop.innerHTML = out + "\u200b";
+    paintMarks();
+}
+
+function paintMarks() {
+    if (!HIGHLIGHTS) return;
+    const H = (window as any).Highlight;
+    const reg = (CSS as any).highlights;
+    const groups: Record<string, Range[]> = { "vb-red": [], "vb-yellow": [], "vb-red-open": [], "vb-yellow-open": [], "vb-zwnj": [] };
+    spans.forEach((sp, k) => groups[`vb-${sp.red ? "red" : "yellow"}${k === openK ? "-open" : ""}`].push(ranges[k]));
+    if (showZwnj.checked) {
+        const text = input.value;
+        for (let i = text.indexOf("\u200c"); i >= 0; i = text.indexOf("\u200c", i + 1)) {
+            const r = document.createRange();
+            const [a, ao] = pointAt(Math.max(0, i - 1));
+            const [b, bo] = pointAt(i + 2);
+            r.setStart(a, ao);
+            r.setEnd(b, bo);
+            groups["vb-zwnj"].push(r);
+        }
+    }
+    for (const [name, rs] of Object.entries(groups)) reg.set(name, new H(...rs));
+}
+function clearMarks() {
+    spans = [];
+    ranges = [];
+    if (HIGHLIGHTS) for (const n of ["vb-red", "vb-yellow", "vb-red-open", "vb-yellow-open", "vb-zwnj"]) (CSS as any).highlights.delete(n);
 }
 
 // invisible characters inside a word (ZWNJ, ZWSP, ZWJ, RLM, word joiner) belong to it
@@ -458,9 +598,8 @@ async function check() {
     messages = merged.primary;
     extras = merged.extra;
     closePopover();
-    renderBackdrop(text);
+    renderMarks(text);
     buildCards(text);
-    autosize();
     status.textContent = "";
     try {
         localStorage.setItem("vajban:draft", text);
@@ -515,11 +654,11 @@ const reviewBtn = $<HTMLButtonElement>("review");
 let openK = -1;
 
 function markRects(k: number): DOMRect[] {
-    const el = document.getElementById(`mk-${k}`);
-    return el ? [...el.getClientRects()] : [];
+    const r = ranges[k];
+    return r ? [...r.getClientRects()].filter((x) => x.width > 0 || x.height > 0) : [];
 }
 
-/** The marked span under a point, if any (marks sit under the transparent textarea). */
+/** The marked span under a point, if any. */
 function spanAt(x: number, y: number): number {
     for (let k = 0; k < spans.length; k++) {
         if (markRects(k).some((r) => x >= r.left - 2 && x <= r.right + 2 && y >= r.top && y <= r.bottom)) return k;
@@ -529,16 +668,16 @@ function spanAt(x: number, y: number): number {
 
 function closePopover() {
     pop.hidden = true;
-    if (openK >= 0) document.getElementById(`mk-${openK}`)?.classList.remove("is-open");
+    const was = openK;
     openK = -1;
+    if (was >= 0) paintMarks();
 }
 
 function openPopover(k: number, x?: number, y?: number) {
     const sp = spans[k];
     if (!sp) return closePopover();
-    if (openK >= 0) document.getElementById(`mk-${openK}`)?.classList.remove("is-open");
     openK = k;
-    document.getElementById(`mk-${k}`)?.classList.add("is-open");
+    paintMarks();
     const fa = (n: number) => n.toLocaleString("fa-IR");
     pop.innerHTML =
         `<div class="pop-nav">
@@ -573,25 +712,25 @@ function place(k: number, x?: number, y?: number) {
 }
 
 function goTo(k: number) {
-    const el = document.getElementById(`mk-${k}`);
-    if (!el) return;
-    el.scrollIntoView({ block: "center" });
+    const r = markRects(k)[0];
+    if (!r) return;
+    window.scrollTo({ top: window.scrollY + r.top - window.innerHeight / 2 });
     openPopover(k);
 }
 
-input.addEventListener("click", (ev) => {
-    if (input.selectionStart !== input.selectionEnd) return;
+box.addEventListener("click", (ev) => {
+    if (!input.collapsed) return;
     const k = spanAt(ev.clientX, ev.clientY);
     if (k < 0) return closePopover();
     openPopover(k, ev.clientX, ev.clientY);
 });
 // a pointer over a marked word says it can be clicked
-input.addEventListener("mousemove", (ev) => {
-    input.style.cursor = spanAt(ev.clientX, ev.clientY) >= 0 ? "pointer" : "";
+box.addEventListener("mousemove", (ev) => {
+    box.style.cursor = spanAt(ev.clientX, ev.clientY) >= 0 ? "pointer" : "";
 });
 document.addEventListener("click", (ev) => {
     const t = ev.target as Node;
-    if (pop.hidden || pop.contains(t) || t === input) return;
+    if (pop.hidden || pop.contains(t) || box.contains(t)) return;
     closePopover();
 });
 document.addEventListener("keydown", (ev) => {
@@ -601,7 +740,6 @@ document.addEventListener("keydown", (ev) => {
     }
 });
 window.addEventListener("resize", () => {
-    autosize();
     if (openK >= 0) place(openK);
 });
 reviewBtn.addEventListener("click", (ev) => {
@@ -642,11 +780,6 @@ pop.addEventListener("click", (ev) => {
     }
 });
 
-/** The textarea grows with its text, so it never scrolls apart from the marks under it. */
-function autosize() {
-    input.style.height = "auto";
-    input.style.height = `${input.scrollHeight}px`;
-}
 
 // ---- theme: light unless the reader picks dark ----
 const themeBtn = $<HTMLButtonElement>("theme");
@@ -671,7 +804,6 @@ fetch("kahroba.woff2")
     .then((buf) => new FontFace("Kahroba", buf, { weight: "100 900", stretch: "87.5% 125%" }).load())
     .then((face) => {
         document.fonts.add(face);
-        autosize();
         if (openK >= 0) place(openK);
     })
     .catch(() => undefined);
@@ -727,13 +859,14 @@ $<HTMLButtonElement>("clear").addEventListener("click", () => {
     input.focus();
 });
 
-input.addEventListener("input", () => {
+box.addEventListener("input", () => {
+    if (composing) return; // the IME is still composing a word: check when it is done
+    normalizeBox();
+    box.classList.toggle("is-empty", input.value === "");
     closePopover();
     changesEl.hidden = true;
-    // the old marks would sit on shifted text: plain text until the check is done
-    spans = [];
-    backdrop.innerHTML = show(input.value) + "\u200b";
-    autosize();
+    // the old marks would sit on shifted text: none until the check is done
+    clearMarks();
     schedule();
 });
 [showZwnj, pluralMode, ezafeStyle].forEach((el) => el.addEventListener("change", check));
