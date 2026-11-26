@@ -8,7 +8,9 @@
  *   تبصره: «ها» در موارد زیر فقط به‌صورتِ جدا نوشته شود: … ۵. هنگامی که
  *   کلمه به «ها»ی غیرملفوظ ختم شود: خانه‌ها، میوه‌ها …
  *
- * حالت پیش‌فرض («recommended») جدانویسی توصیه‌شده را اعمال می‌کند.
+ * حالت پیش‌فرض («recommended») جدانویسی توصیه‌شده را گزارش می‌کند ولی خودکار
+ * اعمال نمی‌کند: پیوسته‌نویسی («آنها»، «کتابها») غلط نیست. فقط مورد الزامی
+ * (کلمهٔ مختوم به «ه»: «خانهها» ← «خانه‌ها») اصلاح خودکار دارد.
  * با گزینهٔ { "mode": "required-only" } فقط موارد الزامی (کلمهٔ مختوم به «ه»)
  * گزارش می‌شوند و نویسنده می‌تواند «ها» را در بقیهٔ موارد پیوسته بنویسد.
  */
@@ -85,11 +87,18 @@ export default createPatternRule<Options>((options) => ({
                 }
                 const endsWithHe = stem.endsWith("ه");
                 if (options.mode === "required-only" && !endsWithHe) return null;
+                const separate = stem + ZWNJ + "ها" + suffix;
+                // the book requires it only after «ه» (تبصره، بند ۵); elsewhere both forms
+                // are correct and separating is a recommendation: reported, never fixed
+                if (!endsWithHe) {
+                    return {
+                        message: `پیوسته هم درست است؛ کتاب جدانویسی «ها» را توصیه می‌کند: «${separate}»`,
+                        fix: false
+                    };
+                }
                 return {
-                    message: endsWithHe
-                        ? "پس از «ه» نشانهٔ جمع «ها» باید جدا (با نیم‌فاصله) نوشته شود"
-                        : "جدانویسی «ها»ی جمع توصیه می‌شود",
-                    replacement: stem + ZWNJ + "ها" + suffix
+                    message: "پس از «ه» نشانهٔ جمع «ها» باید جدا (با نیم‌فاصله) نوشته شود",
+                    replacement: separate
                 };
             }
         }

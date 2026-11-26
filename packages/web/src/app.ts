@@ -335,9 +335,13 @@ function citation(source: string): string {
     return esc(source);
 }
 
+/** The book recommends it, both forms are correct («آنها» / «آن‌ها»): reported only. */
+const isRecommendation = (m: Msg) => m.ruleId === "plural-ha" && !m.fix && /توصیه/.test(m.message);
+
 /** Why a card has no circles, in a few words. */
 function noMeterReason(m: Msg): string {
     if (m.ruleId === "spelling") return "حدس غلط‌یاب است، نه قاعده";
+    if (isRecommendation(m)) return "توصیهٔ کتاب است، نه الزام";
     if (m.ruleId === "may-break") return "پیشنهاد سبکی است، نه غلط";
     if (/^شیوه‌نامهٔ/.test(splitMessage(m).source)) return "شیوه‌نامهٔ فرهنگستان (پیش‌نویس)، نه کتاب";
     if (m.ruleId === "punctuation") return "قرارداد رایج است، نه کتاب";
@@ -394,7 +398,7 @@ function buildCards(text: string) {
             ${meter}
             <div class="issue-head">
                 ${labels.map((l) => `<span class="chip">${esc(l)}</span>`).join("")}
-                ${styleOnly ? '<span class="chip chip-style">ویرایش زبانی · پیشنهاد</span>' : m.fix ? "" : m.ruleId === "may-break" ? '<span class="chip chip-style">پیشنهاد سبکی</span>' : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
+                ${styleOnly ? '<span class="chip chip-style">ویرایش زبانی · پیشنهاد</span>' : m.fix ? "" : m.ruleId === "may-break" ? '<span class="chip chip-style">پیشنهاد سبکی</span>' : isRecommendation(m) ? '<span class="chip chip-style">توصیهٔ کتاب</span>' : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
             </div>
             <p class="change">
                 <span class="from">${show(original) || "&nbsp;"}</span>
