@@ -11,6 +11,8 @@
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, ZWNJ } from "../util/persian";
 import { spellingSuggestions } from "../util/speller";
+import { gozarCorrection } from "./gozar";
+import { MISSPELLED } from "./misspellings";
 
 const SOURCE = "غلط‌یاب (واژه‌نامهٔ ساخته‌شده از ویکی‌پدیای فارسی؛ در دستور خط نیامده)";
 
@@ -23,6 +25,8 @@ export default createPatternRule(() => ({
             check: (m) => {
                 // the same unknown word twice in a paragraph is a name or a term, not a typo
                 if (m.input.split(m[0]).length > 2) return null;
+                // the gozar and misspellings rules correct these with the book's page
+                if (gozarCorrection(m[0]) || MISSPELLED.has(m[0])) return null;
                 const s = spellingSuggestions(m[0]);
                 if (!s) return null;
                 const others = s.slice(1).map((x) => `«${x}»`).join("، ");

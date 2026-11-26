@@ -30,7 +30,7 @@
  */
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, ZWNJ, toPersianDigits } from "../util/persian";
-import { isKnown, isDictionaryWord, endsWithSilentHe } from "../util/words";
+import { isKnown, isDictionaryWord, endsWithSilentHe, hasPronouncedHe } from "../util/words";
 import hazmCompounds from "../dict/hazm-compounds.json";
 
 const COMPOUNDS: Record<string, string> = hazmCompounds.pairs;
@@ -95,7 +95,7 @@ const PRONOUNCED_HE = new Set([
 ]);
 
 function isPronouncedHe(word: string): boolean {
-    if (PRONOUNCED_HE.has(word)) return true;
+    if (PRONOUNCED_HE.has(word) || hasPronouncedHe(word)) return true;
     const before = word[word.length - 2];
     // long vowel before ه → pronounced: راه، کوه، فقیه، شبیه، گناه
     return before === "ا" || before === "و" || before === "ی" || before === "آ";
@@ -186,7 +186,7 @@ export default createPatternRule<Options>((options) => {
                 // the model: «خانه قبلی» → «خانۀ قبلی». Pronouns are handled above.
                 pattern: new RegExp(`${START}(${LETTER}{2,}ه)(?= +(${LETTER}+))`, "g"),
                 check: (m) => {
-                    if (options.model === false || EZAFE_PRONOUNS.includes(m[2])) return null;
+                    if (options.model === false || EZAFE_PRONOUNS.includes(m[2]) || hasPronouncedHe(m[1])) return null;
                     const c = candidateAt(m.input, m.index);
                     if (!c || c.p < MODEL_SUGGEST) return null;
                     // a typo («طایقه») is the spelling rule's: no ezafe advice on it
@@ -220,8 +220,12 @@ export default createPatternRule<Options>((options) => {
                 }
             },
             {
-                pattern: options.style === "he-hamza" ? /ۀ/g : /هٔ/g,
-                check: () => ({ message: `شکل یکدستِ نشانهٔ اضافه «${target}» است`, replacement: target })
+                // «خانهٔ» ↔ «خانۀ»; not after a pronounced «ه» («فرماندهٔ»): that is the final-he rule's
+                pattern: new RegExp(`(${LETTER}*)${options.style === "he-hamza" ? "ۀ" : "هٔ"}`, "g"),
+                check: (m) => {
+                    if (hasPronouncedHe(m[1] + "ه")) return null;
+                    return { message: `شکل یکدستِ نشانهٔ اضافه «${target}» است`, replacement: target, start: m[1].length };
+                }
             }
         ]
     };

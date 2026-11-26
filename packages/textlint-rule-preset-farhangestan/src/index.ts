@@ -19,6 +19,8 @@ import punctuation from "./rules/punctuation";
 import invisible from "./rules/invisible";
 import spacedCompounds from "./rules/spaced-compounds";
 import misspellings from "./rules/misspellings";
+import finalHe from "./rules/final-he";
+import gozar from "./rules/gozar";
 import spelling from "./rules/spelling";
 export { loadSpellingLexicon, spellingReady } from "./util/speller";
 
@@ -44,6 +46,8 @@ export default {
         invisible,
         "spaced-compounds": spacedCompounds,
         misspellings,
+        "final-he": finalHe,
+        gozar,
         spelling,
         dictionary
     },
@@ -68,6 +72,8 @@ export default {
         invisible: true,
         "spaced-compounds": true,
         misspellings: true,
+        "final-he": true,
+        gozar: true,
         spelling: true,
         dictionary: true
     }

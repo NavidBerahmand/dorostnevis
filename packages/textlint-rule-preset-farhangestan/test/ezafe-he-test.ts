@@ -18,7 +18,9 @@ new TextLintTester().run("ezafe-he", rule, {
         { text: "این کتابه خوب بود.", options: { formal: false } },
         "این کتابه که خریدم.",
         "خونه من", // spoken «خانه»: another rule's job
-        "خسته من" // ends in a silent ه: a real word
+        "خسته من", // ends in a silent ه: a real word
+        "فرماندهٔ سپاه و گرهٔ کور", // pronounced «ه»: the final-he rule's
+        { text: "فرماندۀ سپاه", options: { style: "he-hamza" } }
     ],
     invalid: [
         inv("خانه ی من", "خانۀ من"),

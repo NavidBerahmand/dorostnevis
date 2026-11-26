@@ -65,7 +65,9 @@ const RULE_LABELS: Record<string, string> = {
     "ra-placement": "جای «را»",
     "comma-before-va": "ویرگول پیش از «و»",
     "word-choice": "واژه‌گزینی",
-    phrases: "تعبیر نادرست"
+    phrases: "تعبیر نادرست",
+    "final-he": "«ه»ی پایانی",
+    gozar: "گذار/گزار"
 };
 
 const SAMPLE_DIALOGUE = [
@@ -444,7 +446,8 @@ const BOOKS: Array<{ prefix: RegExp; name: string; url?: string }> = [
     { prefix: /^فرهنگ املایی(?: خطّ فارسی)?\s*[،؛]?\s*/, name: `فرهنگ املایی خطّ فارسی، ${ACADEMY}`, url: FARHANG_PDF },
     { prefix: /^اصول شکسته‌نویسی\s*[،؛]?\s*/, name: "اصول شکسته‌نویسی، علی صلح‌جو" },
     { prefix: /^نکته‌های ویرایش، علی صلح‌جو\s*[،؛]?\s*/, name: "نکته‌های ویرایش، علی صلح‌جو" },
-    { prefix: /^نگارش و ویرایش، احمد سمیعی گیلانی\s*[،؛]?\s*/, name: "نگارش و ویرایش، احمد سمیعی گیلانی" }
+    { prefix: /^نگارش و ویرایش، احمد سمیعی گیلانی\s*[،؛]?\s*/, name: "نگارش و ویرایش، احمد سمیعی گیلانی" },
+    { prefix: /^غلط ننویسیم، ابوالحسن نجفی\s*[،؛]?\s*/, name: "غلط ننویسیم، ابوالحسن نجفی" }
 ];
 /** A common convention the book has no rule for: no book meter, never «قطعی». */
 const NOT_IN_BOOK = /در دستور خط نیامده/;

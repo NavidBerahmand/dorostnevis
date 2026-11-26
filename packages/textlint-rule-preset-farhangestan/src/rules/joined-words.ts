@@ -31,6 +31,7 @@ import commonNouns from "../dict/hazm-common-nouns.json";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 import { isPresentStem } from "./mi-prefix";
 import { raCandidates, RaCandidate } from "../util/ezafe-model";
+import { gozarCorrection } from "./gozar";
 
 const RA_FIX = 0.9;
 const RA_SUGGEST = 0.5;
@@ -131,6 +132,8 @@ function presentStemCompound(word: string): PatternResult | null {
 
 function check(word: string): PatternResult | null {
     if (NOT_COMPOUNDS.has(word) || word.startsWith("تکن")) return null;
+    // «سپاسگذار» is «سپاسگزار», not «سپاس‌گذار»: the gozar rule's
+    if (gozarCorrection(word)) return null;
     const stemCompound = presentStemCompound(word);
     if (stemCompound) return stemCompound;
     if (isKnown(word)) return null;

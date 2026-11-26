@@ -57,9 +57,28 @@ const PRONOUNCED_HE = new Set([
     "منزه", "مشتبه", "مشبه", "تنبه", "متنبه", "فرمانده", "بازده", "سپهبد", "وجه", "شبه"
 ]);
 
+/**
+ * Words of three letters or more whose final «ه» is pronounced, the closed list
+ * the «ه»ی ملفوظ check works from (غلط ننویسیم، ابوالحسن نجفی، ص ۲۲۱، ۲۹۲، ۲۹۳،
+ * ۳۲۲، ۳۴۵، ۳۵۰، ۳۷۲، ۴۰۴، ۴۱۱). Words in «ـاه» (راه، دانشگاه، اشتباه) are
+ * pronounced too and are recognised by their ending. A long vowel before «ه» is no
+ * sign by itself: «سایه، گریه، میوه، شیوه» end in a silent «ه».
+ */
+export const PRONOUNCED_HE_WORDS: ReadonlySet<string> = new Set([
+    "فرمانده", "بازده", "گره", "زره", "بزه", "فربه", "توجه", "متوجه", "مواجه", "مشابه", "متشابه", "مرفه",
+    "منزه", "مشتبه", "تنبه", "متنبه", "وجه", "فقیه", "سفیه", "شبیه", "کریه", "وجیه", "نزیه", "تنبیه",
+    "تشبیه", "توجیه", "تنزیه", "موجه", "ابله", "مکروه", "کوه", "گروه", "شکوه", "انبوه", "اندوه", "ستوه",
+    "فقه", "واله", "سپه"
+]);
+
+/** A word ending in a pronounced «ه»: the closed list above, or «ـاه» («راه»، «دانشگاه»). */
+export function hasPronouncedHe(word: string): boolean {
+    return PRONOUNCED_HE_WORDS.has(word) || (word.length >= 3 && word.endsWith("اه"));
+}
+
 export function endsWithSilentHe(word: string): boolean {
     if (!word.endsWith("ه") || word.length < 2) return false;
-    if (PRONOUNCED_HE.has(word)) return false;
+    if (PRONOUNCED_HE.has(word) || PRONOUNCED_HE_WORDS.has(word)) return false;
     const before = word[word.length - 2];
     return !(before === "ا" || before === "و" || before === "ی" || before === "آ");
 }
