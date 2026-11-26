@@ -195,6 +195,7 @@ box.addEventListener("compositionend", () => {
 box.addEventListener("paste", (ev) => {
     ev.preventDefault();
     const t = (ev.clipboardData?.getData("text/plain") ?? "").replace(/\r\n?/g, "\n");
+    pasted = true; // the input handler fixes the whole text after a paste
     document.execCommand("insertText", false, t);
 });
 box.addEventListener("keydown", (ev) => {
@@ -279,14 +280,92 @@ const STYLE_RULES = new Set(Object.keys(virayesh.rules));
 const isStyle = (m: Msg) => STYLE_RULES.has(m.ruleId);
 const styleBoxes = [...document.querySelectorAll<HTMLInputElement>("#style-rules input[data-rule]")];
 
-/** The rules to run; `forFix` leaves out what «اعمال همه» must not touch. */
-function options(forFix = false) {
+/*
+ * اصلاح خودکار ایرادهای تایپی (since 1.3.0). With the setting on (the default), these fixes
+ * are made silently while typing and on paste, and are never marked: they are typing
+ * mechanics, not choices — which letter, which space, which half-space. Each automatic
+ * batch is one step of «بازگشت», and undoing it means «I meant that»: those fixes are then
+ * left alone and marked as before.
+ *
+ * Only certain, context-free fixes are here. Per rule (a rule with `only` contributes just
+ * the checks whose message matches it; `skip` leaves some out):
+ * - normalize-characters: «ي ى ك» and other look-alike letters (ہ ە ھ ے ۍ ڪ ۃ), presentation
+ *   forms, a doubled diacritic, soft hyphen and RLM/LRM between letters (→ نیم‌فاصله),
+ *   «ی» + hamza → «ئ». Not: Arabic digits (left as they are), a kashida (may be decoration),
+ *   «ي/ك» in what looks like an Arabic quotation (that has no fix anyway).
+ * - invisible: special Unicode spaces → space, ZWSP (→ نیم‌فاصله between letters, else
+ *   removed), BOM and word joiner, spaces at the start/end of a paragraph. (NBSP and ZWJ
+ *   have no fix: they can be meant.)
+ * - zwnj-cleanup: double ZWNJ, ZWNJ next to a space or at a word's edge, ZWNJ after a
+ *   non-joining letter.
+ * - mi-prefix: «می/نمی» + verb with a space or joined → نیم‌فاصله. Not the separated
+ *   preverbs («در/بر/باز … می‌»), which are compound choices.
+ * - plural-ha: «کتاب ها» → «کتاب‌ها», «خانهها» → «خانه‌ها». Not the «ا+ی» reading guess
+ *   («خستهایم») or the joined-«ها» recommendation (no fix).
+ * - tar-tarin: «بزرگ تر/بزرگتر/بزرگ ترین» → «بزرگ‌تر/بزرگ‌ترین», «بیش تر» → «بیشتر».
+ * - punctuation: Latin «, ; ?» → «، ؛ ؟» after Persian (not in URLs, e-mails, numbers or
+ *   before Latin), straight double quotes → «» (only when the line's quotes pair up),
+ *   space before «، ؛ : ! ؟ .», a missing space after them, spaces inside «» () [],
+ *   repeated spaces, spaces at a line's end. Not: digits, «...», dashes, «!!!», «(( ))».
+ * Left out entirely: dictionary and compound choices (lexicon, dictionary, joined-words,
+ * spaced-compounds, word-spacing, compound-verbs, misspellings, final-he, gozar,
+ * hamza-tanvin, arabic-prefixes, verb-prefix-alef, bi-prefix and copula-attachment, whose
+ * fixes depend on reading the word: «بی» and «ای» can be free words), the statistical models
+ * (ezafe-he, «را»), numbers, the spelling checker, and all of ویرایش زبانی.
+ */
+const AUTO_FIX: Record<string, { only?: RegExp; skip?: RegExp }> = {
+    "normalize-characters": { skip: /رقم عربی|کشیده/ },
+    invisible: {},
+    "zwnj-cleanup": {},
+    "mi-prefix": { only: /^«ن?می» با نیم‌فاصله به فعل می‌چسبد/ },
+    "plural-ha": { only: /^«ها»ی جمع با فاصلهٔ کامل|^پس از «ه» نشانهٔ جمع/ },
+    "tar-tarin": {},
+    punctuation: {
+        only: /^در متن فارسی «[،؛؟]»|^در متن فارسی گیومهٔ فارسی|^پیش از نشانه فاصله|^پس از نشانه یک فاصله|^پس از نقطه یک فاصله|^داخل پرانتز و گیومه|^فاصلهٔ اضافه در پایان سطر|^بین دو کلمه یک فاصله/
+    }
+};
+
+/** Is this message's fix one of the automatic typing fixes? */
+function isAuto(m: Msg, text: string): boolean {
+    const spec = AUTO_FIX[m.ruleId];
+    if (!spec || !m.fix) return false;
+    if (spec.only && !spec.only.test(m.message)) return false;
+    if (spec.skip && spec.skip.test(m.message)) return false;
+    if (m.ruleId === "punctuation") {
+        const [s, e] = m.fix.range;
+        const lineStart = text.lastIndexOf("\n", s - 1) + 1;
+        const nl = text.indexOf("\n", s);
+        const line = text.slice(lineStart, nl < 0 ? text.length : nl);
+        if (/^در متن فارسی گیومهٔ/.test(m.message)) {
+            // only "…" and “…”, and only when every quote on the line has its pair
+            const q = text[s];
+            if (q === '"') return (line.match(/"/g) ?? []).length % 2 === 0;
+            if (q === "“") return (line.match(/“/g) ?? []).length === (line.match(/”/g) ?? []).length;
+            return false;
+        }
+        if (/^در متن فارسی «/.test(m.message)) {
+            // between Persian words: not before a Latin letter or a digit («,abc», «?2»)
+            const next = text.slice(e).match(/^ *(\S)/)?.[1] ?? "";
+            if (/[A-Za-z0-9]/.test(next)) return false;
+        }
+    }
+    return true;
+}
+
+/** Which fix this is, wherever it sits: the rule, the word and its corrected form. */
+function autoKey(m: Msg, text: string): string {
+    const [s, e] = wordAround(text, m.fix!.range[0], m.fix!.range[1]);
+    return `${m.ruleId}|${text.slice(s, e)}|${text.slice(s, m.fix!.range[0])}${m.fix!.text}${text.slice(m.fix!.range[1], e)}`;
+}
+
+/** The rules to run; `forFix` leaves out what «اعمال همه» must not touch; `autoOnly` keeps the automatic ones. */
+function options(forFix = false, autoOnly = false) {
     const style = mode.value === "dialogue" || forFix ? {} : Object.fromEntries(
         Object.entries(virayesh.rules).filter(([id]) => styleBoxes.find((b) => b.dataset.rule === id)?.checked !== false)
     );
     const all = { ...preset.rules, ...(mode.value === "dialogue" ? shekaste.rules : {}), ...style };
     // spoken forms («می‌رم»، «خونه») are not typos: no spelling check in dialogue
-    const rules = Object.entries(all).filter(([ruleId]) => !(ruleId === "spelling" && mode.value === "dialogue")).map(([ruleId, rule]) => {
+    const rules = Object.entries(all).filter(([ruleId]) => !(ruleId === "spelling" && mode.value === "dialogue") && (!autoOnly || ruleId in AUTO_FIX)).map(([ruleId, rule]) => {
         let opts: object | boolean = true;
         if (ruleId === "plural-ha") opts = { mode: pluralMode.value };
         if (ruleId === "ezafe-he") opts = { style: ezafeStyle.value, formal: mode.value !== "dialogue" };
@@ -591,11 +670,40 @@ fetch("spelling-lexicon.json")
     .catch(() => undefined);
 
 async function check() {
-    const text = input.value;
+    // the automatic typing fixes: never while an IME is composing a word, nor right after an undo
+    const want: AutoMode = autoBox.checked && !autoHold && !composing ? pendingAuto : "none";
+    if (!composing) pendingAuto = "none";
+    let text = input.value;
     status.textContent = "در حال بررسی…";
-    const result = await kernel.lintText(text, options());
+    let result = await kernel.lintText(text, options());
+    if (want !== "none" && input.value === text) {
+        const typing = want === "typing" && document.activeElement === box;
+        const c = typing ? caret() : null;
+        const guard = c !== null ? protectedSpan(text, c) : null;
+        const msgs = result.messages as unknown as Msg[];
+        skippedAtCaret = guard !== null && msgs.some((m) => isAuto(m, text) && touches(m.fix!.range, guard));
+        if (pickAuto(msgs, text, guard).length) {
+            const waited = Date.now() - lastInputAt;
+            if (typing && !lastBoundary && waited < AUTO_PAUSE) {
+                // in the middle of a word: wait for a pause (the word itself is never touched)
+                pendingAuto = "typing";
+                window.clearTimeout(timer);
+                timer = window.setTimeout(check, AUTO_PAUSE - waited + 20);
+            } else {
+                const batch = await autoFix(text, msgs, guard);
+                if (input.value !== text) return; // typed meanwhile: the next check starts over
+                if (batch.count) {
+                    applyBatch(text, batch);
+                    text = batch.text;
+                    result = await kernel.lintText(text, options());
+                }
+            }
+        }
+    }
     const merged = mergeSame(
-        (result.messages as unknown as Msg[]).filter((m) => !ignored.has(key(m, text))),
+        (result.messages as unknown as Msg[]).filter(
+            (m) => !ignored.has(key(m, text)) && !(autoBox.checked && isAuto(m, text) && !declined.has(autoKey(m, text)))
+        ),
         text
     );
     messages = merged.primary;
@@ -616,6 +724,287 @@ function schedule() {
     timer = window.setTimeout(check, 350);
 }
 
+// ---- the automatic typing fixes (AUTO_FIX) ----
+type AutoMode = "none" | "typing" | "all";
+/** What the next check may fix: nothing, all but the word being typed, or the whole text. */
+let pendingAuto: AutoMode = "all";
+/** After an undo, nothing is fixed until the writer types again. */
+let autoHold = false;
+/** A fix waits because it touches the word at the caret: made when the box loses focus. */
+let skippedAtCaret = false;
+let lastInputAt = 0;
+/** The last thing typed ended a word (space, punctuation, Enter) or was a paste. */
+let lastBoundary = true;
+let pasted = false;
+/** The edits of a batch are being made: their input events are not the writer's. */
+let applyingAuto = false;
+/** Fixes the writer undid: left alone, and marked as usual. */
+const declined = new Set<string>();
+const AUTO_PAUSE = 700;
+const autoBox = $<HTMLInputElement>("auto-fix");
+
+/** A changed stretch of the text: [s, e) now, `orig` before the batch. */
+type Hunk = { s: number; e: number; orig: string };
+type Batch = { text: string; count: number; hunks: Hunk[]; keys: string[] };
+
+/** The word at the caret, from the whitespace before it to the whitespace after. */
+function protectedSpan(text: string, c: number): [number, number] {
+    let s = c;
+    while (s > 0 && !/\s/.test(text[s - 1])) s--;
+    let e = c;
+    while (e < text.length && !/\s/.test(text[e])) e++;
+    return [s, e];
+}
+const touches = (r: [number, number], g: [number, number]) => r[0] <= g[1] && r[1] >= g[0];
+
+/** The automatic fixes to make now: not declined, not at the caret, not overlapping; right to left. */
+function pickAuto(msgs: Msg[], text: string, guard: [number, number] | null): Msg[] {
+    const cands = msgs
+        .filter((m) => isAuto(m, text) && !(guard && touches(m.fix!.range, guard)) && !declined.has(autoKey(m, text)))
+        .sort((a, b) => a.fix!.range[0] - b.fix!.range[0] || a.fix!.range[1] - b.fix!.range[1]);
+    const out: Msg[] = [];
+    let lastS = -1;
+    let lastE = -1;
+    for (const m of cands) {
+        const [s, e] = m.fix!.range;
+        if (s < lastE || s === lastS) continue; // overlaps the previous one: the next round
+        out.push(m);
+        lastS = s;
+        lastE = e;
+    }
+    return out.reverse();
+}
+
+/** Record edit [a, b) → t (on `cur`, the text before it) in the batch's hunks. */
+function addHunk(hunks: Hunk[], cur: string, a: number, b: number, t: string): Hunk[] {
+    const near = hunks.filter((h) => h.s <= b && h.e >= a).sort((x, y) => x.s - y.s);
+    let s = a;
+    let e = b;
+    for (const h of near) {
+        s = Math.min(s, h.s);
+        e = Math.max(e, h.e);
+    }
+    let orig = "";
+    let pos = s;
+    for (const h of near) {
+        orig += cur.slice(pos, h.s) + h.orig;
+        pos = h.e;
+    }
+    orig += cur.slice(pos, e);
+    const d = t.length - (b - a);
+    const rest = hunks.filter((h) => !near.includes(h)).map((h) => (h.s >= e ? { s: h.s + d, e: h.e + d, orig: h.orig } : h));
+    return [...rest, { s, e: e + d, orig }].sort((x, y) => x.s - y.s);
+}
+
+/**
+ * Make the automatic fixes on `text`, round after round (a fix can make another
+ * possible: «هاي» → «های» → «کتاب‌های»), until none is left; at most five rounds.
+ */
+async function autoFix(text: string, first: Msg[], guard: [number, number] | null): Promise<Batch> {
+    let cur = text;
+    let msgs = first;
+    let g = guard;
+    let hunks: Hunk[] = [];
+    const keys: string[] = [];
+    let count = 0;
+    for (let round = 0; round < 5; round++) {
+        if (round > 0) msgs = (await kernel.lintText(cur, options(false, true))).messages as unknown as Msg[];
+        const fixes = pickAuto(msgs, cur, g);
+        if (!fixes.length) break;
+        for (const m of fixes) {
+            keys.push(autoKey(m, cur));
+            const [a, b] = m.fix!.range;
+            const t = m.fix!.text;
+            hunks = addHunk(hunks, cur, a, b, t);
+            cur = cur.slice(0, a) + t + cur.slice(b);
+            if (g && b <= g[0]) g = [g[0] + t.length - (b - a), g[1] + t.length - (b - a)];
+        }
+        count += fixes.length;
+    }
+    return { text: cur, count, hunks, keys };
+}
+
+/** Where position `p` of the text before the batch is after it. */
+function mapThrough(hunks: Hunk[], p: number): number {
+    let d = 0;
+    for (const h of hunks) {
+        const bs = h.s - d;
+        const be = bs + h.orig.length;
+        if (p < be || (p === be && p === bs)) return p <= bs ? p + d : h.e;
+        d += h.e - h.s - h.orig.length;
+    }
+    return p + d;
+}
+
+/** The text node and offset at string offset `pos`, over however many text nodes the box has. */
+function domPoint(pos: number): [Node, number] {
+    let n = 0;
+    for (const c of box.childNodes) {
+        if (c.nodeType !== Node.TEXT_NODE) continue;
+        const len = (c as Text).length;
+        if (pos <= n + len) return [c, pos - n];
+        n += len;
+    }
+    return pointAt(pos);
+}
+
+/**
+ * Put a batch in the box. While the writer is in it, each changed line goes in with
+ * «insertText», like typing, so the browser's own undo (Ctrl+Z) takes it back as well;
+ * otherwise the text is replaced. Either way it is one step of «بازگشت».
+ */
+function applyBatch(before: string, batch: Batch) {
+    const focused = document.activeElement === box;
+    const c = focused ? caret() : null;
+    const multiNode = [...box.childNodes].some((n) => n.nodeType !== Node.TEXT_NODE);
+    // the regions to replace, in the old text: hunks on one line go together
+    const regions: Array<{ s: number; e: number; t: string }> = [];
+    let d = 0;
+    for (const h of batch.hunks) {
+        const bs = h.s - d;
+        const be = bs + h.orig.length;
+        d += h.e - h.s - h.orig.length;
+        regions.push({ s: bs, e: be, t: batch.text.slice(h.s, h.e) });
+    }
+    // merge same-line neighbours (their text between is unchanged)
+    const merged: typeof regions = [];
+    for (const r of regions) {
+        const last = merged[merged.length - 1];
+        if (last && !before.slice(last.e, r.s).includes("\n")) {
+            last.t += before.slice(last.e, r.s) + r.t;
+            last.e = r.e;
+        } else merged.push({ ...r });
+    }
+    let ok = false;
+    if (focused && !multiNode && merged.every((r) => !r.t.includes("\n") && !before.slice(r.s, r.e).includes("\n"))) {
+        applyingAuto = true;
+        try {
+            const sel = window.getSelection()!;
+            for (const r of [...merged].reverse()) {
+                const [a, ao] = domPoint(r.s);
+                const [b, bo] = domPoint(r.e);
+                const range = document.createRange();
+                range.setStart(a, ao);
+                range.setEnd(b, bo);
+                sel.removeAllRanges();
+                sel.addRange(range);
+                document.execCommand(r.t ? "insertText" : "delete", false, r.t);
+            }
+        } finally {
+            applyingAuto = false;
+        }
+        ok = readText() === batch.text;
+        if (ok && box.childNodes.length !== 1) {
+            box.normalize();
+            ok = readText() === batch.text;
+        }
+    }
+    if (!ok) input.value = batch.text;
+    if (c !== null) setCaret(mapThrough(batch.hunks, c));
+    history.push({ text: before, auto: { after: batch.text, hunks: batch.hunks, keys: batch.keys } });
+    if (history.length > 50) history.shift();
+    undoBtn.disabled = false;
+    lastAuto = history[history.length - 1];
+    autoFresh = true;
+    showAutoNote(batch.count);
+}
+
+/**
+ * Undo a batch, keeping what was typed after it: the hunks outside the stretch
+ * that changed since are put back as they were.
+ */
+function revertBatch(entry: HistoryEntry, cur: string): string {
+    const { after, hunks } = entry.auto!;
+    if (cur === after) return entry.text;
+    let p = 0;
+    while (p < after.length && p < cur.length && after[p] === cur[p]) p++;
+    let q = 0;
+    while (q < after.length - p && q < cur.length - p && after[after.length - 1 - q] === cur[cur.length - 1 - q]) q++;
+    const changedEnd = after.length - q;
+    const delta = cur.length - after.length;
+    let out = cur;
+    for (const h of [...hunks].reverse()) {
+        const shift = h.e <= p ? 0 : h.s >= changedEnd ? delta : null;
+        if (shift === null) continue;
+        const s = h.s + shift;
+        const e = h.e + shift;
+        if (out.slice(s, e) !== after.slice(h.s, h.e)) continue;
+        out = out.slice(0, s) + h.orig + out.slice(e);
+    }
+    return out;
+}
+
+/** Undo an automatic batch: its fixes are declined, and nothing is fixed until the next keystroke. */
+function undoAuto(entry: HistoryEntry) {
+    const i = history.lastIndexOf(entry);
+    if (i >= 0) history.splice(i, 1);
+    undoBtn.disabled = history.length === 0;
+    for (const k of entry.auto!.keys) declined.add(k);
+    autoHold = true;
+    hideAutoNote();
+    const focused = document.activeElement === box;
+    const c = focused ? caret() : null;
+    const cur = input.value;
+    const text = revertBatch(entry, cur);
+    if (text !== cur) {
+        input.value = text;
+        if (c !== null) setCaret(Math.min(c + text.length - cur.length, text.length));
+    }
+    changesEl.hidden = true;
+    void check().then(() => {
+        status.textContent = "اصلاح خودکار برگشت داده شد.";
+    });
+}
+
+// the quiet line after a batch: «۳ ایراد تایپی خودکار درست شد · بازگشت»
+const autoNote = $<HTMLParagraphElement>("autofix");
+const autoNoteText = $<HTMLSpanElement>("autofix-text");
+let lastAuto: HistoryEntry | null = null;
+/** Nothing was typed since the last batch: a Ctrl+Z now undoes it. */
+let autoFresh = false;
+let noteTimer: number | undefined;
+function showAutoNote(n: number) {
+    autoNoteText.textContent = `${n.toLocaleString("fa-IR")} ایراد تایپی خودکار درست شد`;
+    autoNote.hidden = false;
+    autoNote.classList.remove("fade");
+    window.clearTimeout(noteTimer);
+    noteTimer = window.setTimeout(() => {
+        autoNote.classList.add("fade");
+        noteTimer = window.setTimeout(() => (autoNote.hidden = true), 600);
+    }, 5000);
+}
+function hideAutoNote() {
+    window.clearTimeout(noteTimer);
+    autoNote.hidden = true;
+}
+$<HTMLButtonElement>("autofix-undo").addEventListener("click", () => {
+    if (lastAuto && history.includes(lastAuto)) undoAuto(lastAuto);
+});
+// a fix that waited for the word at the caret is made when the writer leaves the box
+box.addEventListener("blur", () => {
+    if (!autoBox.checked || !skippedAtCaret) return;
+    skippedAtCaret = false;
+    pendingAuto = "all";
+    schedule();
+});
+try {
+    autoBox.checked = stored("auto-fix") !== "off";
+} catch {
+    /* storage may be unavailable */
+}
+autoBox.addEventListener("change", () => {
+    try {
+        localStorage.setItem("vajban:auto-fix", autoBox.checked ? "on" : "off");
+    } catch {
+        /* storage may be unavailable */
+    }
+    if (!autoBox.checked) hideAutoNote();
+    declined.clear(); // turned on again: a fresh start
+    pendingAuto = autoBox.checked ? "all" : "none";
+    autoHold = false;
+    void check();
+});
+
 /**
  * Every automatic change can be undone.
  */
@@ -624,17 +1013,24 @@ function stored(key: string): string | null {
     return localStorage.getItem("vajban:" + key) ?? localStorage.getItem("dorostnevis:" + key);
 }
 
-const history: string[] = [];
+/** The text before a change; for an automatic batch, also what it changed (to undo just that). */
+type HistoryEntry = { text: string; auto?: { after: string; hunks: Hunk[]; keys: string[] } };
+const history: HistoryEntry[] = [];
 const undoBtn = $<HTMLButtonElement>("undo");
 const changesEl = $<HTMLDetailsElement>("changes");
 function remember() {
-    history.push(input.value);
+    history.push({ text: input.value });
     if (history.length > 50) history.shift();
     undoBtn.disabled = false;
 }
 undoBtn.addEventListener("click", () => {
-    const prev = history.pop();
+    const top = history[history.length - 1];
+    if (top?.auto) return undoAuto(top);
+    const prev = history.pop()?.text;
     if (prev === undefined) return;
+    pendingAuto = "none";
+    autoHold = true;
+    hideAutoNote();
     input.value = prev;
     undoBtn.disabled = history.length === 0;
     changesEl.hidden = true;
@@ -853,6 +1249,8 @@ copyBtn.addEventListener("click", async () => {
 $<HTMLButtonElement>("sample").addEventListener("click", () => {
     input.value = mode.value === "dialogue" ? SAMPLE_DIALOGUE : SAMPLE;
     ignored = new Set();
+    pendingAuto = "all";
+    autoHold = false;
     check();
 });
 $<HTMLButtonElement>("clear").addEventListener("click", () => {
@@ -862,7 +1260,28 @@ $<HTMLButtonElement>("clear").addEventListener("click", () => {
     input.focus();
 });
 
-box.addEventListener("input", () => {
+box.addEventListener("input", (ev) => {
+    if (applyingAuto) return; // an automatic batch going in
+    const type = (ev as InputEvent).inputType ?? "";
+    if (type === "historyUndo" || type === "historyRedo") {
+        // Ctrl+Z right after an automatic batch: the writer did not want it
+        if (type === "historyUndo" && autoFresh && lastAuto && history[history.length - 1] === lastAuto) {
+            for (const k of lastAuto.auto!.keys) declined.add(k);
+            if (input.value === lastAuto.text) history.pop();
+            undoBtn.disabled = history.length === 0;
+            autoFresh = false;
+            hideAutoNote();
+        }
+        autoHold = true;
+    } else {
+        autoHold = false;
+        autoFresh = false; // typed since: Ctrl+Z now takes back the typing first
+        const data = (ev as InputEvent).data ?? "";
+        lastBoundary = pasted || /^insert(Paragraph|LineBreak)$/.test(type) || /[\s.,،؛;:!?؟»)\]…"]$/.test(data);
+        pendingAuto = pasted || pendingAuto === "all" ? "all" : "typing";
+        pasted = false;
+    }
+    lastInputAt = Date.now();
     if (composing) return; // the IME is still composing a word: check when it is done
     normalizeBox();
     box.classList.toggle("is-empty", input.value === "");

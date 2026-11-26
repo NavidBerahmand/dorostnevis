@@ -118,7 +118,17 @@
   .swatch-red { background: var(--hl-red-strong); }
   .swatch-yellow { background: var(--hl-yellow-strong); }
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .status { color: var(--ok); font-size: 0.85rem; min-height: 1.4em; margin: 0; }
+  .status-row { display: flex; flex-wrap: wrap; gap: 2px 16px; align-items: baseline; min-height: 1.4em; }
+  .status { color: var(--ok); font-size: 0.85rem; margin: 0; }
+  /* the quiet line after an automatic batch of typing fixes; fades by itself */
+  .autofix { margin: 0; font-size: 0.85rem; color: var(--muted); transition: opacity .6s; }
+  .autofix.fade { opacity: 0; }
+  .autofix[hidden] { display: none; }
+  .link-btn {
+    font: inherit; color: var(--lapis); background: none; border: 0; padding: 0; cursor: pointer;
+    text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px;
+  }
+  .link-btn:hover { text-decoration-color: currentColor; }
   .changes { font-size: 0.85rem; color: var(--muted); margin-top: -6px; }
   .changes summary { cursor: pointer; color: var(--ink); }
   .changes ol { margin: 6px 0 0; padding-inline-start: 1.4em; columns: 2 220px; column-gap: 24px; }
@@ -322,7 +332,10 @@
     <div class="editor" id="editor">
       <div id="text" class="text" role="textbox" aria-multiline="true" contenteditable="true" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="متن برای بررسی" data-placeholder="متن فارسی را اینجا بنویسید یا بچسبانید…"></div>
     </div>
-    <p class="status" id="status" role="status"></p>
+    <div class="status-row">
+      <p class="status" id="status" role="status"></p>
+      <p class="autofix" id="autofix" aria-live="polite" hidden><span id="autofix-text"></span> · <button type="button" class="link-btn" id="autofix-undo">بازگشت</button></p>
+    </div>
     <details class="changes" id="changes" hidden>
       <summary>چه چیزهایی عوض شد</summary>
       <ol></ol>
@@ -334,6 +347,7 @@
           <option value="dialogue">گفت‌وگوی داستان (شکسته)</option>
         </select>
       </label>
+      <label title="فاصله و نیم‌فاصلهٔ اشتباه، «ی» و «ک» عربی، نویسه‌های نادیدنی، گیومه و ویرگول لاتین، بی‌پرسش درست می‌شوند؛ هر بار با «بازگشت» برمی‌گردد."><input type="checkbox" id="auto-fix" checked> اصلاح خودکار ایرادهای تایپی</label>
       <label><input type="checkbox" id="show-zwnj"> نمایش نیم‌فاصله‌ها</label>
       <label>«ها»ی جمع
         <select id="plural-mode">
