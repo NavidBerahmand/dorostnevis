@@ -82,6 +82,10 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 
 const input = $<HTMLTextAreaElement>("text");
 const backdrop = $<HTMLDivElement>("backdrop");
+// Safari on iPhone/iPad (iPadOS reports itself as a Mac with touch) insets textarea text by 3px
+if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
+    document.getElementById("editor")?.classList.add("ios");
+}
 const pop = $<HTMLDivElement>("popover");
 const summary = $<HTMLParagraphElement>("summary");
 const showZwnj = $<HTMLInputElement>("show-zwnj");

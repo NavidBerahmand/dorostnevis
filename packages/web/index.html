@@ -62,6 +62,7 @@
   }
 
   * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body {
     background: var(--bg);
     color: var(--ink);
@@ -140,10 +141,23 @@
     direction: rtl;
     text-align: right;
     letter-spacing: normal;
+    word-spacing: normal;
+    /* the textarea does not inherit these from body: set them on both, or the words differ in
+       width and the lines wrap at different places */
+    font-weight: 350;
+    font-style: normal;
+    font-kerning: normal;
+    font-feature-settings: normal;
+    text-indent: 0;
+    text-transform: none;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     font-variant-ligatures: normal;
     tab-size: 4;
   }
   .backdrop { color: transparent; pointer-events: none; user-select: none; }
+  /* Safari on iPhone/iPad insets a textarea's text by 3px on each side, and CSS cannot remove it */
+  .editor.ios .backdrop { padding-left: 5px; padding-right: 5px; }
   #text {
     width: 100%;
     min-height: 12em;
