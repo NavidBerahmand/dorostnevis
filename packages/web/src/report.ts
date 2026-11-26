@@ -134,7 +134,7 @@ export async function openReport(report: Report): Promise<boolean> {
             }
             const text = FIELDS.filter(([k]) => full[k]).map(([k, label]) => `${label}: ${full[k]}`).concat(full.comment ? [`توضیح من: ${full.comment}`] : []).join("\n");
             try {
-                await navigator.clipboard.writeText("گزارش پیشنهاد غلط در درست‌نویس\n" + text);
+                await navigator.clipboard.writeText("گزارش پیشنهاد غلط در واج‌بان\n" + text);
                 result.textContent = (result.textContent ? result.textContent + " " : "") + "رونوشت شد.";
                 window.setTimeout(() => done(true), 1200);
             } catch {

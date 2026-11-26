@@ -1,5 +1,5 @@
 /**
- * درست‌نویس — test page. Runs textlint with the Farhangestan preset entirely
+ * واج‌بان (vajban.com) — the web page. Runs textlint with the Farhangestan preset entirely
  * in the browser: nothing typed here leaves the page.
  */
 import { TextlintKernel } from "@textlint/kernel";
