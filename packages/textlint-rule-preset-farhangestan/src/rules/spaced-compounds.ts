@@ -15,6 +15,8 @@ interface Entry {
     spaced: string;
     to: string;
     page: number;
+    /** the 2nd edition of دستور خط overrides the farhang's form */
+    book?: boolean;
 }
 const ENTRIES = new Map<string, Entry>((data.entries as Entry[]).map((e) => [e.spaced, e]));
 const SUFFIX = "(?:ی|ها|های|ان|ات|ش|شان|ای|یی|م|ت|مان|تان)?";
@@ -28,10 +30,13 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const e = ENTRIES.get(m[1].replace(/ +/g, " "));
                 if (!e) return null;
+                const how = e.to.includes(ZWNJ) ? "با نیم‌فاصله" : "پیوسته";
                 return {
-                    message: `این ترکیب یک کلمه است و با نیم‌فاصله نوشته می‌شود: «${e.to}»`,
+                    message: `این ترکیب یک کلمه است و ${how} نوشته می‌شود: «${e.to}»`,
                     replacement: e.to + m[2],
-                    source: `فرهنگ املایی، ص ${toPersianDigits(e.page)}`
+                    source: e.book
+                        ? `دستور خط (ویراست جدید)؛ فرهنگ املایی، ص ${toPersianDigits(e.page)}، «${e.spaced.replace(" ", ZWNJ)}» دارد`
+                        : `فرهنگ املایی، ص ${toPersianDigits(e.page)}`
                 };
             }
         }
