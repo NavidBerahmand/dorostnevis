@@ -24,6 +24,7 @@
  */
 import { createPatternRule, PatternResult } from "../util/pattern-rule";
 import { toPersianDigits } from "../util/persian";
+import { joinsNumber } from "../util/number-compounds";
 
 export interface Options {
     marks?: boolean;
@@ -224,7 +225,8 @@ export default createPatternRule<Options>((options) => {
             {
                 // space before a mark: «سلام ،» → «سلام،»
                 // (closing brackets are the next check's; «...» is the ellipsis check's)
-                pattern: new RegExp(`(?<=[${FA}»)\\]…!؟]) +(?=(?:[،؛:!؟…]|\\.(?!\\.))(?![0-9۰-۹]))`, "g"),
+                // (not before a dot that starts a Latin token: «دامنهٔ .gt»، «فایل .pdf»)
+                pattern: new RegExp(`(?<=[${FA}»)\\]…!؟]) +(?=(?:[،؛:!؟…]|\\.(?![.A-Za-z]))(?![0-9۰-۹]))`, "g"),
                 check: (m) => {
                     if (inForeignToken(m.input, m.index - 1)) return null;
                     // «:)»، «;(»: a smiley, not a colon
@@ -298,13 +300,15 @@ export default createPatternRule<Options>((options) => {
     if (on("spacing")) {
         checks.push({
             // a number glued to the next word: «۵سال» → «۵ سال»
-            pattern: /(?<![A-Za-z0-9۰-۹_\-/.:#])([0-9۰-۹]+)([آ-ی][آ-ی\u200c]*)/g,
+            // (Arabic-Indic digits «٠-٩» and «٪ ٫ ٬» sit inside «آ-ی»: they are not letters here)
+            pattern: /(?<![A-Za-z0-9۰-۹٠-٩_\-/.:#])([0-9۰-۹]+)((?:(?![٠-٩٪٫٬٭])[آ-ی])(?:(?![٠-٩٪٫٬٭])[آ-ی\u200c])*)/g,
             check: (m) => {
                 const word = m[2];
                 // suffixes and number compounds the book writes joined (ب-۱۰، ص ۶۵: «۴۷سالگی»):
-                // «۵م»، «۲۰امین»، «۳تایی»، «۵ساله»، «۴۷سالگی»، «۵گانه»; one letter: «۱۳۰۰ق»، «۲۰۰۰م»
+                // «۵م»، «۲۰امین»، «۳تایی»، «۵ساله»، «۴۷سالگی»، «۷۵درصدی»، «۵گانه»; one letter: «۱۳۰۰ق»، «۲۰۰۰م».
+                // The compounds are the «numbers» rule's own list: the book wins, never a ping-pong.
                 if (word.length <= 1 || /^(ام|امین|امی|مین|ین|ها|های|تا|تایی|ای|یی|ی)$/.test(word)) return null;
-                if (/(ساله|سالگی|گانه|روزه|ماهه|ساعته|نفره|طبقه|متری|تایی)$/.test(word)) return null;
+                if (joinsNumber(word)) return null;
                 return {
                     message: "میان عدد و کلمهٔ پس از آن یک فاصله می‌آید",
                     replacement: m[1] + " " + word,

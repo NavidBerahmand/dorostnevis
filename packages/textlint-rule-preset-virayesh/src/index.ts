@@ -11,9 +11,16 @@ import wordChoice from "./rules/word-choice";
 import phrases from "./rules/phrases";
 
 /**
- * Language editing (ویرایش زبانی): editorial advice beyond دستور خط. Every
- * report is a suggestion; where a replacement is certain the rule offers it,
- * but a writing tool should not apply these without the writer's say.
+ * The rules with checks marked `certain` (a flat error by its book, with a fix: «با این
+ * وجود»، «مثمر ثمر»، «خطرات»…). Run with the option `part: "certain"` a rule reports only
+ * those, with `part: "suggest"` only the rest; the page runs both and marks the first red.
+ */
+export const CERTAIN_RULES: ReadonlySet<string> = new Set(["arabic-plurals", "calques", "redundancy", "word-choice", "phrases"]);
+
+/**
+ * Language editing (ویرایش زبانی): editorial advice beyond دستور خط. Most reports are
+ * suggestions for the writer to judge; the checks marked `certain` are errors by the
+ * book they cite (see CERTAIN_RULES).
  */
 export default {
     rules: {

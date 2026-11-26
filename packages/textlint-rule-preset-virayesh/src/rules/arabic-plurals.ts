@@ -51,6 +51,8 @@ const NAJAFI: Record<string, [string, string, string]> = {
     بساتین: ["بوستان‌ها", "۷۰", "«بستان» فارسی است و در فارسی بهتر است با «ها» جمع بسته شود"],
     رنود: ["رندان", "۲۱۴", "«رند» فارسی است و جمع عربی نمی‌گیرد"]
 };
+/** Najafi says «بهتر است» for these: a preference, not an error. */
+const PREFERENCE = new Set(["دواوین", "دهاقین", "بساتین"]);
 /** After these the plural ends its phrase: «خطرها و…»، «قشرها را…». Otherwise the ezafe form: «قشرهای مختلف». */
 const PHRASE_END_WORDS = "و|را|که|از|به|در|با|برای|تا|یا|هم|نیز|است|هستند|بود|بودند|شد|شدند|دارد|دارند|داشت|داشتند|باشد|باشند|شود|شوند";
 const PHRASE_END = new RegExp(`^(?:\\s*(?:[.،؛:!؟?)»\\]\\-]|$)|\\s+(?:(?:${PHRASE_END_WORDS})${END}|ن?می[ ‌]))`);
@@ -82,23 +84,29 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const [plural, page, note] = NAJAFI[m[1]];
                 const to = PHRASE_END.test(m.input.slice(m.index + m[0].length)) ? plural : ezafeForm(plural);
-                return { message: `${note}: «${to}»`, replacement: to, source: N(page) };
+                // «دواوین، دهاقین، بساتین»: «بهتر است» in the book, a preference; the rest are wrong
+                return { message: `${note}: «${to}»`, replacement: to, source: N(page), certain: !PREFERENCE.has(m[1]) };
             }
         },
         {
             pattern: new RegExp(`${START}اثرات${END}`, "g"),
-            check: () => ({
-                message: "«اثرات» جمع نادرست است (مصدر سه‌حرفی «ـات» نمی‌گیرد)؛ بسته به معنا «آثار» یا «اثرها»",
-                fix: false,
-                source: N("۱۴")
-            })
+            check: (m) => {
+                const to = PHRASE_END.test(m.input.slice(m.index + m[0].length)) ? "اثرها" : "اثرهای";
+                return {
+                    message: `«اثرات» جمع نادرست است (مصدر سه‌حرفی «ـات» نمی‌گیرد): «${to}»، یا بسته به معنا «آثار»`,
+                    replacement: to,
+                    source: N("۱۴"),
+                    certain: true
+                };
+            }
         },
         {
             pattern: new RegExp(`${START}اشعه[ ‌]?ها(ی)?${END}`, "g"),
-            check: () => ({
-                message: "«اشعه» خود جمع «شعاع» است و «ها» نمی‌گیرد: «اشعه»، «شعاع‌ها» یا «پرتوها»",
-                fix: false,
-                source: N("۲۷")
+            check: (m) => ({
+                message: `«اشعه» خود جمع «شعاع» است و «ها» نمی‌گیرد: «${m[1] ? "پرتوهای" : "پرتوها"}»، «اشعه» یا «شعاع‌ها»`,
+                replacement: m[1] ? "پرتوهای" : "پرتوها",
+                source: N("۲۷"),
+                certain: true
             })
         }
     ]

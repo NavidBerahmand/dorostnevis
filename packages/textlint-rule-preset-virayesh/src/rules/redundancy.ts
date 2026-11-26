@@ -44,7 +44,7 @@ export default createPatternRule(() => ({
         },
         {
             pattern: new RegExp(`${START}پیشرفت رو به جلو${END}`, "g"),
-            check: () => ({ message: "پیشرفت همیشه رو به جلوست: «پیشرفت»", replacement: "پیشرفت" })
+            check: () => ({ message: "پیشرفت همیشه رو به جلوست: «پیشرفت»", replacement: "پیشرفت", certain: true })
         },
         {
             // «در سن ۹۰ سالگی» ← «در ۹۰ سالگی»: only «سن» is dropped
@@ -54,7 +54,8 @@ export default createPatternRule(() => ({
                 replacement: "",
                 start: 3,
                 end: 3 + m[1].length,
-                source: "غلط ننویسیم، ابوالحسن نجفی، ص ۲۳۳"
+                source: "غلط ننویسیم، ابوالحسن نجفی، ص ۲۳۳",
+                certain: true
             })
         }
     ]

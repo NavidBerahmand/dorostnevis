@@ -20,6 +20,11 @@ export interface PatternResult {
     fix?: boolean;
     /** Overrides the rule's source for this report (e.g. a dictionary entry's page). */
     source?: string;
+    /**
+     * A certain error, not a matter of taste (for the language-editing rules, which are
+     * otherwise suggestions): the page marks it red and «اعمال همه» fixes it. Needs a fix.
+     */
+    certain?: boolean;
     /** Offsets relative to the start of the match. */
     start?: number;
     end?: number;
@@ -35,12 +40,20 @@ export interface PatternRuleSpec {
  * Build a fixable textlint rule from a list of pattern checks.
  * Every message gets the rule's source appended so a writer can look it up.
  */
+/**
+ * `part` (an option of every pattern rule): "certain" reports only the checks marked
+ * `certain`, "suggest" only the others; left out, both. The page runs a language-editing
+ * rule twice, once for each part, so the two can be coloured and fixed apart.
+ */
+export type PatternPart = { part?: "certain" | "suggest" };
+
 export function createPatternRule<T extends object = object>(
     buildSpec: (options: T) => PatternRuleSpec
-): TextlintFixableRuleModule<T> {
-    const reporter = (context: Readonly<TextlintRuleContext>, options?: T): TextlintRuleReportHandler => {
+): TextlintFixableRuleModule<T & PatternPart> {
+    const reporter = (context: Readonly<TextlintRuleContext>, options?: T & PatternPart): TextlintRuleReportHandler => {
         const { Syntax, RuleError, report, getSource, fixer, locator } = context;
         const spec = buildSpec((options ?? {}) as T);
+        const part = options?.part;
         return {
             [Syntax.Str](node) {
                 const text = getSource(node);
@@ -54,6 +67,7 @@ export function createPatternRule<T extends object = object>(
                         }
                         const result = check(m);
                         if (!result) continue;
+                        if (part && (part === "certain") !== !!result.certain) continue;
                         const start = m.index + (result.start ?? 0);
                         const end = m.index + (result.end ?? m[0].length);
                         const message = `${result.message} (${result.source ?? spec.source})`;

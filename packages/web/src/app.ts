@@ -3,19 +3,12 @@
  * in the browser: nothing typed here leaves the page.
  */
 import { TextlintKernel } from "@textlint/kernel";
-import textPlugin from "@textlint/textlint-plugin-text";
-import preset from "../../textlint-rule-preset-farhangestan/src/index";
 import { loadSpellingLexicon } from "../../textlint-rule-preset-farhangestan/src/util/speller";
-import shekaste from "../../textlint-rule-preset-shekaste/src/index";
-import virayesh from "../../textlint-rule-preset-virayesh/src/index";
 import { openReport, sentenceAround, setupOwnerPanel, Report } from "./report";
-
-type Msg = {
-    ruleId: string;
-    message: string;
-    range: [number, number];
-    fix?: { range: [number, number]; text: string };
-};
+import {
+    Msg, Settings, lintOptions, isAuto, isStyle, isEditing, baseRule, wordAround, splitMessage, NOT_IN_BOOK, rank,
+    conflictsOf, outranked, editsOf, applyFix as applyEdit
+} from "./lint-setup";
 
 
 const SAMPLE = [
@@ -275,82 +268,9 @@ function mergeSame(msgs: Msg[], text: string): { primary: Msg[]; extra: Msg[][] 
 let reports: Report[] = [];
 let timer: number | undefined;
 
-/** Language-editing rules: suggestions only, never in «اعمال همه». */
-const STYLE_RULES = new Set(Object.keys(virayesh.rules));
-const isStyle = (m: Msg) => STYLE_RULES.has(m.ruleId);
 const styleBoxes = [...document.querySelectorAll<HTMLInputElement>("#style-rules input[data-rule]")];
 
-/*
- * اصلاح خودکار ایرادهای تایپی (since 1.3.0). With the setting on (the default), these fixes
- * are made silently while typing and on paste, and are never marked: they are typing
- * mechanics, not choices — which letter, which space, which half-space. Each automatic
- * batch is one step of «بازگشت», and undoing it means «I meant that»: those fixes are then
- * left alone and marked as before.
- *
- * Only certain, context-free fixes are here. Per rule (a rule with `only` contributes just
- * the checks whose message matches it; `skip` leaves some out):
- * - normalize-characters: «ي ى ك» and other look-alike letters (ہ ە ھ ے ۍ ڪ ۃ), presentation
- *   forms, a doubled diacritic, soft hyphen and RLM/LRM between letters (→ نیم‌فاصله),
- *   «ی» + hamza → «ئ». Not: Arabic digits (left as they are), a kashida (may be decoration),
- *   «ي/ك» in what looks like an Arabic quotation (that has no fix anyway).
- * - invisible: special Unicode spaces → space, ZWSP (→ نیم‌فاصله between letters, else
- *   removed), BOM and word joiner, spaces at the start/end of a paragraph. (NBSP and ZWJ
- *   have no fix: they can be meant.)
- * - zwnj-cleanup: double ZWNJ, ZWNJ next to a space or at a word's edge, ZWNJ after a
- *   non-joining letter.
- * - mi-prefix: «می/نمی» + verb with a space or joined → نیم‌فاصله. Not the separated
- *   preverbs («در/بر/باز … می‌»), which are compound choices.
- * - plural-ha: «کتاب ها» → «کتاب‌ها», «خانهها» → «خانه‌ها». Not the «ا+ی» reading guess
- *   («خستهایم») or the joined-«ها» recommendation (no fix).
- * - tar-tarin: «بزرگ تر/بزرگتر/بزرگ ترین» → «بزرگ‌تر/بزرگ‌ترین», «بیش تر» → «بیشتر».
- * - punctuation: Latin «, ; ?» → «، ؛ ؟» after Persian (not in URLs, e-mails, numbers or
- *   before Latin), straight double quotes → «» (only when the line's quotes pair up),
- *   space before «، ؛ : ! ؟ .», a missing space after them, spaces inside «» () [],
- *   repeated spaces, spaces at a line's end. Not: digits, «...», dashes, «!!!», «(( ))».
- * Left out entirely: dictionary and compound choices (lexicon, dictionary, joined-words,
- * spaced-compounds, word-spacing, compound-verbs, misspellings, final-he, gozar,
- * hamza-tanvin, arabic-prefixes, verb-prefix-alef, bi-prefix and copula-attachment, whose
- * fixes depend on reading the word: «بی» and «ای» can be free words), the statistical models
- * (ezafe-he, «را»), numbers, the spelling checker, and all of ویرایش زبانی.
- */
-const AUTO_FIX: Record<string, { only?: RegExp; skip?: RegExp }> = {
-    "normalize-characters": { skip: /رقم عربی|کشیده/ },
-    invisible: {},
-    "zwnj-cleanup": {},
-    "mi-prefix": { only: /^«ن?می» با نیم‌فاصله به فعل می‌چسبد/ },
-    "plural-ha": { only: /^«ها»ی جمع با فاصلهٔ کامل|^پس از «ه» نشانهٔ جمع/ },
-    "tar-tarin": {},
-    punctuation: {
-        only: /^در متن فارسی «[،؛؟]»|^در متن فارسی گیومهٔ فارسی|^پیش از نشانه فاصله|^پس از نشانه یک فاصله|^پس از نقطه یک فاصله|^داخل پرانتز و گیومه|^فاصلهٔ اضافه در پایان سطر|^بین دو کلمه یک فاصله/
-    }
-};
-
-/** Is this message's fix one of the automatic typing fixes? */
-function isAuto(m: Msg, text: string): boolean {
-    const spec = AUTO_FIX[m.ruleId];
-    if (!spec || !m.fix) return false;
-    if (spec.only && !spec.only.test(m.message)) return false;
-    if (spec.skip && spec.skip.test(m.message)) return false;
-    if (m.ruleId === "punctuation") {
-        const [s, e] = m.fix.range;
-        const lineStart = text.lastIndexOf("\n", s - 1) + 1;
-        const nl = text.indexOf("\n", s);
-        const line = text.slice(lineStart, nl < 0 ? text.length : nl);
-        if (/^در متن فارسی گیومهٔ/.test(m.message)) {
-            // only "…" and “…”, and only when every quote on the line has its pair
-            const q = text[s];
-            if (q === '"') return (line.match(/"/g) ?? []).length % 2 === 0;
-            if (q === "“") return (line.match(/“/g) ?? []).length === (line.match(/”/g) ?? []).length;
-            return false;
-        }
-        if (/^در متن فارسی «/.test(m.message)) {
-            // between Persian words: not before a Latin letter or a digit («,abc», «?2»)
-            const next = text.slice(e).match(/^ *(\S)/)?.[1] ?? "";
-            if (/[A-Za-z0-9]/.test(next)) return false;
-        }
-    }
-    return true;
-}
+// اصلاح خودکار ایرادهای تایپی (AUTO_FIX, isAuto): see lint-setup.ts
 
 /** Which fix this is, wherever it sits: the rule, the word and its corrected form. */
 function autoKey(m: Msg, text: string): string {
@@ -358,23 +278,19 @@ function autoKey(m: Msg, text: string): string {
     return `${m.ruleId}|${text.slice(s, e)}|${text.slice(s, m.fix!.range[0])}${m.fix!.text}${text.slice(m.fix!.range[1], e)}`;
 }
 
+/** The page's settings, as the rules take them. */
+function settings(): Settings {
+    return {
+        mode: mode.value,
+        pluralMode: pluralMode.value,
+        ezafeStyle: ezafeStyle.value,
+        styleOn: (id) => styleBoxes.find((b) => b.dataset.rule === id)?.checked !== false
+    };
+}
 /** The rules to run; `forFix` leaves out what «اعمال همه» must not touch; `autoOnly` keeps the automatic ones. */
 function options(forFix = false, autoOnly = false) {
-    const style = mode.value === "dialogue" || forFix ? {} : Object.fromEntries(
-        Object.entries(virayesh.rules).filter(([id]) => styleBoxes.find((b) => b.dataset.rule === id)?.checked !== false)
-    );
-    const all = { ...preset.rules, ...(mode.value === "dialogue" ? shekaste.rules : {}), ...style };
-    // spoken forms («می‌رم»، «خونه») are not typos: no spelling check in dialogue
-    const rules = Object.entries(all).filter(([ruleId]) => !(ruleId === "spelling" && mode.value === "dialogue") && (!autoOnly || ruleId in AUTO_FIX)).map(([ruleId, rule]) => {
-        let opts: object | boolean = true;
-        if (ruleId === "plural-ha") opts = { mode: pluralMode.value };
-        if (ruleId === "ezafe-he") opts = { style: ezafeStyle.value, formal: mode.value !== "dialogue" };
-        if (ruleId === "calques") opts = { ezafe: ezafeStyle.value };
-        return { ruleId, rule: rule as any, options: opts };
-    });
-    return { ext: ".txt", plugins: [{ pluginId: "text", plugin: (textPlugin as any).default ?? textPlugin }], rules };
+    return lintOptions(settings(), forFix, autoOnly);
 }
-
 
 function esc(s: string): string {
     return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -384,18 +300,6 @@ function esc(s: string): string {
 function show(s: string): string {
     const e = esc(s);
     return showZwnj.checked ? e.replace(/‌/g, '<span class="zw" aria-label="نیم‌فاصله">‌</span>') : e;
-}
-
-function splitMessage(m: Msg): { text: string; source: string } {
-    // the source is the last parenthesis, which may itself contain one: «… (غلط‌یاب (واژه‌نامهٔ …))»
-    const msg = m.message.trimEnd();
-    if (!msg.endsWith(")")) return { text: m.message, source: "" };
-    let depth = 0;
-    for (let i = msg.length - 1; i >= 0; i--) {
-        if (msg[i] === ")") depth++;
-        else if (msg[i] === "(" && --depth === 0) return { text: msg.slice(0, i).trimEnd(), source: msg.slice(i + 1, -1) };
-    }
-    return { text: m.message, source: "" };
 }
 
 /** A run of text that carries a highlighter mark, and the cards it opens. */
@@ -476,14 +380,6 @@ function clearMarks() {
     if (HIGHLIGHTS) for (const n of ["vb-red", "vb-yellow", "vb-red-open", "vb-yellow-open", "vb-zwnj"]) (CSS as any).highlights.delete(n);
 }
 
-// invisible characters inside a word (ZWNJ, ZWSP, ZWJ, RLM, word joiner) belong to it
-const WORD_CHAR = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\u200B-\u200F\u2060\u0640]/;
-function wordAround(text: string, start: number, end: number): [number, number] {
-    while (start > 0 && WORD_CHAR.test(text[start - 1])) start--;
-    while (end < text.length && WORD_CHAR.test(text[end])) end++;
-    return [start, end];
-}
-
 /** «(احتمال ۸۲٪)» in a model's message → 82, and the message without it. */
 function takeConfidence(msg: string): { msg: string; p: number | null } {
     const m = msg.match(/ ?\(احتمال ([۰-۹0-9]+)٪\)/);
@@ -528,8 +424,6 @@ const BOOKS: Array<{ prefix: RegExp; name: string; url?: string }> = [
     { prefix: /^نگارش و ویرایش، احمد سمیعی گیلانی\s*[،؛]?\s*/, name: "نگارش و ویرایش، احمد سمیعی گیلانی" },
     { prefix: /^غلط ننویسیم، ابوالحسن نجفی\s*[،؛]?\s*/, name: "غلط ننویسیم، ابوالحسن نجفی" }
 ];
-/** A common convention the book has no rule for: no book meter, never «قطعی». */
-const NOT_IN_BOOK = /در دستور خط نیامده/;
 const faDigits = (s: string) => Number(s.replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0)));
 const PAGES = /ص ([۰-۹]+(?:–[۰-۹]+)?)/g;
 
@@ -573,6 +467,7 @@ function noMeterReason(m: Msg): string {
     if (m.ruleId === "spelling") return "حدس غلط‌یاب است، نه قاعده";
     if (isRecommendation(m)) return "توصیهٔ کتاب است، نه الزام";
     if (m.ruleId === "may-break") return "پیشنهاد سبکی است، نه غلط";
+    if (isEditing(m) && !isStyle(m)) return "خطای قطعی ویرایشی است؛ در دستور خط نیامده";
     if (m.ruleId === "punctuation" || NOT_IN_BOOK.test(splitMessage(m).source)) return "قرارداد رایج است، نه کتاب";
     if (isStyle(m)) return "توصیهٔ ویرایشی است، نه قاعدهٔ کتاب";
     return "به معنای جمله بستگی دارد";
@@ -598,7 +493,7 @@ function buildCards(text: string) {
         const members = [m, ...extras[i]];
         const sources = [...new Set(members.map((x) => splitMessage(x).source).filter(Boolean))];
         const source = sources.join(" | ");
-        const labels = [...new Set(members.map((x) => RULE_LABELS[x.ruleId] ?? x.ruleId))];
+        const labels = [...new Set(members.map((x) => RULE_LABELS[baseRule(x.ruleId)] ?? x.ruleId))];
         const { msg, p } = takeConfidence(split.text);
         // a book rule agreeing with a model's guess: the book's certainty
         const bookAgrees = [m, ...extras[i]].some(
@@ -606,6 +501,8 @@ function buildCards(text: string) {
         );
         const meter = bookAgrees ? bookMeter() : meterFor(m, p);
         const styleOnly = members.every(isStyle);
+        // a flat error by an editing book («با این وجود»، «مثمر ثمر»): red, and applied with the rest
+        const editingCertain = !styleOnly && members.some((x) => isEditing(x) && !isStyle(x));
         const cls = (styleOnly ? "issue issue-style" : m.fix ? "issue" : "issue issue-judge") + (m.fix ? "" : " no-fix") + (meter.includes("confidence-none") ? " has-note" : " has-confidence");
         // show the whole word around the change, so «ي ← ی» reads «رييس ← رئیس»
         const [ws, we] = wordAround(text, Math.min(m.range[0], m.fix?.range[0] ?? m.range[0]), Math.max(m.range[1], m.fix?.range[1] ?? m.range[1]));
@@ -627,7 +524,7 @@ function buildCards(text: string) {
             ${meter}
             <div class="issue-head">
                 ${labels.map((l) => `<span class="chip">${esc(l)}</span>`).join("")}
-                ${styleOnly ? '<span class="chip chip-style">ویرایش زبانی · پیشنهاد</span>' : m.fix ? "" : m.ruleId === "may-break" ? '<span class="chip chip-style">پیشنهاد سبکی</span>' : isRecommendation(m) ? '<span class="chip chip-style">توصیهٔ کتاب</span>' : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
+                ${styleOnly ? '<span class="chip chip-style">ویرایش زبانی · پیشنهاد</span>' : editingCertain ? '<span class="chip">ویرایش زبانی · غلط قطعی</span>' : m.fix ? "" : m.ruleId === "may-break" ? '<span class="chip chip-style">پیشنهاد سبکی</span>' : isRecommendation(m) ? '<span class="chip chip-style">توصیهٔ کتاب</span>' : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
             </div>
             <p class="change">
                 <span class="from">${show(original) || "&nbsp;"}</span>
@@ -700,12 +597,12 @@ async function check() {
             }
         }
     }
-    const merged = mergeSame(
-        (result.messages as unknown as Msg[]).filter(
-            (m) => !ignored.has(key(m, text)) && !(autoBox.checked && isAuto(m, text) && !declined.has(autoKey(m, text)))
-        ),
-        text
+    const shown = (result.messages as unknown as Msg[]).filter(
+        (m) => !ignored.has(key(m, text)) && !(autoBox.checked && isAuto(m, text) && !declined.has(autoKey(m, text)))
     );
+    const guarded = await noPingPong(text, shown);
+    if (input.value !== text) return; // typed meanwhile: the next check starts over
+    const merged = mergeSame(guarded, text);
     messages = merged.primary;
     extras = merged.extra;
     closePopover();
@@ -1043,8 +940,85 @@ function applyFix(m: Msg) {
     if (!m.fix) return;
     remember();
     const t = input.value;
-    input.value = t.slice(0, m.fix.range[0]) + m.fix.text + t.slice(m.fix.range[1]);
+    const after = applyEdit(t, m.fix);
+    // what was just changed, and by how high a rule: nothing lower may ask for it back
+    let d = 0;
+    const spans: Array<[number, number]> = [];
+    for (const e of editsOf(t, m.fix.range, m.fix.text)) {
+        spans.push([e.pos + d, e.pos + d + e.inserted.length]);
+        d += e.inserted.length - e.removed.length;
+    }
+    justApplied = { before: t, after, spans, rank: Math.min(...[m, ...(extrasOf(m) ?? [])].map(rank)) };
+    input.value = after;
     check();
+}
+const extrasOf = (m: Msg) => extras[messages.indexOf(m)];
+
+/*
+ * No ping-pong (since 1.3.1). A suggestion is never shown if making it would be taken back:
+ * by its own rule over a further step, by a rule of the same or higher precedence, or if a
+ * higher rule would find fault with what it puts in (precedence: دستور خط and فرهنگ املایی,
+ * then the other rules of the book, ویرایش زبانی, conventions not in the book, the spelling
+ * checker; lint-setup.ts, rank). Nor anything that asks back a fix the writer just made.
+ * The same check runs over thousands of sentences in the tests (test/no-ping-pong-test.ts),
+ * so this is a safety net: it re-lints only the sentence around each fix, and remembers.
+ */
+let justApplied: { before: string; after: string; spans: Array<[number, number]>; rank: number } | null = null;
+const pieceCache = new Map<string, Msg[]>();
+const verdictCache = new Map<string, boolean>();
+const settingsKey = () => JSON.stringify([mode.value, pluralMode.value, ezafeStyle.value, styleBoxes.map((b) => b.checked)]);
+/** The sentence around [s, e): from the mark before it to the mark after it (at most ~600 letters). */
+function pieceAround(text: string, s: number, e: number): [number, number] {
+    const END_MARK = /[.!?؟؛\n]/;
+    let a = s;
+    while (a > 0 && s - a < 300 && !END_MARK.test(text[a - 1])) a--;
+    let b = e;
+    while (b < text.length && b - e < 300 && !END_MARK.test(text[b])) b++;
+    if (b < text.length) b++; // with its full stop
+    return [a, b];
+}
+async function noPingPong(text: string, msgs: Msg[]): Promise<Msg[]> {
+    const sk = settingsKey();
+    const lint = async (piece: string): Promise<Msg[]> => {
+        const k = sk + "\0" + piece;
+        let r = pieceCache.get(k);
+        if (!r) {
+            r = (await kernel.lintText(piece, options())).messages as unknown as Msg[];
+            if (pieceCache.size > 4000) pieceCache.clear();
+            pieceCache.set(k, r);
+        }
+        return r;
+    };
+    const just = justApplied && justApplied.after === text ? justApplied : null;
+    const out: Msg[] = [];
+    for (const m of msgs) {
+        if (just) {
+            // takes back the writer's last fix, or a lower rule finds fault with it
+            if (m.fix && applyEdit(text, m.fix) === just.before) continue;
+            const [ms, me] = m.fix ? [Math.min(m.range[0], m.fix.range[0]), Math.max(m.range[1], m.fix.range[1])] : m.range;
+            if (rank(m) > just.rank && just.spans.some(([s, e]) => (e > s ? ms < e && me > s : ms <= s && me >= s))) continue;
+        }
+        if (!m.fix) {
+            out.push(m);
+            continue;
+        }
+        const [ps, pe] = pieceAround(text, Math.min(m.range[0], m.fix.range[0]), Math.max(m.range[1], m.fix.range[1]));
+        const piece = text.slice(ps, pe);
+        const local: Msg = { ...m, range: [m.range[0] - ps, m.range[1] - ps], fix: { range: [m.fix.range[0] - ps, m.fix.range[1] - ps], text: m.fix.text } };
+        const vk = `${sk}\0${piece}\0${m.ruleId}\0${m.message}\0${local.fix!.range}\0${m.fix.text}`;
+        let drop = verdictCache.get(vk);
+        if (drop === undefined) {
+            try {
+                drop = outranked(local, await conflictsOf(lint, piece, local, await lint(piece)));
+            } catch {
+                drop = false;
+            }
+            if (verdictCache.size > 8000) verdictCache.clear();
+            verdictCache.set(vk, drop);
+        }
+        if (!drop) out.push(m);
+    }
+    return out;
 }
 
 // ---- the note that opens on a marked word ----

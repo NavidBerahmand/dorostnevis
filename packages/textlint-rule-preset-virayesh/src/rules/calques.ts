@@ -49,7 +49,8 @@ export default createPatternRule<{ ezafe?: "he-yeh" | "he-hamza" }>((options) =>
                     return verb ? {
                         message: `«آتش گشودن» ترجمهٔ لفظ‌به‌لفظ open fire است؛ «تیراندازی ${verb}»، «شلیک ${verb}» یا «آتش ${verb}»`,
                         replacement: `تیراندازی ${verb}`,
-                        source: "غلط ننویسیم، ابوالحسن نجفی، ص ۲–۳"
+                        source: "غلط ننویسیم، ابوالحسن نجفی، ص ۲–۳",
+                        certain: true
                     } : null;
                 }
             }

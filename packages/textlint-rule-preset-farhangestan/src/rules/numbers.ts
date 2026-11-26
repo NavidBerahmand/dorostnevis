@@ -18,6 +18,7 @@
  */
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, ZWNJ, joinWithHalfSpace } from "../util/persian";
+import { NUMBER_COMPOUNDS } from "../util/number-compounds";
 
 const S_CARDINAL = "دستور خط، ترکیب‌ها، ب-۱۰، ص ۶۵";
 const S_GANE = "دستور خط، ترکیب‌ها، الف-۱-ب، ص ۵۹";
@@ -65,6 +66,8 @@ export default createPatternRule(() => ({
             // «-گانه» with numbers: «پنج گانه»، «پنجگانه» → «پنج‌گانه»
             pattern: new RegExp(`${START}${NUM}[ ${ZWNJ}]?گانه${END}`, "g"),
             check: (m) => {
+                // with digits it is the compound rule below: «۱۲گانه», joined (ب-۱۰-الف)
+                if (/^[۰-۹0-9]+$/.test(m[1])) return null;
                 const fixed = joinWithHalfSpace(m[1], "گانه");
                 if (m[0] === fixed) return null;
                 return { message: `«-گانه» با عدد، نیم‌فاصله می‌گیرد: «${fixed}»`, replacement: fixed, source: S_GANE };
@@ -80,7 +83,7 @@ export default createPatternRule(() => ({
         },
         {
             // «۴۷ سالگی» → «۴۷سالگی» (ب-۱۰-الف)
-            pattern: new RegExp(`(?<![۰-۹0-9])([۰-۹0-9]+)[ ${ZWNJ}](سالگی|ساله|ماهه|روزه|سالة|درصدی|نفره|طبقه|گانه)${END}`, "g"),
+            pattern: new RegExp(`(?<![۰-۹0-9])([۰-۹0-9]+)[ ${ZWNJ}](${NUMBER_COMPOUNDS.join("|")})${END}`, "g"),
             check: (m) => {
                 const fixed = m[1] + m[2];
                 return { message: `واژهٔ مرکّب با عدد پیوسته نوشته می‌شود: «${fixed}»`, replacement: fixed };

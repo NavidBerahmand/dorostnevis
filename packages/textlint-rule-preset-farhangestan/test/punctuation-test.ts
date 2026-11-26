@@ -7,6 +7,10 @@ new TextLintTester().run("punctuation", rule, {
         "سال ۱۳۰۰ ه.ق و ۵۰۰ ق.م",
         "ج.ا.ا",
         "در ۴۷سالگی و جشن ۵۰ساله",
+        // the «numbers» rule joins these (دستور خط ص ۶۵): never ask for the space back
+        "اما آدمِ ۷۵درصدی همان روزکار را جمع می‌کند، کاهش ۳۴درصدی، ۵ساله‌ای، ۱۲گانه، ۳نفره، ۲۰ساله‌اش",
+        "سال ١٤٠٤ و ۴٠٤",                     // Arabic-Indic digits are not a word after a number
+        "دامنهٔ .gt و فایل .pdf",               // a dot starting a Latin token is not a full stop
         "دهم ۲۰امین سالگرد",
         "سلام، جهان! من اینجا هستم؛ تو کجایی؟",
         "نشانی https://example.com/a,b?c=1 را ببینید.",

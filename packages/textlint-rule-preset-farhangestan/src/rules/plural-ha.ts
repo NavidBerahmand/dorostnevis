@@ -92,7 +92,7 @@ export default createPatternRule<Options>((options) => ({
                 // are correct and separating is a recommendation: reported, never fixed
                 if (!endsWithHe) {
                     return {
-                        message: `پیوسته هم درست است؛ کتاب جدانویسی «ها» را توصیه می‌کند: «${separate}»`,
+                        message: `کتاب جدانویسی «ها» را توصیه می‌کند: «${separate}»؛ پیوسته هم درست است`,
                         fix: false
                     };
                 }
