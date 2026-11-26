@@ -457,7 +457,7 @@ async function check() {
     autosize();
     status.textContent = "";
     try {
-        localStorage.setItem("dorostnevis:draft", text);
+        localStorage.setItem("vajban:draft", text);
     } catch {
         /* storage may be unavailable */
     }
@@ -471,6 +471,11 @@ function schedule() {
 /**
  * Every automatic change can be undone.
  */
+/** A saved setting; settings saved under the site's old name («dorostnevis:») still count. */
+function stored(key: string): string | null {
+    return localStorage.getItem("vajban:" + key) ?? localStorage.getItem("dorostnevis:" + key);
+}
+
 const history: string[] = [];
 const undoBtn = $<HTMLButtonElement>("undo");
 const changesEl = $<HTMLDetailsElement>("changes");
@@ -646,7 +651,7 @@ themeBtn.addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = next;
     try {
-        localStorage.setItem("dorostnevis:theme", next);
+        localStorage.setItem("vajban:theme", next);
     } catch {
         /* storage may be unavailable */
     }
@@ -728,7 +733,7 @@ input.addEventListener("input", () => {
 [showZwnj, pluralMode, ezafeStyle].forEach((el) => el.addEventListener("change", check));
 // which language-editing rules are on: remembered per browser
 try {
-    const off = JSON.parse(localStorage.getItem("dorostnevis:style-off") || "[]") as string[];
+    const off = JSON.parse(stored("style-off") || "[]") as string[];
     for (const b of styleBoxes) b.checked = !off.includes(b.dataset.rule!);
 } catch {
     /* storage may be unavailable */
@@ -736,7 +741,7 @@ try {
 for (const b of styleBoxes) {
     b.addEventListener("change", () => {
         try {
-            localStorage.setItem("dorostnevis:style-off", JSON.stringify(styleBoxes.filter((x) => !x.checked).map((x) => x.dataset.rule)));
+            localStorage.setItem("vajban:style-off", JSON.stringify(styleBoxes.filter((x) => !x.checked).map((x) => x.dataset.rule)));
         } catch {
             /* storage may be unavailable */
         }
@@ -745,21 +750,21 @@ for (const b of styleBoxes) {
 }
 mode.addEventListener("change", () => {
     try {
-        localStorage.setItem("dorostnevis:mode", mode.value);
+        localStorage.setItem("vajban:mode", mode.value);
     } catch {
         /* storage may be unavailable */
     }
     check();
 });
 try {
-    mode.value = localStorage.getItem("dorostnevis:mode") || "formal";
+    mode.value = stored("mode") || "formal";
 } catch {
     /* storage may be unavailable */
 }
 
 let initial = SAMPLE;
 try {
-    initial = localStorage.getItem("dorostnevis:draft") || SAMPLE;
+    initial = stored("draft") || SAMPLE;
 } catch {
     /* storage may be unavailable */
 }

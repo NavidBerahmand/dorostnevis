@@ -73,7 +73,7 @@ def main(paths):
 
     VERDICTS = ["agree", "flagged", "other", "missed"]
     NAMES = {"agree": "خودکار، همان", "flagged": "فقط گزارش", "other": "تغییر دیگر", "missed": "ندیده"}
-    print(f"# ویرایش‌های املایی انسانی ویکی‌پدیا در برابر درست‌نویس\n")
+    print(f"# ویرایش‌های املایی انسانی ویکی‌پدیا در برابر واج‌بان\n")
     print(f"{len(uniq)} تغییر یکتا؛ {sum(r['w'] for r in uniq)} ویرایش در سطح صفحه.\n")
     for kind_filter, title in (("manual", "دستی"), ("tool", "با ابزار نیمه‌خودکار"), (None, "همه")):
         sub = [r for r in uniq if kind_filter is None or r.get("kind") == kind_filter]

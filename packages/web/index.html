@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&display=swap">
 <script>
   // Light unless the reader chose dark on this page before.
-  try { document.documentElement.dataset.theme = localStorage.getItem("dorostnevis:theme") || "light"; }
+  try { document.documentElement.dataset.theme = localStorage.getItem("vajban:theme") || localStorage.getItem("dorostnevis:theme") || "light"; }
   catch (e) { document.documentElement.dataset.theme = "light"; }
 </script>
 <style>

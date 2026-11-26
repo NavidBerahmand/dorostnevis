@@ -1,7 +1,7 @@
 {
-  "name": "dorostnevis-web",
+  "name": "vajban-web",
   "private": true,
-  "description": "صفحهٔ آزمایشی درست‌نویس: textlint و قواعد فرهنگستان در مرورگر",
+  "description": "صفحهٔ واج‌بان: textlint و قواعد فرهنگستان در مرورگر",
   "scripts": {
     "build": "node build.mjs"
   },
