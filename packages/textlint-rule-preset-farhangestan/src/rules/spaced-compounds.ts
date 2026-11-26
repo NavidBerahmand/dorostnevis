@@ -15,6 +15,19 @@
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, ZWNJ, WORD, WORD_CHAR, LETTER, toPersianDigits } from "../util/persian";
 import data from "../dict/spaced-compounds.json";
+import commonNouns from "../dict/hazm-common-nouns.json";
+import hazmAdjectives from "../dict/hazm-adjectives.json";
+
+/** Words of their own: «دست سازمان» is «دست» + «سازمان», not «دست‌ساز» + «مان». */
+const STANDALONE = new Set<string>([...commonNouns.words, ...hazmAdjectives.adjectives]);
+/** A light verb as the last word: «پاک کنی» is a compound verb (compound-verbs: spaced), not «پاک‌کنی». */
+const LIGHT_VERB_WORD = new RegExp(
+    "^(?:" +
+        // compound-verbs' forms: past stems with a person ending or «ن», bare present stems with a person ending
+        "(?:کرد|شد|نمود|گردید|داد|گرفت|داشت|زد|گفت|یافت)(?:|م|ی|یم|ید|ند|ن)" +
+        "|(?:ن?می\u200c?|ب)?(?:کن|شو|نما|گرد|ده|گیر|دار|زن|گوی|یاب)(?:م|ی|د|یم|ید|ند)" +
+    ")$"
+);
 
 interface Entry {
     spaced: string;
@@ -46,6 +59,8 @@ const isLang = (spaced: string) => /^\S+ زبان(ان)?$/.test(spaced) && LANGS
 const ENTRIES = new Map<string, Entry>((data.entries as Entry[]).filter((e) => !isLang(e.spaced)).map((e) => [e.spaced, e]));
 for (const [spaced, to, page, kind, amb, verb] of data.more as Row[]) {
     if (ENTRIES.has(spaced) || isLang(spaced)) continue;
+    // a joined target with a silent «ه» inside («همه مهم» → «همهمهم») cannot be right: the book puts a ZWNJ there
+    if (to === 1 && /ه /.test(spaced)) continue;
     ENTRIES.set(spaced, {
         spaced,
         to: to === 0 ? spaced.replace(/ /g, ZWNJ) : to === 1 ? spaced.replace(/ /g, "") : (to as string),
@@ -77,6 +92,9 @@ function findCompound(m: RegExpExecArray): { len: number; e: Entry; suf: string;
                 const e = ENTRIES.get(`${head} ${tok.slice(0, tok.length - suf.length)}`);
                 if (!e) continue;
                 if (suf && e.verbSuf?.includes(suf)) continue;
+                // the last word with its «suffix» is a word of its own («سازمان»، «بافت»): not this compound
+                if (suf && STANDALONE.has(tok)) continue;
+                if (LIGHT_VERB_WORD.test(tok)) continue;
                 return { len: last.at + cut, e, suf, amb: !!e.amb || (!!suf && !!e.ambSuf?.includes(suf)) };
             }
         }
@@ -125,7 +143,8 @@ export default createPatternRule(() => ({
                 if (!found) return null;
                 const { len: end, e, suf, amb } = found;
                 coveredTo = m.index + end;
-                const to = e.to + suf;
+                // the ezafe mark is always «هٔ» (the farhang's «ۀ» is the same letter)
+                const to = (e.to + suf).replace(/ۀ/g, "هٔ").replace(/(?<=[اآدذرزژو])\u200c/g, "");
                 const how = e.to.includes(ZWNJ) ? "با نیم‌فاصله" : "پیوسته";
                 const source = e.book
                     ? `دستور خط (ویراست جدید)؛ فرهنگ املایی، ص ${toPersianDigits(e.page)}، «${e.spaced.replace(/ /g, ZWNJ)}» دارد`
@@ -140,7 +159,7 @@ export default createPatternRule(() => ({
                         source
                     };
                 }
-                return { message: `این ترکیب یک کلمه است و ${how} نوشته می‌شود: «${e.to}»`, replacement: to, end, source };
+                return { message: `این ترکیب یک کلمه است و ${how} نوشته می‌شود: «${e.to.replace(/ۀ/g, "هٔ")}»`, replacement: to, end, source };
             }
         }
     ]

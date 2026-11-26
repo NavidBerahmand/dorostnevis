@@ -35,6 +35,12 @@ const PRESENT_ENDINGS = ["یم", "ید", "ند", "م", "ی", "د"];
 const PAST_ENDINGS = ["یم", "ید", "ند", "م", "ی", ""];
 const PRESENT = new Set(hazmVerbs.present);
 const PAST = new Set(hazmVerbs.past);
+/** A past participle, also negative or with «می»: «زده»، «نزده»، «نکرده»، «می‌رفته». */
+export function isParticiple(word: string): boolean {
+    if (!word.endsWith("ه")) return false;
+    const stem = word.slice(0, -1).replace(/^(?:ن?می\u200c?|ن|ب)(?=..)/, "");
+    return PAST.has(word.slice(0, -1)) || PAST.has(stem) || (stem.startsWith("ا") && PAST.has("آ" + stem.slice(1)));
+}
 const NOT_VERBS = new Set(hazmVerbs.notVerbs);
 
 /**

@@ -4,7 +4,9 @@ import { inv } from "./helpers";
 
 const one = (text: string) => ({ text, errors: [{}] });
 new TextLintTester().run("invisible", rule, {
-    valid: ["سلام دنیا.", "کتاب‌ها", "Hello world"],
+    valid: [
+        "موزی —\u00A0که تقریباً است\u00A0— درست کنار", // the dash's inner no-break space (1.4.0)
+        "سلام دنیا.", "کتاب‌ها", "Hello world"],
     invalid: [
         inv("کتاب خوب است.", "کتاب خوب است."),
         inv("کتاب​ها خوب است.", "کتاب‌ها خوب است."),

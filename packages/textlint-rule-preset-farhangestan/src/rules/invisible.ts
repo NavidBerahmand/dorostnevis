@@ -15,12 +15,15 @@
  */
 import type { TextlintRuleModule } from "@textlint/types";
 import { LETTER, ZWNJ } from "../util/persian";
+import { SUGGESTION, KIND_SUGGESTION } from "../util/pattern-rule";
+import { nbspBelongs } from "../util/nbsp";
 
 const SOURCE = "قراردادهای رایج حروف‌نگاری فارسی (در دستور خط نیامده)";
 const FA = /[؀-ۿ]/;
 const LETTER_RE = new RegExp(LETTER);
 
-const reporter: TextlintRuleModule = (context) => {
+const reporter: TextlintRuleModule = (context, rawOptions) => {
+    const options = rawOptions as { suggestions?: boolean } | undefined;
     const { Syntax, RuleError, report, getSource, fixer, locator } = context;
     return {
         [Syntax.Paragraph](node) {
@@ -32,13 +35,20 @@ const reporter: TextlintRuleModule = (context) => {
                     ...(replacement !== undefined ? { fix: fixer.replaceTextRange([start, end], replacement) } : {})
                 }));
             };
+            // NBSP and ZWJ may be meant: on the page they come with a suggested replacement (yellow)
+            const suggest = (start: number, end: number, message: string, replacement: string, advice = false) =>
+                options?.suggestions
+                    ? report(node, new RuleError((advice ? KIND_SUGGESTION : "") + SUGGESTION + message, { padding: locator.range([start, end]), fix: fixer.replaceTextRange([start, end], replacement) }))
+                    : add(start, end, message);
             const isLetter = (i: number) => i >= 0 && i < text.length && LETTER_RE.test(text[i]);
 
             for (const m of text.matchAll(/[ -   　]+/g)) {
                 add(m.index!, m.index! + m[0].length, `اینجا یکی از فاصله‌های ویژهٔ یونیکد آمده است؛ میان واژه‌ها فاصلهٔ معمولی به کار می‌رود (${SOURCE})`, " ");
             }
             for (const m of text.matchAll(/ +/g)) {
-                add(m.index!, m.index! + m[0].length, `اینجا فاصلهٔ نشکن آمده است؛ فقط جایی لازم است که دو طرفش نباید در دو سطر بیفتند (عدد و واحد، نام)؛ وگرنه فاصلهٔ معمولی (${SOURCE})`);
+                // meant to be no-break (since 1.4.0): a dash's inner side, a number and its unit, «ص ۲۳۹», «۲۵ مهر»
+                if (m[0].length === 1 && nbspBelongs(text, m.index!)) continue;
+                suggest(m.index!, m.index! + m[0].length, `اینجا فاصلهٔ نشکن آمده است؛ فقط جایی لازم است که دو طرفش نباید در دو سطر بیفتند (عدد و واحد، نام)؛ وگرنه فاصلهٔ معمولی (${SOURCE})`, " ", true);
             }
             for (const m of text.matchAll(/​+/g)) {
                 const s = m.index!;
@@ -54,7 +64,7 @@ const reporter: TextlintRuleModule = (context) => {
             for (const m of text.matchAll(/‍+/g)) {
                 const s = m.index!;
                 if (!(isLetter(s - 1) && isLetter(s + m[0].length))) continue;
-                add(s, s + m[0].length, `اینجا «اتصال مجازی» (ZWJ) آمده که دو حرف را به هم می‌چسباند؛ اگر منظور نیم‌فاصله است، نیم‌فاصله بگذارید (${SOURCE})`);
+                suggest(s, s + m[0].length, `اینجا «اتصال مجازی» (ZWJ) آمده که دو حرف را به هم می‌چسباند؛ اگر منظور نیم‌فاصله است، نیم‌فاصله بگذارید (${SOURCE})`, ZWNJ);
             }
 
             // paragraph edges, only in plain text (all children are Str)

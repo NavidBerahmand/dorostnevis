@@ -17,6 +17,7 @@
  * هر فهرست را می‌شود با گزینه خاموش کرد:
  *   { "dictionaries": { "hamza": false } }
  */
+import { otherReading, homographMessage } from "../util/homograph";
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, ZWNJ, escapeRegExp } from "../util/persian";
 import multiSpelling from "../dict/multi-spelling.json";
@@ -44,6 +45,8 @@ interface Entry {
     message?: string;
     /** not when the word continues after a ZWNJ: Arabic terms keep their spelling («مستثنی‌منه») */
     wholeWordOnly?: boolean;
+    /** not before this (a RegExp source tested on the text after the word): «مبنی بر» is idiomatic */
+    notBefore?: string;
 }
 
 const DICTIONARIES: Record<keyof NonNullable<Options["dictionaries"]>, { entries: Entry[] }> = {
@@ -80,11 +83,53 @@ function buildIndex(enabled: Options["dictionaries"]) {
     return { map, pattern };
 }
 
+/**
+ * What the writer is told, by the book's rule rather than «املای مرجّح» wherever the rule is a
+ * general one (since 1.4.0: «املای مرجّح «معنا» است» did not say why). «املای مرجّح» stays for
+ * the book's list of words with several accepted spellings, where it just picks one.
+ */
+function messageFor(entry: Entry, from: string, to: string): string {
+    const src = entry.source;
+    if (/«تنوین»/.test(src)) return `تنوین نصب «اً» نوشته می‌شود: «${to}»`;
+    if (/الف مقصوره در حالت اضافه/.test(src)) return `الف مقصوره در حالت اضافه «ای» نوشته می‌شود: «${to}» (نه «${from}»)`;
+    if (/«الف مقصوره»/.test(src) || (/«واژه‌های برگرفته از عربی»/.test(src) && /ی$/.test(from) && /ا$/.test(to)))
+        return `در دستور خط، الف مقصورهٔ کلمه‌های عربی همیشه «ا» نوشته می‌شود: «${to}» (نه «${from}»)`;
+    if (/ة/.test(from)) return `در دستور خط، «ة»ی کلمه‌های عربی در فارسی «ت» نوشته می‌شود: «${to}» (نه «${from}»)`;
+    if (/«هجای میانی و پایانی ـ وو ـ»/.test(src)) return `در دستور خط، «و»ی بلند پس از «و» دوبار نوشته می‌شود: «${to}» (نه «${from}»)`;
+    if (/«نشانۀ همزه»/.test(src)) return `بنا بر قاعدهٔ همزه در دستور خط: «${to}» (نه «${from}»)`;
+    if (/فهرست (واژه‌های عامّ|نام‌های خاصّ) دو یا چنداملایی/.test(src)) return `املای مرجّح «${to}» است`;
+    const section = src.match(/«([^«»]+)»/)?.[1];
+    if (/ترکیب‌ها/.test(src)) return `بنا بر قاعدهٔ ترکیب‌ها در دستور خط: «${to}» (نه «${from}»)`;
+    if (section) return `بنا بر دستور خط («${section.replace("ۀ", "هٔ")}»): «${to}» (نه «${from}»)`;
+    return `املای مرجّح «${to}» است`;
+}
+
+/** Alif maqsura words («معنی» ← «معنا»), so that «بی‌معنی»، «معنیش» follow the word itself. */
+const isMaqsura = (e: Entry) => /«الف مقصوره»/.test(e.source) || (/«واژه‌های برگرفته از عربی»/.test(e.source) && e.from.some((f) => /ی$/.test(f)) && /ا$/.test(e.to));
+
 export default createPatternRule<Options>((options) => {
     const { map, pattern } = buildIndex(options.dictionaries);
+    const maqsura = [...map.entries()].filter(([f, e]) => isMaqsura(e) && !f.includes(" ")).map(([f]) => f);
+    const MAQSURA = maqsura.length
+        ? new RegExp(`${START}(بی${ZWNJ}?)?(${maqsura.map(escapeRegExp).join("|")})(ش|ت|م|مان|تان|شان)?(?=${ZWNJ}|${END})`, "g")
+        : null;
     return {
         source: "دستور خط، فهرست‌ها",
         checks: [
+            ...(MAQSURA
+                ? [
+                      {
+                          // «بی‌معنی» ← «بی‌معنا»، «معنیش» ← «معنایش» (the plain word is the next check's)
+                          pattern: MAQSURA,
+                          check: (m: RegExpExecArray) => {
+                              if (!m[1] && !m[3]) return null;
+                              const entry = map.get(m[2])!;
+                              const to = (m[1] ? "بی" + ZWNJ : "") + entry.to + (m[3] ? "ی" + m[3] : "");
+                              return { message: messageFor(entry, m[0], to), replacement: to, source: entry.source };
+                          }
+                      }
+                  ]
+                : []),
             {
                 pattern,
                 check: (m) => {
@@ -97,6 +142,7 @@ export default createPatternRule<Options>((options) => {
                     // the base plus the suffix can be another word: «رای» + «انه» is «رایانه», «جزئ» + «ی» is «جزئی»
                     if (suffix && isKnown(m[1] + suffix) && !isKnown(to)) return null;
                     if (entry.wholeWordOnly && m.input[m.index + m[0].length] === ZWNJ) return null;
+                    if (entry.notBefore && new RegExp(entry.notBefore).test(m.input.slice(m.index + m[0].length))) return null;
                     if (entry.fix === false) {
                         return {
                             message: entry.message ?? `اگر در معنای اصطلاحی است، «${to}» نوشته می‌شود`,
@@ -105,8 +151,11 @@ export default createPatternRule<Options>((options) => {
                             source: entry.source
                         };
                     }
+                    // «عقبی»: also «عقب» + «ی», a different word: never red
+                    const other = suffix ? null : otherReading(m[1], to, (b) => map.get(key(b))?.to);
+                    if (other) return { message: homographMessage(m[1], to, other), replacement: to, alternatives: [m[1]], fix: false, source: entry.source };
                     return {
-                        message: entry.message ?? `املای مرجّح «${to}» است`,
+                        message: entry.message ?? messageFor(entry, m[1].replace(/ +/g, " ") + suffix, to),
                         replacement: to,
                         source: entry.source
                     };

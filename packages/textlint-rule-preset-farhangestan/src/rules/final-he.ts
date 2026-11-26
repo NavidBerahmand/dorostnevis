@@ -57,7 +57,7 @@ export default createPatternRule(() => ({
             check: (m): PatternResult | null => {
                 if (!pronounced(m[1])) return null;
                 return {
-                    message: `«ه»ی «${m[1]}» ملفوظ است و در حالت اضافه کسره می‌گیرد، نه «ۀ»: «${m[1]}ِ»`,
+                    message: `«ه»ی «${m[1]}» ملفوظ است و در حالت اضافه کسره می‌گیرد، نه «هٔ»: «${m[1]}ِ»`,
                     replacement: "ِ",
                     start: m[1].length,
                     source: sourceFor(m[1])
@@ -71,7 +71,7 @@ export default createPatternRule(() => ({
                 const word = m[1] + "ه";
                 if (!pronounced(word)) return null;
                 return {
-                    message: `«ه»ی «${word}» ملفوظ است و در حالت اضافه کسره می‌گیرد، نه «ۀ»: «${word}ِ»`,
+                    message: `«ه»ی «${word}» ملفوظ است و در حالت اضافه کسره می‌گیرد، نه «هٔ»: «${word}ِ»`,
                     replacement: "هِ",
                     start: m[1].length,
                     source: sourceFor(word)

@@ -44,7 +44,9 @@ export default createPatternRule(() => ({
                 const rest = m.input.slice(m.index).split(/[.!?؟؛\n]/)[0];
                 if (!PASSIVE.test(rest)) return null;
                 return {
-                    message: "«توسط» در جملهٔ مجهول ترجمه‌وار است؛ بهتر است جمله معلوم شود: «نامه توسط مدیر نوشته شد» ← «مدیر نامه را نوشت»",
+                    message: "«توسط» در جملهٔ مجهول ترجمه‌وار است؛ بهتر است جمله معلوم شود («نامه توسط مدیر نوشته شد» ← «مدیر نامه را نوشت»)، یا «به دست» یا «به‌وسیلهٔ»",
+                    replacement: "به دست",
+                    alternatives: ["به‌وسیلهٔ"],
                     fix: false
                 };
             }

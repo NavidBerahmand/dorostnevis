@@ -21,6 +21,7 @@
  *    (src/util/ezafe-model.ts، آموزش‌دیده روی ویکی‌پدیا) از روی کلمه‌های
  *    اطراف تصمیم می‌گیرد: از ۹۰٪ اطمینان اصلاح خودکار، از ۵۰٪ پیشنهاد. (ص ۳۵)
  */
+import { otherReading, homographMessage } from "../util/homograph";
 import { createPatternRule, PatternResult } from "../util/pattern-rule";
 import { START, END, LETTER, LETTER_RANGE, ZWNJ, isNonJoining, toPersianDigits } from "../util/persian";
 import { isKnown, isDictionaryWord, endsWithSilentHe, BOOK_JOINED } from "../util/words";
@@ -160,6 +161,8 @@ function check(word: string): PatternResult | null {
     // ۱. compounds Hazm writes with ZWNJ
     const compound = fixedCompound(word) && COMPOUNDS[word] ? COMPOUNDS[word] : null;
     if (compound) {
+        const other = otherReading(word, compound);
+        if (other) return { message: homographMessage(word, compound, other), replacement: compound, alternatives: [word], fix: false, source: S_COMPOUND };
         return { message: `ترکیب با نیم‌فاصله نوشته می‌شود: «${compound}»`, replacement: compound, source: S_COMPOUND };
     }
 
@@ -225,6 +228,7 @@ function check(word: string): PatternResult | null {
             return {
                 message: `«هر» معمولاً با فاصلهٔ کامل نوشته می‌شود: «هر ${rest}»`,
                 replacement: "هر " + rest,
+                kind: "suggestion",
                 fix: false,
                 source: S_HAR
             };

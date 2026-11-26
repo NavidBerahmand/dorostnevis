@@ -16,7 +16,7 @@ const OPEN_FIRE: Record<string, string> = {
 };
 
 export default createPatternRule<{ ezafe?: "he-yeh" | "he-hamza" }>((options) => {
-    const darbare = options.ezafe === "he-hamza" ? "دربارهٔ" : "دربارۀ";
+    const darbare = options.ezafe === "he-yeh" ? "دربارۀ" : "دربارهٔ";
     return {
         source: SOURCE("ترجمه‌زدگی"),
         checks: [
@@ -24,21 +24,37 @@ export default createPatternRule<{ ezafe?: "he-yeh" | "he-hamza" }>((options) =>
                 pattern: new RegExp(`${START}در رابطه با${END}`, "g"),
                 check: () => ({
                     message: `«در رابطه با» گرته‌برداری از in relation to است؛ «${darbare}» یا «در مورد» رساتر است`,
-                    replacement: darbare
+                    replacement: darbare,
+                    alternatives: ["در مورد"]
                 })
             },
             {
                 pattern: new RegExp(`${START}به چالش (?:کشید|کشیدند|کشیده|کشیدن|می[‌ ]?کشد|می[‌ ]?کشند|بکشد|بکشند|کشاند|کشاندند)${END}`, "g"),
-                check: () => ({
-                    message: "«به چالش کشیدن» گرته‌برداری از to challenge است؛ بسته به معنا: «زیر سؤال بردن»، «نقد کردن»، «به مبارزه طلبیدن»",
-                    fix: false
-                })
+                check: (m) => {
+                    // the same tense and person with «بردن» and «طلبیدن»
+                    const v = m[0].replace(/^به چالش /, "").replace(/[‌ ]/g, "");
+                    const BORD: Record<string, [string, string]> = {
+                        کشید: ["برد", "طلبید"], کشیدند: ["بردند", "طلبیدند"], کشیده: ["برده", "طلبیده"], کشیدن: ["بردن", "طلبیدن"],
+                        میکشد: ["می‌برد", "می‌طلبد"], میکشند: ["می‌برند", "می‌طلبند"], بکشد: ["ببرد", "بطلبد"], بکشند: ["ببرند", "بطلبند"],
+                        کشاند: ["برد", "طلبید"], کشاندند: ["بردند", "طلبیدند"]
+                    };
+                    const [b, t] = BORD[v] ?? ["برد", "طلبید"];
+                    return {
+                        message: "«به چالش کشیدن» گرته‌برداری از to challenge است؛ بسته به معنا: «زیر سؤال بردن»، «نقد کردن»، «به مبارزه طلبیدن»",
+                        replacement: `زیر سؤال ${b}`,
+                        alternatives: [`به مبارزه ${t}`],
+                        fix: false
+                    };
+                }
             },
             {
                 pattern: new RegExp(`${START}در راستای(?= +([^ ]+))?`, "g"),
                 // «در راستای ۶ کیلومتری»: the physical direction
                 check: (m) => (/^[0-9۰-۹]/.test(m[1] ?? "") ? null : {
                     message: "«در راستای» گرته‌برداری از in line with است؛ بسته به معنا: «برای»، «در جهتِ»، «همسو با»",
+                    replacement: "برای",
+                    alternatives: ["در جهتِ", "همسو با"],
+                    end: "در راستای".length,
                     fix: false
                 })
             },

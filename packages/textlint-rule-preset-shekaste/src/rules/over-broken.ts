@@ -219,7 +219,9 @@ export default createPatternRule(() => ({
                     "رو": "اگر «را»ست، «را» بنویسید (ص ۲۵)",
                     "صب": "اگر «صبر» است، کامل بنویسید (ص ۴۲)"
                 };
-                return { message: hints[m[1]], fix: false, source: BOOK };
+                const choices: Record<string, string[]> = { "اونو": ["آن را", "او را"], "اون": ["آن", "او"], "رو": ["را"], "صب": ["صبر"] };
+                const [first, ...rest] = choices[m[1]];
+                return { message: hints[m[1]], replacement: first, alternatives: rest, fix: false, source: BOOK };
             }
         }
     ]

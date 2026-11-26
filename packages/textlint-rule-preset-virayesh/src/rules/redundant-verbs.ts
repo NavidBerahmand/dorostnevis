@@ -100,6 +100,7 @@ export default createPatternRule(() => ({
                 if (!NOUN_SET.has(m[1])) {
                     return {
                         message: `«مورد ${m[1]} قرار ${m[2]}» ساختی طولانی است؛ بهتر است جمله با فعل «${m[1]} ${isPassive ? "شدن" : "کردن"}» یا فعلی ساده بازنویسی شود`,
+                        replacement: `${m[1]} ${verb}`,
                         fix: false
                     };
                 }

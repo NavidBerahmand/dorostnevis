@@ -4,12 +4,19 @@ import { inv, z } from "./helpers";
 
 new TextLintTester().run("hamza-tanvin", rule, {
     valid: [
+        "جدا شد", "دوما رفت", "کلا", // a word of its own, the Duma, village names
+
         "جزئی، سوئی، شیئی، ابتدائاً، استثنائاً، جزئاً، حقیقتاً، نسبتاً، ظاهراً", // pp. 51, 56
         z("دایرة‹المعارف، ثقة‹الاسلام، بقیةالله"),
         // tanvin on Persian words: «سوماً» (also a name), «دوما» (the Duma), «جانا» (vocative) stay
         "گاهی می‌آید، گاه، احیاناً، دوم، ناچار، تلفنی، سوماً، دومای روسیه، جانا!، لطفاً، مالاً"
     ],
     invalid: [
+        // tanvin left out, closed list (1.4.0)
+        inv("ایضا رفت", "ایضاً رفت"),
+        inv("ترجیحا بیا", "ترجیحاً بیا"),
+        inv("مضافا اینکه", "مضافاً اینکه"),
+
         inv("جزءی", "جزئی"),
         inv("جزءاً", "جزئاً"),
         inv("حقیقةً", "حقیقتاً"),

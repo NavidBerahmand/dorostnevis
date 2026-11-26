@@ -22,6 +22,8 @@ import { isKnown, isDictionaryWord } from "../util/words";
 
 export interface Options {
     mode?: "recommended" | "required-only";
+    /** The writer always separates «ها» (the page's setting): joined «ها» gets a fix. */
+    apart?: boolean;
 }
 
 const SOURCE = "دستور خط، «ها (نشانۀ جمع)»، ص ۴۰";
@@ -80,8 +82,15 @@ export default createPatternRule<Options>((options) => ({
                             replacement: copula
                         };
                     }
+                    // the likelier reading first: before a noun («سالهای بچگی») the plural, else «ساله‌ای»
+                    const plural = stem + ZWNJ + "ها" + suffix;
+                    const next = m.input.slice(m.index + m[0].length).match(/^ +([\u0621-\u06cc\u200c]+)/)?.[1];
+                    const nounNext = suffix === "ی" && next !== undefined && !/^(است|بود|که|و|را|هم|شد|نیست|هست|می|نمی)$/.test(next) && !/^ن?می\u200c?/.test(next);
+                    const [first, second] = nounNext ? [plural, copula] : [copula, plural];
                     return {
-                        message: `این کلمه دو خوانش دارد: «${copula}» یا «${stem + ZWNJ}ها${suffix}»؛ هر دو با نیم‌فاصله`,
+                        message: `این کلمه دو خوانش دارد: «${first}» یا «${second}»؛ هر دو با نیم‌فاصله`,
+                        replacement: first,
+                        alternatives: [second],
                         fix: false
                     };
                 }
@@ -91,8 +100,11 @@ export default createPatternRule<Options>((options) => ({
                 // the book requires it only after «ه» (تبصره، بند ۵); elsewhere both forms
                 // are correct and separating is a recommendation: reported, never fixed
                 if (!endsWithHe) {
+                    if (options.apart) return { message: `«ها» جدا نوشته می‌شود (تنظیم «همیشه «ها» را جدا بنویس»): «${separate}»`, replacement: separate };
                     return {
                         message: `کتاب جدانویسی «ها» را توصیه می‌کند: «${separate}»؛ پیوسته هم درست است`,
+                        replacement: separate,
+                        kind: "suggestion",
                         fix: false
                     };
                 }

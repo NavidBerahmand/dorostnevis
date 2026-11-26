@@ -12,11 +12,15 @@
  * - فاصله پیش از نشانه‌ها حذف، پس از آن‌ها یک فاصله؛ فاصلهٔ داخل پرانتز و گیومه حذف
  * - «؟؟؟» ← «؟»، «!!!» ← «!»، «!؟»/«?!» ← «؟!»
  * - چند فاصلهٔ پشت سر هم ← یک فاصله
- * - «--» و «---» ← «–» و «—»؛ کشیده‌ای که به‌جای خط فاصله آمده («ـ که») ← «–»؛
- *   خط فاصلهٔ تکی میان دو واژهٔ فارسی («تهران - مشهد») ← «–»
  * - «((…))» و «<<…>>» ← «…»
+ * - دو نشانهٔ پشت سر هم («هستند،:»، «.،»، «؛.»، «؟،») ← یکی، قوی‌تر: «؟ !» بر «:»، «:» بر «.»،
+ *   «.» بر «؛»، «؛» بر «،» («؟!» می‌ماند)
+ * - «؛» در پایان بند ← «.» یا، اگر فهرست یا توضیحی در پی است، «:» (پیشنهاد)
+ * - سه‌نقطهٔ چسبیده به کلمهٔ بعد («آمد…دیوارها») ← «آمد… دیوارها»
+ * - خط تیره میان دو واژه «—» با یک فاصله از دو طرف (سمیعی، ص ۲۳۹): «ساختمان—مثل»، «فرقه - حشاشیون»،
+ *   «او ـ که» ← «… — …»؛ آغاز گفت‌وگو «— »
  * - گیومهٔ “…” درون «…» دست نمی‌خورد (الگوی «“ ”» برای نقل‌قول تودرتو)
- * - گیومه و کمانک بی‌جفت: فقط گزارش
+ * - گیومه و کمانک بی‌جفت: پیشنهاد، روی خود نشانه؛ گیومهٔ باز در پایان جمله بسته می‌شود
  * - پرانتز درون پرانتز: فقط پیشنهاد، توضیحِ درون کمانک در قلاب «[ ]» می‌آید
  * - رقم انگلیسی در متن فارسی ← رقم فارسی («12%» ← «۱۲٪»، «4.7» ← «۴٫۷»، «12,543» ← «۱۲٬۵۴۳»)
  *
@@ -25,6 +29,7 @@
 import { createPatternRule, PatternResult } from "../util/pattern-rule";
 import { toPersianDigits } from "../util/persian";
 import { joinsNumber } from "../util/number-compounds";
+import { nbspPlaces, isUnit, CITATIONS, LETTERS } from "../util/nbsp";
 
 export interface Options {
     marks?: boolean;
@@ -167,15 +172,36 @@ export default createPatternRule<Options>((options) => {
 
     if (on("pairs")) {
         checks.push({
+            // reported on the mark itself; the suggestion closes (or opens) it in its sentence
             pattern: /[«»()\[\]]/g,
             check: (m) => {
                 if (!persianContext(m.input, m.index) || !unmatchedAt(m.input, m.index)) return null;
-                const open = OPEN[m[0]] !== undefined;
-                return {
-                    message: open ? `«${m[0]}» باز شده و بسته نشده است` : `«${m[0]}» بسته شده ولی باز نشده است`,
-                    fix: false,
-                    source: SOURCE
-                };
+                const c = m[0];
+                const open = OPEN[c] !== undefined;
+                const message = open ? `«${c}» باز شده و بسته نشده است` : `«${c}» بسته شده ولی باز نشده است`;
+                const text = m.input;
+                if (open) {
+                    // close at the end of the line, before a final «. ! ؟»; a quotation that is a
+                    // whole sentence («او گفت: «می‌آیم.»») takes the final mark inside
+                    let e = text.indexOf("\n", m.index);
+                    if (e < 0) e = text.length;
+                    while (e > m.index + 1 && /\s/.test(text[e - 1])) e--;
+                    const before = text.slice(text.lastIndexOf("\n", m.index - 1) + 1, m.index).trimEnd();
+                    const wholeSentence = c === "«" && (before === "" || /[:.!؟]$/.test(before));
+                    if (!wholeSentence) while (e > m.index + 1 && /[.!؟…]/.test(text[e - 1])) e--;
+                    if (e <= m.index + 1) return { message, fix: false, source: SOURCE };
+                    const close = OPEN[c];
+                    return { message, replacement: close, fixStart: e - m.index, fixEnd: e - m.index, fix: false, source: SOURCE };
+                }
+                // a closing mark without its opening: open it where its sentence starts, or drop it
+                const lineStart = text.lastIndexOf("\n", m.index - 1) + 1;
+                const head = text.slice(lineStart, m.index);
+                const cut = Math.max(head.lastIndexOf(". "), head.lastIndexOf("! "), head.lastIndexOf("؟ "), head.lastIndexOf(": "));
+                let s0 = lineStart + (cut >= 0 ? cut + 2 : 0);
+                while (s0 < m.index && /\s/.test(text[s0])) s0++;
+                const opening = CLOSE[c];
+                if (s0 >= m.index) return { message, replacement: "", fix: false, source: SOURCE };
+                return { message, replacement: opening, fixStart: s0 - m.index, fixEnd: s0 - m.index, fix: false, source: SOURCE };
             }
         });
         checks.push({
@@ -201,8 +227,15 @@ export default createPatternRule<Options>((options) => {
             pattern: / *\.{3,}|(?<=\S) +…/g,
             check: (m) => {
                 if (!persianContext(m.input, m.index) || inForeignToken(m.input, m.index + m[0].length - 1)) return null;
-                return { message: "سه‌نقطه یک نویسه است («…») و بی‌فاصله به کلمهٔ پیش از خود می‌چسبد", replacement: "…", source: SOURCE };
+                // «آمد...دیوارها»: and a space after it, before the next word
+                const glued = new RegExp(`^${FA_LETTER}`).test(m.input.slice(m.index + m[0].length)) && m.index > 0 && /\S/.test(m.input[m.index - 1]);
+                return { message: "سه‌نقطه یک نویسه است («…») و بی‌فاصله به کلمهٔ پیش از خود می‌چسبد", replacement: glued ? "… " : "…", source: SOURCE };
             }
+        });
+        checks.push({
+            // «آمد…دیوارها»: the ellipsis ends the word before it; a space before the next one
+            pattern: new RegExp(`(?<=${FA_LETTER}|[»)])…(?=${FA_LETTER}|«)`, "g"),
+            check: (m) => (persianContext(m.input, m.index) ? { message: "پس از سه‌نقطه یک فاصله می‌آید", replacement: "… ", source: SOURCE } : null)
         });
     }
 
@@ -217,6 +250,46 @@ export default createPatternRule<Options>((options) => {
                 if (fixed === m[0]) return null;
                 return { message: `نشانه‌های تکراری: «${fixed}» کافی است`, replacement: fixed, source: SOURCE };
             }
+        });
+    }
+
+    if (on("repeated")) {
+        const STRENGTH: Record<string, number> = { "؟": 5, "!": 5, ":": 4, ".": 3, "؛": 2, "،": 1 };
+        checks.push({
+            // two different marks in a row: «هستند،:» → «هستند:»، «.،» → «.»، «؛.» → «.»، «؟،» → «؟»
+            // (not «؟!», not «...»/«…», not the dot of an abbreviation «ق.م.»، not between digits)
+            pattern: /(?<![.])([،؛:.؟!])( *)([،؛:.؟!])(?![.])/g,
+            check: (m) => {
+                const [, a, , b] = m;
+                if (!persianContext(m.input, m.index)) return null;
+                if (a === b && a !== "،" && a !== "؛" && a !== ":") return null; // «!!»، «؟؟»: the next check
+                if (/[؟!]/.test(a) && /[؟!]/.test(b)) return null; // «؟!»
+                const prev = m.input.slice(0, m.index);
+                if (a === "." && /(?:^|[\s.])\S$/.test(prev)) return null; // «ق.م.،»
+                if (/[0-9۰-۹]$/.test(prev) && /^[0-9۰-۹]/.test(m.input.slice(m.index + m[0].length))) return null;
+                if (inForeignToken(m.input, m.index)) return null;
+                const keep = STRENGTH[b] >= STRENGTH[a] ? b : a;
+                const dropsComma = (keep === a ? b : a) === "،";
+                return {
+                    message: dropsComma ? `ویرگول پیش یا پس از نشانهٔ دیگر نمی‌آید: «${keep}» کافی است` : `دو نشانه پشت سر هم: «${keep}» کافی است`,
+                    replacement: keep,
+                    source: SOURCE
+                };
+            }
+        });
+        checks.push({
+            // «…متعجبم؛» at the end of a paragraph: a semicolon does not end one
+            pattern: /؛(?=[ \t]*(?:\n|$))/g,
+            check: (m) =>
+                persianContext(m.input, m.index)
+                    ? {
+                          message: "نقطه‌ویرگول بند را تمام نمی‌کند: «.»؛ اگر فهرست یا توضیحی در پی است، «:»",
+                          replacement: ".",
+                          alternatives: [":"],
+                          fix: false,
+                          source: SOURCE
+                      }
+                    : null
         });
     }
 
@@ -235,8 +308,9 @@ export default createPatternRule<Options>((options) => {
                 }
             },
             {
-                // no space after a mark before a Persian letter: «سلام،جهان» → «سلام، جهان»
-                pattern: new RegExp(`(?<=${FA_LETTER})([،؛!؟])(?=${FA_LETTER}|«)`, "g"),
+                // no space after a mark before a Persian letter: «سلام،جهان» → «سلام، جهان»، «افتاد:خانه» → «افتاد: خانه»
+                // (letters on both sides: never «۱۲:۳۰»، «http:»، «::»)
+                pattern: new RegExp(`(?<=${FA_LETTER})([،؛!؟:])(?=${FA_LETTER}|«)`, "g"),
                 check: (m) => ({ message: "پس از نشانه یک فاصله می‌آید", replacement: m[1] + " ", source: SOURCE })
             },
             {
@@ -286,6 +360,25 @@ export default createPatternRule<Options>((options) => {
         );
     }
 
+    if (on("spacing")) {
+        let placesText = "";
+        let places = new Map<number, string>();
+        const WHAT: Record<string, string> = { unit: "عدد و واحدش", citation: "نشانهٔ ارجاع و شماره‌اش", date: "روز و ماه" };
+        checks.push({
+            // a no-break space where the two sides must stay on one line (1.4.0): «۲۰ درصد»، «ص ۲۳۹»، «۲۵ مهر ۱۴۰۳»
+            pattern: new RegExp(`(?<=[0-9۰-۹٠-٩]|(?<![${LETTERS}])(?:${CITATIONS.join("|")}))[ \u00A0]+(?=[${LETTERS}0-9۰-۹٠-٩])`, "g"),
+            check: (m) => {
+                if (m.input !== placesText) {
+                    placesText = m.input;
+                    places = new Map(nbspPlaces(m.input).map((p) => [p.at, p.what]));
+                }
+                const what = places.get(m.index);
+                if (!what || m[0] === "\u00A0") return null;
+                return { message: `میان ${WHAT[what]} فاصلهٔ نشکن می‌آید تا در دو سطر نیفتند`, replacement: "\u00A0", source: SOURCE };
+            }
+        });
+    }
+
     if (on("digits")) {
         checks.push({
             // separators between Persian digits: «۱۲,۵۴۳» → «۱۲٬۵۴۳», «۴.۷» → «۴٫۷»
@@ -311,9 +404,10 @@ export default createPatternRule<Options>((options) => {
                 if (joinsNumber(word)) return null;
                 return {
                     message: "میان عدد و کلمهٔ پس از آن یک فاصله می‌آید",
-                    replacement: m[1] + " " + word,
+                    replacement: m[1] + (isUnit(word) ? "\u00A0" : " ") + word,
                     // an adjective made with the number («۵کیلویی») may be meant: only a suggestion
                     fix: /(ی|ه|گی)$/.test(word) ? false : undefined,
+                    kind: /(ی|ه|گی)$/.test(word) ? "suggestion" : undefined,
                     source: SOURCE
                 };
             }
@@ -321,29 +415,51 @@ export default createPatternRule<Options>((options) => {
     }
 
     if (on("dashes")) {
-        checks.push(
-            {
-                pattern: /(?<=\s|^)-{2,3}(?=\s|$)/gm,
-                check: (m) => {
-                    if (!persianContext(m.input, m.index)) return null;
-                    const fixed = m[0].length === 3 ? "—" : "–";
-                    return { message: `خط فاصله یک نویسه است: «${fixed}»`, replacement: fixed, source: SOURCE };
-                }
-            },
-            {
-                // one hyphen between two Persian words: «تهران - مشهد» → «تهران – مشهد»
-                pattern: new RegExp(`(?<=${FA_LETTER} )-(?= ${FA_LETTER})`, "g"),
-                check: () => ({ message: "خط فاصله (-) با خط تیره فرق دارد؛ میان دو واژه «–» به کار می‌رود", replacement: "–", source: SOURCE })
-            },
-            {
-                // a kashida used as a dash: «ـ که …» → «– که …»
-                pattern: /(?<=\s|^)ـ(?=\s|$)/gm,
-                check: (m) => {
-                    if (!persianContext(m.input, m.index)) return null;
+        // the dash: «—» with one space on each side, between words (نگارش و ویرایش، سمیعی، ص ۲۳۹:
+        // «یک روزِ تمام — اگر حاجت باشد، دو روز — برای انجام دادنِ این کار فرصت دارید»). Number
+        // ranges («۴-۵»، «۱۳۹۰–۱۴۰۰»)، Latin compounds and a hyphen starting a line (a list) stay.
+        const DASH = "خط تیره (—) میان دو واژه با یک فاصله از دو طرف نوشته می‌شود";
+        const S_DASH = "نگارش و ویرایش، احمد سمیعی گیلانی، ص ۲۳۹";
+        // a dash between Persian words, however it was typed: «--»، «-»، «–»، «ـ» with spaces, «—» with any spacing
+        const SP = "[ \\u00A0]";
+        const DASH_RE = new RegExp(`(?<=${FA_LETTER}[»)]?)(?:${SP}*[—–]${SP}*|${SP}+(?:-{1,3}|ـ)${SP}+)(?=[«(]?${FA_LETTER})`, "g");
+        /**
+         * The right form of the dash at `index` (since 1.4.0): «—» with a normal space outside and a
+         * no-break space inside, so it stays with its phrase and never ends or starts a line alone.
+         * The first of a pair opens (« —\u00A0»), the second closes («\u00A0— »); a dash alone opens.
+         */
+        const dashForm = (text: string, index: number): string => {
+            let a = index;
+            while (a > 0 && !/[.!؟?\n]/.test(text[a - 1])) a--;
+            let b = index;
+            while (b < text.length && !/[.!؟?\n]/.test(text[b])) b++;
+            const all = [...text.slice(a, b).matchAll(DASH_RE)].map((x) => a + x.index!);
+            const i = all.indexOf(index);
+            return all.length >= 2 && i % 2 === 1 ? "\u00A0— " : " —\u00A0";
+        };
+        checks.push({
+            // «تهران - مشهد»، «فرقه – حشاشیون»، «او ـ که»، «علی -- رضا»، «ساختمان—مثل»، «موزی–که»
+            pattern: DASH_RE,
+            check: (m) => {
+                if (!persianContext(m.input, m.index)) return null;
+                if (/ـ/.test(m[0])) {
                     // «بی ـ، می ـ»: a hyphen marking an affix, not a dash
                     const prev = m.input.slice(0, m.index).trimEnd().split(/\s/).pop() ?? "";
                     if (AFFIXES.has(prev)) return null;
-                    return { message: "کشیده (ـ) خط فاصله نیست؛ «–» به کار می‌رود", replacement: "–", source: SOURCE };
+                }
+                const form = dashForm(m.input, m.index);
+                if (m[0] === form) return null;
+                return { message: DASH, replacement: form, source: S_DASH };
+            }
+        });
+        checks.push(
+            {
+                // a dash starting a line of dialogue: «— سلام.» (a kashida or an en dash there too), one space after it
+                pattern: /^[ \t]*[—–ـ](?! )(?=\S)|^[ \t]*[–ـ](?= )|^[ \t]*— {2,}/gm,
+                check: (m) => {
+                    if (!persianContext(m.input, m.index)) return null;
+                    const lead = m[0].match(/^[ \t]*/)![0];
+                    return { message: "خط تیرهٔ آغاز گفت‌وگو «—» است و یک فاصله پس از آن می‌آید", replacement: lead + "— ", end: m[0].length + (m.input.slice(m.index + m[0].length).match(/^ */)![0].length), source: S_DASH };
                 }
             }
         );

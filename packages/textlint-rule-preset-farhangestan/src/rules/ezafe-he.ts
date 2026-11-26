@@ -7,9 +7,10 @@
  *   … کلمه‌های مختوم به «ها»ی ملفوظ، در حالت اضافه، کسره می‌گیرند:
  *   بازدهِ تولید، گرهِ کور، فرماندهِ سپاه
  *
- * - «خانه ی من»، «خانه‌ی من»، «خانه‌یِ من» ← «خانۀ من»
- * - «خانهٔ من» (ه + همزهٔ بالا U+0654) ← «خانۀ من» (U+06C0)، مگر با گزینهٔ
- *   { "style": "he-hamza" } که برعکس عمل می‌کند.
+ * - «خانه ی من»، «خانه‌ی من»، «خانه‌یِ من» ← «خانهٔ من»
+ * - نشانهٔ اضافه یک شکل دارد: «هٔ» (ه + همزهٔ بالا U+0654)، و «خانۀ من» (U+06C0) ← «خانهٔ من»
+ *   (از نسخهٔ ۱.۴.۰ به تصمیم کاربر؛ کتاب هر دو را یکی می‌داند). گزینهٔ { "style": "he-yeh" }
+ *   برعکس عمل می‌کند.
  *
  * «ه»ی ملفوظ (راه، کوه، فقیه، گره…) کنار گذاشته می‌شود: کلمه‌ای که پیش از
  * «ه» مصوّت بلند (ا، و، ی) دارد یا در فهرست زیر است.
@@ -17,12 +18,11 @@
  * کسرهٔ اضافه‌ای که «ه» نوشته شده: «کتابه من» ← «کتاب من». کسرهٔ اضافه پس
  * از حرف بی‌صدا نوشته نمی‌شود (یا با ـِ نشان داده می‌شود). فقط وقتی که
  * «کتابه» خودش کلمهٔ شناخته‌شده‌ای نیست و «کتاب» هست:
- * - پیش از ضمیر (من، تو، او…) اصلاح خودکار؛
- * - پیش از کلمه‌های دیگر فقط پیشنهاد، و فقط در متن رسمی، چون در گفتار
- *   «کتابه» نشانهٔ معرفه هم هست («این کتابه خوبه»).
+ * فقط پیشنهاد، فقط برای اسم رایج و پیش از ضمیر (من، تو، او…): روی ویکی‌پدیا تقریباً
+ * همهٔ موردهای دیگر واژهٔ درست یا نام بودند («پیشرانه»، «نزده ولی»).
  * شکل‌های گفتاری مثل «خونه» (خانه) و «نشونه» (نشانه) کنار گذاشته می‌شوند.
  *
- * کسرهٔ اضافهٔ جاافتاده («خانه قبلی» ← «خانۀ قبلی»): اینکه کلمه در حالت اضافه
+ * کسرهٔ اضافهٔ جاافتاده («خانه قبلی» ← «خانهٔ قبلی»): اینکه کلمه در حالت اضافه
  * است یا نه را قاعده نمی‌تواند بگوید؛ یک مدل آماری کوچک (src/util/ezafe-model.ts)
  * از روی کلمه‌های اطراف حدس می‌زند. اگر مدل دست‌کم ۹۰٪ مطمئن باشد و کلمه
  * شناخته‌شده باشد اصلاح خودکار، و از ۶۰٪ به بالا فقط پیشنهاد. با گزینهٔ
@@ -49,7 +49,7 @@ function spacedCompound(w0: string, w1: string): string | null {
     }
     return null;
 }
-import { verbForm } from "./mi-prefix";
+import { verbForm, isParticiple } from "./mi-prefix";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 import commonNouns from "../dict/hazm-common-nouns.json";
 import { ezafeCandidates, EzafeCandidate } from "../util/ezafe-model";
@@ -78,11 +78,11 @@ const ADJECTIVES = new Set<string>(hazmAdjectives.adjectives);
 const COMMON_NOUNS = new Set<string>(commonNouns.words);
 
 export interface Options {
-    /** "he-yeh" → ۀ (U+06C0, the book's form); "he-hamza" → هٔ (ه + U+0654). */
+    /** "he-hamza" (default) → هٔ (ه + U+0654); "he-yeh" → ۀ (U+06C0). */
     style?: "he-yeh" | "he-hamza";
     /** false in story dialogue, where «کتابه» may be the definite marker. Default true. */
     formal?: boolean;
-    /** false turns off the ezafe model (missing «ۀ» before other words). Default true. */
+    /** false turns off the ezafe model (missing «هٔ» before other words). Default true. */
     model?: boolean;
 }
 
@@ -115,6 +115,8 @@ const NOT_EZAFE_NEXT = new Set([
 function ezafeWrittenAsHe(word: string): string | null {
     const stem = word.slice(0, -1);
     if (stem.length < 2 || isKnown(word) || !isKnown(stem)) return null;
+    // «نزده»، «نکرده»: a past participle, not «نزد» + ezafe
+    if (isParticiple(word)) return null;
     if ("اآوهة".includes(stem[stem.length - 1])) return null;
     // spoken forms of known words: «خونه» (خانه)، «نشونه» (نشانه)
     const i = word.lastIndexOf("ون");
@@ -130,7 +132,8 @@ const NOT_EZAFE = new Set([
 ]);
 
 export default createPatternRule<Options>((options) => {
-    const target = options.style === "he-hamza" ? "هٔ" : "ۀ";
+    const hamza = options.style !== "he-yeh";
+    const target = hamza ? "هٔ" : "ۀ";
     return {
         source: SOURCE,
         checks: [
@@ -149,20 +152,22 @@ export default createPatternRule<Options>((options) => {
                 // «کتابه من»: the next word is looked at but not consumed
                 pattern: new RegExp(`${START}(${LETTER}{3,}ه)(?= (${LETTER}+)${END})`, "g"),
                 check: (m) => {
+                    // Narrowed in 1.4.0: on Wikipedia nearly every hit was a real word or a name
+                    // («پیشرانه»، «فردینه ماه»، «نزده ولی»: 756 in 6000 articles, almost none right).
+                    // Only a common noun before a pronoun, and only as a suggestion: «کتابه من».
                     const stem = ezafeWrittenAsHe(m[1]);
-                    if (!stem) return null;
-                    const next = m[2];
-                    const pronoun = PRONOUNS.has(next);
-                    if (!pronoun && (options.formal === false || NOT_EZAFE_NEXT.has(next) || !isKnown(next))) return null;
+                    if (!stem || !COMMON_NOUNS.has(stem) || !PRONOUNS.has(m[2])) return null;
+                    if (/[0-9۰-۹]\s*$/.test(m.input.slice(0, m.index))) return null; // «۱۵۰۰۰ نفره»
                     return {
-                        message: `کسرهٔ اضافه با «ه» نوشته نمی‌شود؛ باید «${stem} ${next}» (یا «${stem}ِ ${next}») نوشته شود`,
+                        message: `اگر کسرهٔ اضافه است، با «ه» نوشته نمی‌شود: «${stem} ${m[2]}» (یا «${stem}ِ ${m[2]}»)`,
                         replacement: stem,
-                        fix: pronoun ? undefined : false
+                        alternatives: [stem + "\u0650"],
+                        fix: false
                     };
                 }
             },
             {
-                // «خانه من» → «خانۀ من»: before a personal pronoun the word is an ezafe.
+                // «خانه من» → «خانهٔ من»: before a personal pronoun the word is an ezafe.
                 // When a verb follows the pronoun the sentence may split there
                 // («در خانه من نبودم»), so that case is only suggested.
                 pattern: new RegExp(`${START}(${LETTER}{2,}ه) (${EZAFE_PRONOUNS.join("|")})${END}(?: +(${LETTER}+))?`, "g"),
@@ -183,7 +188,7 @@ export default createPatternRule<Options>((options) => {
                 }
             },
             {
-                // the model: «خانه قبلی» → «خانۀ قبلی». Pronouns are handled above.
+                // the model: «خانه قبلی» → «خانهٔ قبلی». Pronouns are handled above.
                 pattern: new RegExp(`${START}(${LETTER}{2,}ه)(?= +(${LETTER}+))`, "g"),
                 check: (m) => {
                     if (options.model === false || EZAFE_PRONOUNS.includes(m[2]) || hasPronouncedHe(m[1])) return null;
@@ -220,8 +225,8 @@ export default createPatternRule<Options>((options) => {
                 }
             },
             {
-                // «خانهٔ» ↔ «خانۀ»; not after a pronounced «ه» («فرماندهٔ»): that is the final-he rule's
-                pattern: new RegExp(`(${LETTER}*)${options.style === "he-hamza" ? "ۀ" : "هٔ"}`, "g"),
+                // «خانۀ» → «خانهٔ» (the other way with "he-yeh"); not after a pronounced «ه» («فرماندهٔ»): that is the final-he rule's
+                pattern: new RegExp(`(${LETTER}*)${hamza ? "ۀ" : "هٔ"}`, "g"),
                 check: (m) => {
                     if (hasPronouncedHe(m[1] + "ه")) return null;
                     return { message: `شکل یکدستِ نشانهٔ اضافه «${target}» است`, replacement: target, start: m[1].length };

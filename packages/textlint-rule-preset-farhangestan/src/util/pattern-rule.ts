@@ -25,9 +25,26 @@ export interface PatternResult {
      * otherwise suggestions): the page marks it red and «اعمال همه» fixes it. Needs a fix.
      */
     certain?: boolean;
+    /**
+     * Other replacements that fit as well as `replacement` («گاهاً» → «گاهی»، «گاه»، «احیاناً»):
+     * reported, as suggestions, only with the option `suggestions`.
+     */
+    alternatives?: string[];
+    /**
+     * How sure (since 1.4.0): "error" (the default with a fix: red), "maybe" (a reading to judge:
+     * yellow), "suggestion" (not an error, a recommendation: blue, «پیشنهاد»). Only "suggestion"
+     * is marked in the message (KIND_SUGGESTION), so the page can tell it from a «maybe».
+     */
+    kind?: "error" | "maybe" | "suggestion";
     /** Offsets relative to the start of the match. */
     start?: number;
     end?: number;
+    /**
+     * Where the replacement goes, if not over the report (offsets relative to the match): an
+     * unclosed «« is reported on itself and closed at the end of its sentence.
+     */
+    fixStart?: number;
+    fixEnd?: number;
 }
 
 export interface PatternRuleSpec {
@@ -45,7 +62,19 @@ export interface PatternRuleSpec {
  * `certain`, "suggest" only the others; left out, both. The page runs a language-editing
  * rule twice, once for each part, so the two can be coloured and fixed apart.
  */
-export type PatternPart = { part?: "certain" | "suggest" };
+export type PatternPart = { part?: "certain" | "suggest"; suggestions?: boolean };
+
+/**
+ * With the option `suggestions` (the page), a report the writer must judge (`fix: false`, or
+ * any with `alternatives`) still carries its replacement as a fix, once per alternative, and
+ * its message starts with this mark (U+2063, invisible): the page shows it yellow, with a
+ * button for each replacement, and never makes it in «درست‌کن». Without the option (the
+ * command line, the tests) such reports have no fix, as before.
+ */
+export const SUGGESTION = "\u2063";
+export const isSuggestion = (message: string) => /^\u2064?\u2063/.test(message);
+/** U+2064 (invisible): the report is a recommendation, not an error («پیشنهاد», blue on the page). */
+export const KIND_SUGGESTION = "\u2064";
 
 export function createPatternRule<T extends object = object>(
     buildSpec: (options: T) => PatternRuleSpec
@@ -70,13 +99,27 @@ export function createPatternRule<T extends object = object>(
                         if (part && (part === "certain") !== !!result.certain) continue;
                         const start = m.index + (result.start ?? 0);
                         const end = m.index + (result.end ?? m[0].length);
+                        const fs = result.fixStart === undefined ? start : m.index + result.fixStart;
+                        const fe = result.fixEnd === undefined ? end : m.index + result.fixEnd;
+                        const kindMark = options?.suggestions && result.kind === "suggestion" ? KIND_SUGGESTION : "";
                         const message = `${result.message} (${result.source ?? spec.source})`;
                         const canFix = result.fix !== false && result.replacement !== undefined;
+                        const choices = [result.replacement, ...(result.alternatives ?? [])].filter((x, i, a): x is string => x !== undefined && a.indexOf(x) === i);
+                        if (options?.suggestions && choices.length && (!canFix || choices.length > 1)) {
+                            // a certain fix keeps its own report (red, «درست‌کن» makes it); the other
+                            // replacements come as suggestions beside it, one mark more each
+                            // (textlint drops a second report with the same message and range)
+                            for (const [i, text] of choices.entries()) {
+                                const mark = canFix ? SUGGESTION.repeat(i) : SUGGESTION.repeat(i + 1);
+                                report(node, new RuleError(kindMark + mark + message, { padding: locator.range([start, end]), fix: fixer.replaceTextRange([fs, fe], text) }));
+                            }
+                            continue;
+                        }
                         report(
                             node,
-                            new RuleError(message, {
+                            new RuleError(kindMark + message, {
                                 padding: locator.range([start, end]),
-                                ...(canFix ? { fix: fixer.replaceTextRange([start, end], result.replacement!) } : {})
+                                ...(canFix ? { fix: fixer.replaceTextRange([fs, fe], result.replacement!) } : {})
                             })
                         );
                     }

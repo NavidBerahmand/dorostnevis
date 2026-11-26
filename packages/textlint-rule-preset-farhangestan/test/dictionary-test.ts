@@ -16,6 +16,14 @@ new TextLintTester().run("dictionary", rule, {
         z("دایرة‹المعارف، دایرةالمعارف")        // ZWNJ after «ة» is invisible
     ],
     invalid: [
+        // a homograph is never red: «کمکم» is also «کمک» + «م» (1.4.0); no automatic fix
+        {
+            text: "حالا کمکم کن",
+            output: "حالا کمکم کن",
+            errors: [{ message: "اگر منظور «کم‌کم» است، «کم‌کم» نوشته می‌شود؛ «کمکم» («کمک» + «م») هم درست است (فرهنگ املایی خطّ فارسی، ص ۵۱۱)" }]
+        },
+        { text: "دندانهای او", output: "دندانهای او", errors: [{}] },
+
         inv("زندگینامه او", z("زندگی‹نامه او")),
         inv("فیلمسازی", z("فیلم‹سازی")),
         inv("زبانشناسی", z("زبان‹شناسی")),

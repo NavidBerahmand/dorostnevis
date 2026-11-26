@@ -15,7 +15,9 @@
  *   «کشتی ای» ← «کشتی‌ای».
  * - پس از صامت: «کتاب اش» ← «کتابش»، «برادر ام» ← «برادرم»، «پاک اند» ← «پاک‌اند».
  * - پس از «ا»: «پا ام» ← «پایم»؛ و «یم، یش…» جداافتاده: «پا یم» ← «پایم»، «عمو یش» ← «عمویش».
- * - یای نکره پس از «ه» و «ی» به شکل «یی»: «خانه یی»، «خانه‌یی» ← «خانه‌ای»؛ «کشتی‌یی» ← «کشتی‌ای».
+ * - یای نکره پس از «ه» و «ی» به شکل «یی»، «ایی»، «ئی»: «خانه یی»، «خانه‌یی»، «خامنه ایی»،
+ *   «خامنه‌ایی»، «خامنه ئی» ← «خامنه‌ای»؛ «کشتی‌یی» ← «کشتی‌ای». (در ویکی‌پدیا از ۷۰۸۵ «ه ای/ایی/ئی»
+ *   هیچ‌کدام «ای»ِ ندا نبود؛ فقط «ای کاش» کنار گذاشته می‌شود.)
  * - «ئی» پس از «ا» و «و»: «جائی» ← «جایی»، «دانشجوئی» ← «دانشجویی»، «رادیوئی» ← «رادیویی».
  *
  * چه چیزهایی کنار گذاشته می‌شود:
@@ -61,7 +63,8 @@ function known(word: string): boolean {
     return isKnown(word) || (word.endsWith("ی") && isKnown(word.slice(0, -1)));
 }
 
-function afterHeOrYeh(word: string, ending: string): PatternResult | null {
+function afterHeOrYeh(word: string, ending: string, next?: string): PatternResult | null {
+    if (ending === "ای" && next === "کاش") return null; // «ای کاش»
     if (word.endsWith("ه")) {
         if (isPronouncedHe(word)) return null;
     } else if (ending === "ای" && verbForm(word) && !isKnown(word)) {
@@ -119,7 +122,7 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const [word, ending] = [m[1], m[2]];
                 const last = word[word.length - 1];
-                if (last === "ه" || last === "ی") return afterHeOrYeh(word, ending);
+                if (last === "ه" || last === "ی") return afterHeOrYeh(word, ending, m[3]);
                 if (last === "ا") return ending === "ای" || POSSESSIVE_PLURAL.includes(ending) ? null : afterAlef(word, ending);
                 // «و» (دانشجو، رهرو، رادیو) and hamza endings vary: left alone
                 if ("آوءأؤئ".includes(last) || ending === "ای") return null;
@@ -136,8 +139,8 @@ export default createPatternRule(() => ({
             }
         },
         {
-            // indefinite «یی» after silent ه or ی: «خانه یی»، «خانه‌یی»، «کشتی‌یی» → «‌ای»
-            pattern: new RegExp(`${START}(${LETTER}+[هی])[ ${ZWNJ}]+(?:یی|ئی)${END}`, "g"),
+            // indefinite «یی» after silent ه or ی: «خانه یی»، «خانه‌یی»، «خامنه ایی»، «خامنه‌ایی»، «کشتی‌یی» → «‌ای»
+            pattern: new RegExp(`${START}(${LETTER}+[هی])[ ${ZWNJ}]+(?:یی|ئی|ایی|ائی)${END}`, "g"),
             check: (m) => {
                 if (m[1].endsWith("ه") && (isPronouncedHe(m[1]) || !endsWithSilentHe(m[1]))) return null;
                 const fixed = m[1] + ZWNJ + "ای";
@@ -155,6 +158,7 @@ export default createPatternRule(() => ({
                 return {
                     message: `برای یکدستی، صامت میانجی «ی» توصیه می‌شود: «${fixed}»`,
                     replacement: fixed,
+                    kind: "suggestion",
                     fix: false,
                     source: S_INDEFINITE + "؛ پانویس ۱ در ص ۴۲"
                 };

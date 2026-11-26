@@ -13,6 +13,8 @@ new TextLintTester().run("bi-prefix", rule, {
         "بیهوش شد. بیجا گفت. بیخود نگران است."                                   // book exceptions, never separated
     ],
     invalid: [
+        { text: "بینشان فاصله بود", output: "بینشان فاصله بود", errors: [{}] }, // «بین» + «شان» too
+
         inv("کاری بی دلیل کرد.", z("کاری بی‹دلیل کرد.")),
         inv("مرد بی چاره", "مرد بیچاره"),
         inv(z("آدم بی‹کار"), "آدم بیکار"),

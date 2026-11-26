@@ -32,6 +32,15 @@ import { LETTER, WORD_CHAR, START, END } from "../util/persian";
 
 const S_HAMZA = "دستور خط، «همزۀ پایانی»، تبصرهٔ ۲، ص ۵۱";
 const S_TANVIN = "دستور خط، «تنوین»، ص ۵۶";
+/**
+ * Tanvin left out («ایضا» ← «ایضاً»; ص ۵۶: «تنوین نصب در همه‌جا به صورت «اً» نوشته می‌شود»).
+ * A closed list beside the book's own (lexicon, arabic.json): the adverbs Persian Wikipedia
+ * writes with «اً» at least ten times, whose bare form is no word of its own (not in the farhang
+ * or Hazm's nouns and adjectives) and is rare (under half as often as the tanvin form). Left
+ * out by that: «جدا»، «اسما» (اسما بنت عمیس)، «عرفا»، «آشکارا»، «محتملا»؛ and by hand «کلا»
+ * (village names «… کلا»), «راسا»/«دایما» (their tanvin form has a hamza: «رأساً»، «دائماً»).
+ */
+const MISSING_TANVIN = ["اصطلاحا", "منحصرا", "جمعا", "علنا", "مشترکا", "نوعا", "ترجیحا", "متناوبا", "ضرورتا", "اختصاصا", "مضافا", "ندرتا", "عادتا", "منطقا", "مختصرا", "سهوا", "غیابا", "متفقا", "بدوا", "مفصلا", "ایضا", "قلبا", "قهرا", "ماهیتا"];
 const S_TA = "دستور خط، «ة»، ص ۵۴";
 const N = (page: string) => `غلط ننویسیم، ابوالحسن نجفی، ص ${page}`;
 /** alef with or without tanvin, in either order; or only with tanvin */
@@ -64,22 +73,24 @@ export default createPatternRule(() => ({
             pattern: new RegExp(`(?<=${LETTER})ة(?!${WORD_CHAR})`, "g"),
             check: () => ({
                 message: "در فارسی «ة» پایانی به‌صورت «ت» (اگر تلفظ شود) یا «ه» (اگر تلفظ نشود) نوشته می‌شود",
+                replacement: "ت",
+                alternatives: ["ه"],
                 fix: false,
                 source: S_TA
             })
         },
         {
             pattern: new RegExp(`${START}گاه${AN}${END}`, "g"),
-            check: () => ({ message: `${NOT_ARABIC("گاه")}؛ بسته به معنا «گاهی»، «گاه» یا «احیاناً»`, replacement: "گاهی", source: N("۳۱۹") })
+            check: () => ({ message: `${NOT_ARABIC("گاه")}؛ بسته به معنا «گاهی»، «گاه» یا «احیاناً»`, replacement: "گاهی", alternatives: ["گاه", "احیاناً"], source: N("۳۱۹") })
         },
         {
             // not «دوما» without tanvin: the Russian Duma
             pattern: new RegExp(`${START}دوم${AN_ONLY}${END}`, "g"),
-            check: () => ({ message: `${NOT_ARABIC("دوم")}؛ «دوم» خود قید است (یا «دوم آنکه»، «ثانیاً»)`, replacement: "دوم", source: N("۱۹۷") })
+            check: () => ({ message: `${NOT_ARABIC("دوم")}؛ «دوم» خود قید است (یا «دوم آنکه»، «ثانیاً»)`, replacement: "دوم", alternatives: ["ثانیاً"], source: N("۱۹۷") })
         },
         {
             pattern: new RegExp(`${START}ناچار${AN}${END}`, "g"),
-            check: () => ({ message: `${NOT_ARABIC("ناچار")}؛ «ناچار» خود قید است (یا «به‌ناچار»)`, replacement: "ناچار", source: N("۳۸۱") })
+            check: () => ({ message: `${NOT_ARABIC("ناچار")}؛ «ناچار» خود قید است (یا «به‌ناچار»)`, replacement: "ناچار", alternatives: ["به‌ناچار"], source: N("۳۸۱") })
         },
         {
             pattern: new RegExp(`${START}(تلفن|تلگراف)${AN}${END}`, "g"),
@@ -99,6 +110,10 @@ export default createPatternRule(() => ({
         {
             pattern: new RegExp(`${START}خواهش${AN}${END}`, "g"),
             check: () => ({ message: `${NOT_ARABIC("خواهش")}: «لطفاً» یا «خواهش می‌کنم …»`, replacement: "لطفاً", source: `${N("۳۱۹")}، به قیاس «گاهاً»` })
+        },
+        {
+            pattern: new RegExp(`${START}(${MISSING_TANVIN.join("|")})${END}`, "g"),
+            check: (m) => ({ message: `تنوین نصب «اً» نوشته می‌شود: «${m[1].slice(0, -1)}اً»`, replacement: m[1].slice(0, -1) + "اً", source: S_TANVIN })
         },
         {
             pattern: new RegExp(`(?<=${LETTER})\\u064Bا`, "g"),

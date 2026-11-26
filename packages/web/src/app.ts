@@ -7,21 +7,9 @@ import { loadSpellingLexicon } from "../../textlint-rule-preset-farhangestan/src
 import { openReport, sentenceAround, setupOwnerPanel, Report } from "./report";
 import {
     Msg, Settings, lintOptions, isAuto, isStyle, isEditing, baseRule, wordAround, splitMessage, NOT_IN_BOOK, rank,
-    conflictsOf, outranked, editsOf, applyFix as applyEdit
+    conflictsOf, outranked, editsOf, applyFix as applyEdit, isTentative, isCertainMsg, applyCertain, isBlue
 } from "./lint-setup";
 
-
-const SAMPLE = [
-    "رييس اداره گفت كه این مساله را بررسي می کنیم و نتیجه ی آن را بزودی اعلام می کنیم.",
-    "ما در اطاق جلسه منتظر بودیم و هیچکس نمیدانست بلیط ها کجاست.",
-    "بزرگترها میگفتند که این سریعترین راه است، ولی بیخیال شدیم و برگشتیم.",
-    "خانه ای که خریدند بزرگ تر از خانه قبلی است و بی شک بهترین انتخاب بود.",
-    "من خستهام، ولی هم‌چنین باید پیش از آنکه شب شود با او صحبت‌کنم.",
-    "زبانشناسی و روانشناسی دو رشته ی همسو هستند؛ اما آدم بیسواد نمیتواند آنرا بفهمد.",
-    "بمحض رسیدن، کتاب اش را از خانه من آورد؛ واقعا آنروز ریاضیدان ها چه طور اینگونه فکر میکردند؟",
-    "او نتیجه نهایی را اعلام کرد و همه دفترهارا جمع کرد؛ بعد مسیررا عوض کردیم.",
-    "این طرح مورد بررسی قرار گرفت و مسئولین گفتند نتیجه جهت اطلاع عموم در رابطه با بودجه منتشر می‌شود و قابل قبول می‌باشد."
-].join("\n");
 
 const RULE_LABELS: Record<string, string> = {
     "normalize-characters": "نویسه‌ها",
@@ -63,16 +51,16 @@ const RULE_LABELS: Record<string, string> = {
     gozar: "گذار/گزار"
 };
 
-const SAMPLE_DIALOGUE = [
-    "ـ دیروز اومدم دنبالت که بریم پارک. نبودی.",
-    "ـ آره، رفته بودم خونه‌ی خاله‌م. حالش خیلی خرابه.",
-    "ـ اگه دیگه نیاد چی؟ یه خرده صبر کن، بهش زنگ می‌زنم.",
-    "ـ بچه‌ها رفته‌ان؟ نمی‌تونن بیان، دکترا می‌گن مریضه.",
-    "ـ کتابو بده، شاید فردا وقت کنم بخونمش. الان نیس.",
-    "ـ هوا سرد است. من می‌روم، تو هم بیا."
-].join("\n");
-
 const kernel = new TextlintKernel();
+
+/** Stroke icons in the text colour (the toolbar buttons and the popover's «ویرایش»). */
+const svg = (d: string) =>
+    `<svg class="icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON = {
+    pencil: svg('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>'),
+    sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+    moon: svg('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>')
+};
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 /*
@@ -202,10 +190,11 @@ const pop = $<HTMLDivElement>("popover");
 const summary = $<HTMLParagraphElement>("summary");
 const showZwnj = $<HTMLInputElement>("show-zwnj");
 const pluralMode = $<HTMLSelectElement>("plural-mode");
-const ezafeStyle = $<HTMLSelectElement>("ezafe-style");
+const haApart = $<HTMLInputElement>("ha-apart");
 const mode = $<HTMLSelectElement>("mode");
 const applyAllBtn = $<HTMLButtonElement>("apply-all");
 const copyBtn = $<HTMLButtonElement>("copy");
+const pasteBtn = $<HTMLButtonElement>("paste");
 const status = $<HTMLSpanElement>("status");
 
 let messages: Msg[] = [];
@@ -264,6 +253,39 @@ function mergeSame(msgs: Msg[], text: string): { primary: Msg[]; extra: Msg[][] 
     const order = primary.map((m, i) => i).sort((a, b) => primary[a].range[0] - primary[b].range[0]);
     return { primary: order.map((i) => primary[i]), extra: order.map((i) => extra[i]) };
 }
+/** A message with the other replacements its rule offers («گاه»، «گاهی»، «احیاناً»): one button each. */
+type Card = Msg & { alts?: Msg[] };
+/**
+ * A suggestion with several replacements comes as one report per replacement (pattern-rule's
+ * `alternatives`): the same rule, range and message. Each went through the no-ping-pong guard
+ * by itself; the ones left make one card.
+ */
+function collapseAlts(msgs: Msg[]): Card[] {
+    const groups = new Map<string, Msg[]>();
+    for (const m of msgs) {
+        if (!m.fix) continue;
+        const k = `${m.ruleId}|${m.range}|${m.message.replace(/[\u2063\u2064]/g, "")}`;
+        groups.set(k, [...(groups.get(k) ?? []), m]);
+    }
+    const out: Card[] = [];
+    const done = new Set<Msg>();
+    for (const m of msgs) {
+        if (done.has(m)) continue;
+        const k = m.fix ? `${m.ruleId}|${m.range}|${m.message.replace(/[\u2063\u2064]/g, "")}` : "";
+        const g = k ? groups.get(k)! : [m];
+        if (g.length < 2 || !g.some((x) => /^\u2064?\u2063/.test(x.message))) {
+            out.push(m);
+            done.add(m);
+            continue;
+        }
+        // the certain one (no mark), if any, leads: it keeps the card red and «درست‌کن» makes it
+        const sorted = [...g].sort((a, b) => a.message.length - b.message.length);
+        for (const x of g) done.add(x);
+        out.push({ ...sorted[0], alts: sorted });
+    }
+    return out;
+}
+
 /** What «این پیشنهاد غلط است» would send for each card. */
 let reports: Report[] = [];
 let timer: number | undefined;
@@ -283,7 +305,7 @@ function settings(): Settings {
     return {
         mode: mode.value,
         pluralMode: pluralMode.value,
-        ezafeStyle: ezafeStyle.value,
+        haApart: haApart.checked,
         styleOn: (id) => styleBoxes.find((b) => b.dataset.rule === id)?.checked !== false
     };
 }
@@ -303,12 +325,30 @@ function show(s: string): string {
 }
 
 /** A run of text that carries a highlighter mark, and the cards it opens. */
-type Span = { s: number; e: number; items: number[]; red: boolean };
+type Span = { s: number; e: number; items: number[]; red: boolean; blue?: boolean; sentence?: boolean };
+/** Notes about a whole sentence («جملهٔ بلند»): their own layer, a dotted line under the sentence, never a word's highlight. */
+const SENTENCE_RULES = new Set(["long-sentences"]);
+const isSentenceNote = (m: Msg) => SENTENCE_RULES.has(baseRule(m.ruleId));
+/** The sentence around a report: from the mark before it to the mark after it. */
+function sentenceSpan(text: string, s: number, e: number): [number, number] {
+    const END = /[.!?؟؛\n]/;
+    let a = s;
+    while (a > 0 && !END.test(text[a - 1])) a--;
+    while (a < s && /\s/.test(text[a])) a++;
+    let b = e;
+    while (b < text.length && !END.test(text[b])) b++;
+    return [a, b];
+}
 let spans: Span[] = [];
 
 /** The word(s) a card is about: the reported range plus the corrected one. */
 function cardSpan(m: Msg, text: string): [number, number] {
-    return wordAround(text, Math.min(m.range[0], m.fix?.range[0] ?? m.range[0]), Math.max(m.range[1], m.fix?.range[1] ?? m.range[1]));
+    // a report on a mark alone («باز شده و بسته نشده» on «»») is painted on that mark, wherever its fix goes
+    if (!/[\p{L}\p{N}]/u.test(text.slice(m.range[0], m.range[1])) && m.range[1] - m.range[0] <= 2) return m.range;
+    // a fix that goes somewhere else (a long sentence split at its middle) does not stretch the mark
+    const far = m.fix && (m.fix.range[0] > m.range[1] + 1 || m.fix.range[1] < m.range[0] - 1);
+    if (!m.fix || far) return wordAround(text, m.range[0], m.range[1]);
+    return wordAround(text, Math.min(m.range[0], m.fix.range[0]), Math.max(m.range[1], m.fix.range[1]));
 }
 
 /**
@@ -316,7 +356,11 @@ function cardSpan(m: Msg, text: string): [number, number] {
  * Yellow: a model's guess, a possible typo, a judgement of meaning, a style note.
  */
 function isCertain(i: number): boolean {
-    return [messages[i], ...extras[i]].some((x) => x.fix && !isStyle(x) && !/احتمال/.test(x.message));
+    return [messages[i], ...extras[i]].some(isCertainMsg);
+}
+/** Blue: every report on the card is a recommendation, not an error («پیشنهاد»). */
+function isAdvice(i: number): boolean {
+    return [messages[i], ...extras[i]].every(isBlue);
 }
 
 /** The Range of span k in the box (kept until the text changes). */
@@ -329,21 +373,28 @@ let ranges: Range[] = [];
 function renderMarks(text: string) {
     const items = messages
         .map((m, i) => {
-            const [s, e] = cardSpan(m, text);
-            return { s, e, i };
+            const sentence = isSentenceNote(m);
+            const [s, e] = sentence ? sentenceSpan(text, m.range[0], m.range[1]) : cardSpan(m, text);
+            return { s, e, i, sentence };
         })
         .sort((a, b) => a.s - b.s || b.e - a.e);
-    spans = [];
+    // words and sentences are two layers: a sentence note never merges with a word's mark
+    const words: Span[] = [];
+    const sentences: Span[] = [];
     for (const it of items) {
-        const last = spans[spans.length - 1];
+        const layer = it.sentence ? sentences : words;
+        const last = layer[layer.length - 1];
         if (last && it.s < last.e) {
             last.e = Math.max(last.e, it.e);
             last.items.push(it.i);
             last.red = last.red || isCertain(it.i);
+            last.blue = last.blue && isAdvice(it.i);
         } else {
-            spans.push({ s: it.s, e: it.e, items: [it.i], red: isCertain(it.i) });
+            layer.push({ s: it.s, e: it.e, items: [it.i], red: isCertain(it.i), blue: isAdvice(it.i), sentence: it.sentence });
         }
     }
+    // «قبلی/بعدی» go through both, in reading order (a sentence's note before its words)
+    spans = [...words, ...sentences].sort((a, b) => a.s - b.s || Number(!!b.sentence) - Number(!!a.sentence));
     ranges = spans.map((sp) => {
         const r = document.createRange();
         const [a, ao] = pointAt(sp.s);
@@ -355,12 +406,14 @@ function renderMarks(text: string) {
     paintMarks();
 }
 
+const MARK_NAMES = ["vb-red", "vb-yellow", "vb-blue", "vb-red-open", "vb-yellow-open", "vb-blue-open", "vb-zwnj", "vb-sentence", "vb-sentence-open"];
 function paintMarks() {
     if (!HIGHLIGHTS) return;
     const H = (window as any).Highlight;
     const reg = (CSS as any).highlights;
-    const groups: Record<string, Range[]> = { "vb-red": [], "vb-yellow": [], "vb-red-open": [], "vb-yellow-open": [], "vb-zwnj": [] };
-    spans.forEach((sp, k) => groups[`vb-${sp.red ? "red" : "yellow"}${k === openK ? "-open" : ""}`].push(ranges[k]));
+    const groups: Record<string, Range[]> = Object.fromEntries(MARK_NAMES.map((n) => [n, [] as Range[]]));
+    const colour = (sp: Span) => (sp.red ? "red" : sp.blue ? "blue" : "yellow");
+    spans.forEach((sp, k) => groups[sp.sentence ? `vb-sentence${k === openK ? "-open" : ""}` : `vb-${colour(sp)}${k === openK ? "-open" : ""}`].push(ranges[k]));
     if (showZwnj.checked) {
         const text = input.value;
         for (let i = text.indexOf("\u200c"); i >= 0; i = text.indexOf("\u200c", i + 1)) {
@@ -377,7 +430,7 @@ function paintMarks() {
 function clearMarks() {
     spans = [];
     ranges = [];
-    if (HIGHLIGHTS) for (const n of ["vb-red", "vb-yellow", "vb-red-open", "vb-yellow-open", "vb-zwnj"]) (CSS as any).highlights.delete(n);
+    if (HIGHLIGHTS) for (const n of MARK_NAMES) (CSS as any).highlights.delete(n);
 }
 
 /** «(احتمال ۸۲٪)» in a model's message → 82, and the message without it. */
@@ -460,7 +513,7 @@ function citation(source: string): string {
 }
 
 /** The book recommends it, both forms are correct («آنها» / «آن‌ها»): reported only. */
-const isRecommendation = (m: Msg) => m.ruleId === "plural-ha" && !m.fix && /توصیه/.test(m.message);
+const isRecommendation = (m: Msg) => m.ruleId === "plural-ha" && /توصیه/.test(m.message);
 
 /** Why a card has no circles, in a few words. */
 function noMeterReason(m: Msg): string {
@@ -475,7 +528,7 @@ function noMeterReason(m: Msg): string {
 
 function meterFor(m: Msg, p: number | null): string {
     if (p !== null) return confidenceMeter(p);
-    if (m.fix && m.ruleId !== "punctuation" && m.ruleId !== "invisible" && !isStyle(m) && !NOT_IN_BOOK.test(splitMessage(m).source)) return bookMeter();
+    if (m.fix && !isTentative(m) && m.ruleId !== "punctuation" && m.ruleId !== "invisible" && !isStyle(m) && !NOT_IN_BOOK.test(splitMessage(m).source)) return bookMeter();
     return `<div class="confidence confidence-none" title="این کارت درجهٔ اطمینان ندارد: ${noMeterReason(m)}.">
                 <span class="confidence-label">درجه ندارد</span>
                 <span class="confidence-why">${noMeterReason(m)}</span>
@@ -484,6 +537,13 @@ function meterFor(m: Msg, p: number | null): string {
 
 /** Card i's HTML and class, shown in the note when its word is clicked. */
 let cards: Array<{ cls: string; html: string }> = [];
+
+/** A long stretch (an unclosed «« and its sentence) shown by its ends. */
+function clip(s: string, max = 40): string {
+    if (s.length <= max) return s;
+    const h = Math.floor((max - 1) / 2);
+    return s.slice(0, h) + "…" + s.slice(-h);
+}
 
 function buildCards(text: string) {
     cards = [];
@@ -497,17 +557,21 @@ function buildCards(text: string) {
         const { msg, p } = takeConfidence(split.text);
         // a book rule agreeing with a model's guess: the book's certainty
         const bookAgrees = [m, ...extras[i]].some(
-            (x) => x.fix && !/احتمال/.test(x.message) && x.ruleId !== "punctuation" && x.ruleId !== "invisible" && !isStyle(x) && !NOT_IN_BOOK.test(splitMessage(x).source)
+            (x) => x.fix && !isTentative(x) && x.ruleId !== "punctuation" && x.ruleId !== "invisible" && !isStyle(x) && !NOT_IN_BOOK.test(splitMessage(x).source)
         );
         const meter = bookAgrees ? bookMeter() : meterFor(m, p);
         const styleOnly = members.every(isStyle);
         // a flat error by an editing book («با این وجود»، «مثمر ثمر»): red, and applied with the rest
         const editingCertain = !styleOnly && members.some((x) => isEditing(x) && !isStyle(x));
-        const cls = (styleOnly ? "issue issue-style" : m.fix ? "issue" : "issue issue-judge") + (m.fix ? "" : " no-fix") + (meter.includes("confidence-none") ? " has-note" : " has-confidence");
+        const certain = isCertain(i);
+        const advice = !certain && isAdvice(i);
+        const cls = (advice ? "issue issue-style" : certain ? "issue" : "issue issue-judge") + (m.fix ? "" : " no-fix") + (meter.includes("confidence-none") ? " has-note" : " has-confidence");
         // show the whole word around the change, so «ي ← ی» reads «رييس ← رئیس»
         const [ws, we] = wordAround(text, Math.min(m.range[0], m.fix?.range[0] ?? m.range[0]), Math.max(m.range[1], m.fix?.range[1] ?? m.range[1]));
+        const fixedBy = (x: Msg) => text.slice(ws, x.fix!.range[0]) + x.fix!.text + text.slice(x.fix!.range[1], we);
         const original = text.slice(ws, we);
-        const fixed = m.fix ? text.slice(ws, m.fix.range[0]) + m.fix.text + text.slice(m.fix.range[1], we) : "";
+        const fixed = m.fix ? fixedBy(m) : "";
+        const alts = (m as Card).alts;
         reports.push({
             rule: members.map((x) => x.ruleId).join(", "),
             ruleLabel: labels.join("، "),
@@ -524,30 +588,35 @@ function buildCards(text: string) {
             ${meter}
             <div class="issue-head">
                 ${labels.map((l) => `<span class="chip">${esc(l)}</span>`).join("")}
-                ${styleOnly ? '<span class="chip chip-style">ویرایش زبانی · پیشنهاد</span>' : editingCertain ? '<span class="chip">ویرایش زبانی · غلط قطعی</span>' : m.fix ? "" : m.ruleId === "may-break" ? '<span class="chip chip-style">پیشنهاد سبکی</span>' : isRecommendation(m) ? '<span class="chip chip-style">توصیهٔ کتاب</span>' : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
+                ${styleOnly ? '<span class="chip chip-advice">ویرایش زبانی · پیشنهاد</span>' : editingCertain ? '<span class="chip">ویرایش زبانی · غلط قطعی</span>' : certain ? "" : advice ? `<span class="chip chip-advice">${isRecommendation(m) ? "توصیهٔ کتاب · پیشنهاد" : m.ruleId === "may-break" ? "پیشنهاد سبکی" : "پیشنهاد"}</span>` : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
             </div>
             <p class="change">
-                <span class="from">${show(original) || "&nbsp;"}</span>
-                ${m.fix ? `<span class="arrow" aria-hidden="true">←</span><span class="to">${show(fixed) || "(حذف)"}</span>` : ""}
+                <span class="from">${show(clip(original)) || "&nbsp;"}</span>
+                ${m.fix ? `<span class="arrow" aria-hidden="true">←</span><span class="to">${(alts ?? [m]).map((x) => show(clip(fixedBy(x))) || "(حذف)").join('<span class="or"> یا </span>')}</span>` : ""}
             </p>
             <p class="msg">${esc(msg)}</p>
             ${sources.map((src) => `<p class="source">${citation(src)}</p>`).join("")}
             <div class="actions">
-                ${m.fix ? `<button type="button" class="btn btn-small" data-apply="${i}">اعمال</button>` : ""}
+                ${alts && alts.length > 1
+                    ? alts.map((x, j) => `<button type="button" class="btn btn-small" data-alt="${i}:${j}" title="جایگزین با «${esc(fixedBy(x))}»">${show(clip(fixedBy(x), 18))}</button>`).join("")
+                    : m.fix ? `<button type="button" class="btn btn-small" data-apply="${i}">جایگزین</button>` : ""}
                 <button type="button" class="btn btn-small btn-quiet" data-ignore="${i}">نادیده</button>
+                <button type="button" class="btn btn-small btn-quiet btn-edit" data-edit="${i}" title="ویرایش همین واژه با صفحه‌کلید">${ICON.pencil}ویرایش</button>
                 <button type="button" class="btn btn-small btn-report" data-report="${i}">این پیشنهاد غلط است</button>
             </div>`;
         cards.push({ cls, html });
     });
     const red = spans.filter((sp) => sp.red).length;
-    const yellow = spans.length - red;
+    const blue = spans.filter((sp) => !sp.red && sp.blue).length;
+    const yellow = spans.length - red - blue;
     const fa = (n: number) => n.toLocaleString("fa-IR");
     summary.innerHTML =
         spans.length === 0
             ? "ایرادی پیدا نشد. متن با قواعدی که این ابزار می‌شناسد سازگار است."
             : `<span>${fa(spans.length)} واژه یا عبارت</span>` +
               `<span class="key"><span class="swatch swatch-red"></span>${fa(red)} غلط قطعی</span>` +
-              `<span class="key"><span class="swatch swatch-yellow"></span>${fa(yellow)} شاید غلط</span>`;
+              `<span class="key"><span class="swatch swatch-yellow"></span>${fa(yellow)} شاید غلط</span>` +
+              `<span class="key"><span class="swatch swatch-blue"></span>${fa(blue)} پیشنهاد</span>`;
     applyAllBtn.disabled = red === 0;
     reviewBtn.disabled = spans.length === 0;
 }
@@ -597,12 +666,9 @@ async function check() {
             }
         }
     }
-    const shown = (result.messages as unknown as Msg[]).filter(
-        (m) => !ignored.has(key(m, text)) && !(autoBox.checked && isAuto(m, text) && !declined.has(autoKey(m, text)))
-    );
-    const guarded = await noPingPong(text, shown);
+    const guarded = await visible(text, result.messages as unknown as Msg[]);
     if (input.value !== text) return; // typed meanwhile: the next check starts over
-    const merged = mergeSame(guarded, text);
+    const merged = mergeSame(collapseAlts(guarded), text);
     messages = merged.primary;
     extras = merged.extra;
     closePopover();
@@ -614,6 +680,12 @@ async function check() {
     } catch {
         /* storage may be unavailable */
     }
+}
+
+/** What the page shows for `msgs` (a lint of `text`): not ignored, not made silently, nothing that ping-pongs. */
+async function visible(text: string, msgs: Msg[]): Promise<Msg[]> {
+    const shown = msgs.filter((m) => !ignored.has(key(m, text)) && !(autoBox.checked && isAuto(m, text) && !declined.has(autoKey(m, text))));
+    return noPingPong(text, shown);
 }
 
 function schedule() {
@@ -936,7 +1008,7 @@ undoBtn.addEventListener("click", () => {
     });
 });
 
-function applyFix(m: Msg) {
+function applyFix(m: Msg, extra: Msg[] = extrasOf(m) ?? []) {
     if (!m.fix) return;
     remember();
     const t = input.value;
@@ -948,7 +1020,7 @@ function applyFix(m: Msg) {
         spans.push([e.pos + d, e.pos + d + e.inserted.length]);
         d += e.inserted.length - e.removed.length;
     }
-    justApplied = { before: t, after, spans, rank: Math.min(...[m, ...(extrasOf(m) ?? [])].map(rank)) };
+    justApplied = { before: t, after, spans, rank: Math.min(...[m, ...extra].map(rank)) };
     input.value = after;
     check();
 }
@@ -966,7 +1038,7 @@ const extrasOf = (m: Msg) => extras[messages.indexOf(m)];
 let justApplied: { before: string; after: string; spans: Array<[number, number]>; rank: number } | null = null;
 const pieceCache = new Map<string, Msg[]>();
 const verdictCache = new Map<string, boolean>();
-const settingsKey = () => JSON.stringify([mode.value, pluralMode.value, ezafeStyle.value, styleBoxes.map((b) => b.checked)]);
+const settingsKey = () => JSON.stringify([mode.value, pluralMode.value, haApart.checked, styleBoxes.map((b) => b.checked)]);
 /** The sentence around [s, e): from the mark before it to the mark after it (at most ~600 letters). */
 function pieceAround(text: string, s: number, e: number): [number, number] {
     const END_MARK = /[.!?؟؛\n]/;
@@ -1033,8 +1105,12 @@ function markRects(k: number): DOMRect[] {
 
 /** The marked span under a point, if any. */
 function spanAt(x: number, y: number): number {
-    for (let k = 0; k < spans.length; k++) {
-        if (markRects(k).some((r) => x >= r.left - 2 && x <= r.right + 2 && y >= r.top && y <= r.bottom)) return k;
+    // a word's own mark first; a sentence note where no word mark is
+    const order = [...spans.keys()].sort((a, b) => Number(!!spans[a].sentence) - Number(!!spans[b].sentence));
+    for (const k of order) {
+        // a one-letter mark («»» alone) still takes a finger: at least 24px wide
+        const slop = (r: DOMRect) => Math.max(2, (24 - r.width) / 2);
+        if (markRects(k).some((r) => x >= r.left - slop(r) && x <= r.right + slop(r) && y >= r.top && y <= r.bottom)) return k;
     }
     return -1;
 }
@@ -1084,14 +1160,56 @@ function place(k: number, x?: number, y?: number) {
     pop.style.top = `${top + window.scrollY}px`;
 }
 
+/**
+ * «قبلی/بعدی» and «مرور»: the page moves only if the word is off-screen, and only as far as
+ * needed («nearest»). Opening a note by tapping its word never moves the text.
+ */
 function goTo(k: number) {
     const r = markRects(k)[0];
     if (!r) return;
-    window.scrollTo({ top: window.scrollY + r.top - window.innerHeight / 2 });
+    const view = window.visualViewport;
+    const top = view ? view.offsetTop : 0;
+    const bottom = top + (view ? view.height : window.innerHeight);
+    const margin = 24;
+    let dy = 0;
+    if (r.top < top + margin) dy = r.top - top - margin;
+    else if (r.bottom > bottom - margin) dy = r.bottom - bottom + margin;
+    if (dy) window.scrollBy({ top: dy });
     openPopover(k);
 }
 
+/*
+ * A tap on a marked word opens its note and nothing else: no caret, no keyboard, no scroll
+ * (since 1.4.0). When the editor is not focused, the tap's default (focus, caret, the phone's
+ * keyboard) is cancelled; when the writer is typing, the caret moves as usual and the
+ * keyboard stays. A tap on unmarked text focuses as always.
+ */
+let touchAt: { x: number; y: number; t: number } | null = null;
+let skipClick = false;
+box.addEventListener("touchstart", (ev) => {
+    const t = ev.touches[0];
+    touchAt = ev.touches.length === 1 && document.activeElement !== box && spanAt(t.clientX, t.clientY) >= 0 ? { x: t.clientX, y: t.clientY, t: Date.now() } : null;
+}, { passive: true });
+box.addEventListener("touchend", (ev) => {
+    const start = touchAt;
+    touchAt = null;
+    if (!start) return;
+    const t = ev.changedTouches[0];
+    // a drag or a long press (scrolling, selecting) is the browser's
+    if (Math.hypot(t.clientX - start.x, t.clientY - start.y) > 10 || Date.now() - start.t > 600) return;
+    const k = spanAt(t.clientX, t.clientY);
+    if (k < 0) return;
+    ev.preventDefault(); // no click, no focus, no keyboard
+    skipClick = true;
+    window.setTimeout(() => (skipClick = false), 400);
+    openPopover(k, t.clientX, t.clientY);
+}, { passive: false });
+box.addEventListener("mousedown", (ev) => {
+    // a mouse click on a mark while not typing: the note, without the caret
+    if (document.activeElement !== box && spanAt(ev.clientX, ev.clientY) >= 0) ev.preventDefault();
+});
 box.addEventListener("click", (ev) => {
+    if (skipClick) return;
     if (!input.collapsed) return;
     const k = spanAt(ev.clientX, ev.clientY);
     if (k < 0) return closePopover();
@@ -1102,8 +1220,9 @@ box.addEventListener("mousemove", (ev) => {
     box.style.cursor = spanAt(ev.clientX, ev.clientY) >= 0 ? "pointer" : "";
 });
 document.addEventListener("click", (ev) => {
-    const t = ev.target as Node;
-    if (pop.hidden || pop.contains(t) || box.contains(t)) return;
+    // the path as dispatched: a button the note just replaced («بعدی») is no longer inside it
+    const path = ev.composedPath();
+    if (pop.hidden || path.includes(pop) || path.includes(box)) return;
     closePopover();
 });
 document.addEventListener("keydown", (ev) => {
@@ -1125,12 +1244,39 @@ pop.addEventListener("click", (ev) => {
     const nav = target.closest("[data-nav]") as HTMLElement | null;
     if (nav) return goTo(openK + Number(nav.dataset.nav));
     if (target.closest("[data-close]")) return closePopover();
+    const alt = target.closest("[data-alt]") as HTMLElement | null;
+    if (alt) {
+        const [i, j] = alt.dataset.alt!.split(":").map(Number);
+        const x = (messages[i] as Card).alts?.[j];
+        if (!x) return;
+        const text = input.value;
+        if (applyEdit(text, x.fix!) === text) {
+            // the other reading is the word as written («کمکم» = «کمک» + «م»): keep it, like «نادیده»
+            for (const y of [messages[i], ...extras[i]]) ignored.add(key(y, text));
+            void check();
+            return;
+        }
+        applyFix({ ...x, alts: undefined } as Msg, extras[i]);
+        status.textContent = "جایگزین شد.";
+        return;
+    }
+    const ed = target.closest("[data-edit]") as HTMLElement | null;
+    if (ed) {
+        // «ویرایش»: the keyboard opens with the caret at the end of the word. focus() is called
+        // right here, in the tap's own handler: iOS opens the keyboard only for a user gesture.
+        const sp = spans[openK];
+        const end = sp ? sp.e : cardSpan(messages[Number(ed.dataset.edit)], input.value)[1];
+        closePopover();
+        box.focus({ preventScroll: true });
+        setCaret(end);
+        return;
+    }
     const a = target.closest("[data-apply]") as HTMLElement | null;
     const ig = target.closest("[data-ignore]") as HTMLElement | null;
     const rp = target.closest("[data-report]") as HTMLElement | null;
     if (a) {
         applyFix(messages[Number(a.dataset.apply)]);
-        status.textContent = "اصلاح شد.";
+        status.textContent = "جایگزین شد.";
     }
     if (rp) {
         const i = Number(rp.dataset.report);
@@ -1157,7 +1303,10 @@ pop.addEventListener("click", (ev) => {
 // ---- theme: light unless the reader picks dark ----
 const themeBtn = $<HTMLButtonElement>("theme");
 function showTheme() {
-    themeBtn.textContent = document.documentElement.dataset.theme === "dark" ? "روشن" : "تیره";
+    // the icon of the mode a tap switches to; the label says both
+    const dark = document.documentElement.dataset.theme === "dark";
+    themeBtn.innerHTML = dark ? ICON.sun : ICON.moon;
+    themeBtn.setAttribute("aria-pressed", String(dark));
 }
 themeBtn.addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
@@ -1181,24 +1330,28 @@ fetch("kahroba.woff2")
     })
     .catch(() => undefined);
 
+/*
+ * «درست‌کن»: every red mark, and only those (since 1.4.0 the page does it itself: textlint's
+ * own fixer would also make the yellow suggestions, which now carry their replacements).
+ * One fix can make another possible («همه دفترهارا» → «همه دفترها را» → «همهٔ دفترها را»).
+ */
 applyAllBtn.addEventListener("click", async () => {
-    status.textContent = "در حال اعمال…";
-    // what is about to change, for the list after
+    status.textContent = "در حال جایگزینی…";
     const planned = spans
         .filter((sp) => sp.red)
-        .map((sp) => reports[sp.items.find((i) => messages[i].fix && !isStyle(messages[i])) ?? sp.items[0]])
+        .map((sp) => reports[sp.items.find((i) => isCertainMsg(messages[i])) ?? sp.items[0]])
         .filter((r) => r && r.suggestion && r.suggestion !== r.original);
     remember();
-    // one fix can make another possible («همه دفترهارا» → «همه دفترها را» → «همۀ دفترها را»)
     let text = input.value;
     for (let round = 0; round < 3; round++) {
-        const next = (await kernel.fixText(text, options(true))).output;
+        const msgs = await visible(text, (await kernel.lintText(text, options())).messages as unknown as Msg[]);
+        const next = applyCertain(text, msgs);
         if (next === text) break;
         text = next;
     }
     input.value = text;
     await check();
-    status.textContent = `${planned.length.toLocaleString("fa-IR")} اصلاح قطعی اعمال شد.`;
+    status.textContent = `${planned.length.toLocaleString("fa-IR")} غلط قطعی جایگزین شد.`;
     const list = changesEl.querySelector("ol")!;
     list.replaceChildren(
         ...planned.map((r) => {
@@ -1208,6 +1361,34 @@ applyAllBtn.addEventListener("click", async () => {
         })
     );
     changesEl.hidden = planned.length === 0;
+});
+
+/*
+ * «چسباندن»: the clipboard into the editor, the way a paste goes (the typing fixes run on it,
+ * it is one step of «بازگشت», and the text is checked). Into an empty editor it replaces all;
+ * otherwise at the caret, or at the end. readText() is called right in the tap's handler:
+ * iOS shows its «Paste» bubble only for a user gesture.
+ */
+pasteBtn.addEventListener("click", () => {
+    const denied = () => (status.textContent = "اجازهٔ خواندن حافظه داده نشد؛ متن را با نگه‌داشتن انگشت بچسبانید");
+    if (!navigator.clipboard?.readText) return void denied();
+    const at = document.activeElement === box ? caret() : null;
+    navigator.clipboard.readText().then((t) => {
+        t = t.replace(/\r\n?/g, "\n");
+        if (!t) return;
+        const cur = input.value;
+        remember();
+        const pos = cur === "" ? 0 : at ?? cur.length;
+        input.value = cur === "" ? t : cur.slice(0, pos) + t + cur.slice(pos);
+        if (at !== null) setCaret(pos + t.length);
+        pendingAuto = "all";
+        autoHold = false;
+        closePopover();
+        changesEl.hidden = true;
+        clearMarks();
+        schedule();
+        status.textContent = "متن چسبانده شد.";
+    }, denied);
 });
 
 copyBtn.addEventListener("click", async () => {
@@ -1220,13 +1401,6 @@ copyBtn.addEventListener("click", async () => {
     }
 });
 
-$<HTMLButtonElement>("sample").addEventListener("click", () => {
-    input.value = mode.value === "dialogue" ? SAMPLE_DIALOGUE : SAMPLE;
-    ignored = new Set();
-    pendingAuto = "all";
-    autoHold = false;
-    check();
-});
 $<HTMLButtonElement>("clear").addEventListener("click", () => {
     input.value = "";
     ignored = new Set();
@@ -1265,7 +1439,23 @@ box.addEventListener("input", (ev) => {
     clearMarks();
     schedule();
 });
-[showZwnj, pluralMode, ezafeStyle].forEach((el) => el.addEventListener("change", check));
+[showZwnj, pluralMode].forEach((el) => el.addEventListener("change", check));
+// «همیشه «ها» را جدا بنویس»: joined «ها» joins the typing fixes; remembered per browser
+try {
+    haApart.checked = stored("ha-apart") === "on";
+} catch {
+    /* storage may be unavailable */
+}
+haApart.addEventListener("change", () => {
+    try {
+        localStorage.setItem("vajban:ha-apart", haApart.checked ? "on" : "off");
+    } catch {
+        /* storage may be unavailable */
+    }
+    pendingAuto = "all";
+    autoHold = false;
+    void check();
+});
 // which language-editing rules are on: remembered per browser
 try {
     const off = JSON.parse(stored("style-off") || "[]") as string[];
@@ -1297,12 +1487,14 @@ try {
     /* storage may be unavailable */
 }
 
-let initial = SAMPLE;
+// no sample text: the empty editor shows its placeholder; a saved draft comes back
+let initial = "";
 try {
-    initial = stored("draft") || SAMPLE;
+    initial = stored("draft") || "";
 } catch {
     /* storage may be unavailable */
 }
 input.value = initial;
+pendingAuto = initial ? "all" : "none";
 check();
 void setupOwnerPanel();

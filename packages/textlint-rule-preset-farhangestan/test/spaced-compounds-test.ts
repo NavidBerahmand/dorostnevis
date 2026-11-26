@@ -7,7 +7,9 @@ new TextLintTester().run("spaced-compounds", rule, {
         // the spaced form is a phrase: a preposition («در گذشته») or a verb («قرار داد»، «دست یابیم»)
         "در گذشته چنین بود", "قرار داد که برود", "به این مهم دست یابیم", "شناخته شده است",
         // a light verb next: «باز کرد», not «زبان‌باز»
-        "زبان باز کرد", z("کارِ خانه")],
+        "زبان باز کرد", z("کارِ خانه"),
+        // the last word with its suffix is a word of its own («آموزش»، «سازمان»، «بافت»), or a light verb («کنی»)
+        "دانش آموزش", "به دست سازمان جهانی", "توسط بافت‌ها", "چای پاک کنی"],
     invalid: [
         inv("رئیس جمهور آمد", z("رئیس‹جمهور آمد")),
         inv("رئیس جمهوری", z("رئیس‹جمهوری")),
@@ -42,11 +44,5 @@ new TextLintTester().run("spaced-compounds", rule, {
             errors: [{ message: "اگر «خانه دار» یک واژه است، با نیم‌فاصله نوشته می‌شود: «خانه‌دار» (فرهنگ املایی، ص ۲۶۱)" }]
         },
         { text: "شورای عالی انقلاب", output: "شورای عالی انقلاب", errors: [{}] },
-        // a suffix that makes the last part a word of its own («آموزش»): two words, maybe
-        {
-            text: "دانش آموزش",
-            output: "دانش آموزش",
-            errors: [{ message: "اگر «دانش آموزش» یک واژه است، با نیم‌فاصله نوشته می‌شود: «دانش‌آموزش» (فرهنگ املایی، ص ۲۹۲)" }]
-        }
     ]
 });

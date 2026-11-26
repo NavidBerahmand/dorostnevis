@@ -80,7 +80,7 @@ export default createPatternRule(() => ({
         },
         {
             pattern: new RegExp(`${START}در ارتباط با${END}`, "g"),
-            check: () => ({ message: "«در ارتباط با» تعبیر اداری و عاریتی است؛ بسته به معنا «دربارهٔ» یا «در مورد»", fix: false, source: S("۱۵۷") })
+            check: () => ({ message: "«در ارتباط با» تعبیر اداری و عاریتی است؛ بسته به معنا «دربارهٔ» یا «در مورد»", replacement: "دربارهٔ", alternatives: ["در مورد"], fix: false, source: S("۱۵۷") })
         },
         {
             pattern: new RegExp(`${START}نقطه${Z}?نظر(ات)?${END}`, "g"),
@@ -94,13 +94,13 @@ export default createPatternRule(() => ({
         {
             pattern: new RegExp(`${START}نظرات${END}`, "g"),
             // no automatic fix: «نظرات او» needs «نظرهای او»
-            check: () => ({ message: "«نظرات» جمع «نظره» است، نه «نظر»؛ «نظرها» (یا «نظرهای …») یا «آرا»", replacement: "نظرها", fix: false, source: S("۱۶۱") })
+            check: () => ({ message: "«نظرات» جمع «نظره» است، نه «نظر»؛ «نظرها» (یا «نظرهای …») یا «آرا»", replacement: "نظرها", alternatives: ["آرا"], fix: false, source: S("۱۶۱") })
         },
         {
             pattern: new RegExp(`${START}لازم به (ذکر|یادآوری|توضیح|تذکر) است${END}`, "g"),
             check: (m) => m[1] === "تذکر"
-                ? { message: "«لازم» حرف اضافهٔ «به» نمی‌گیرد؛ «این تذکر لازم است»، یا عبارت را یکسره بردارید", fix: false, source: N("۳۲۸") }
-                : { message: "«لازم به ذکر است» نامطلوب است؛ «باید یادآور شد» یا «یادآوری این نکته لازم است»", fix: false, source: S("۱۶۰") }
+                ? { message: "«لازم» حرف اضافهٔ «به» نمی‌گیرد؛ «این تذکر لازم است»، یا عبارت را یکسره بردارید", replacement: "این تذکر لازم است", fix: false, source: N("۳۲۸") }
+                : { message: "«لازم به ذکر است» نامطلوب است؛ «باید یادآور شد» یا «یادآوری این نکته لازم است»", replacement: "باید یادآور شد", alternatives: ["یادآوری این نکته لازم است"], fix: false, source: S("۱۶۰") }
         },
         {
             pattern: new RegExp(`${START}غیر${Z}?قابلِ?${Z}?(${Object.keys(UNABLE).map((k) => k.replace(ZWNJ, Z)).join("|")})${END}`, "g"),
@@ -122,7 +122,12 @@ export default createPatternRule(() => ({
         },
         {
             pattern: new RegExp(`${START}را استفاده (?:کرد|کردند|کرده|کردیم|کردم|می${Z}?کند|می${Z}?کنند|می${Z}?کنیم|کنند|کند|کنید)${END}`, "g"),
-            check: () => ({ message: "«استفاده کردن» با «از» می‌آید، نه «را»: «از … استفاده کرد»", fix: false, source: S("۱۶۸") })
+            // «را استفاده کرد» → «را به کار برد»: the object stays where it is
+            check: (m) => {
+                const v = m[0].replace(/^را استفاده /, "");
+                const to = "را به کار " + v.replace(/کرد/, "برد").replace(/کن(?=د|ند|یم|ید)/, "بر");
+                return { message: "«استفاده کردن» با «از» می‌آید، نه «را» («از … استفاده کرد»)؛ «را به کار برد» هم رساست", replacement: to, fix: false, source: S("۱۶۸") };
+            }
         },
         {
             pattern: new RegExp(`${START}قابلِ?${Z}?اهمیت${END}`, "g"),
@@ -143,7 +148,7 @@ export default createPatternRule(() => ({
         },
         {
             pattern: new RegExp(`${START}کنکاش${END}`, "g"),
-            check: () => ({ message: "«کنکاش» (درست‌تر: کنگاش) یعنی «مشورت»؛ در معنای جست‌وجو «کاوش» یا «تفحص»", fix: false, source: S("۱۶۰") })
+            check: () => ({ message: "«کنکاش» (درست‌تر: کنگاش) یعنی «مشورت»؛ در معنای جست‌وجو «کاوش» یا «تفحص»", replacement: "کاوش", alternatives: ["تفحص", "کنگاش"], fix: false, source: S("۱۶۰") })
         },
         {
             pattern: new RegExp(`${START}معرّ?ف حضور`, "g"),

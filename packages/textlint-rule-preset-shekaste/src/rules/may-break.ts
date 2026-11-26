@@ -53,6 +53,7 @@ export default createPatternRule(() => ({
                 const e = MAP.get(m[0].replace(/ +/g, " "))!;
                 return {
                     message: `در گفت‌وگو می‌توان شکسته نوشت (یک هجا کم می‌شود): «${e.spoken}»`,
+                    replacement: e.spoken,
                     fix: false,
                     source: `${BOOK}، ص ${e.page}`
                 };
@@ -65,6 +66,7 @@ export default createPatternRule(() => ({
                 if (!KNOWN.has(m[1])) return null;
                 return {
                     message: `در گفت‌وگو: «${m[1]}م»`,
+                    replacement: `${m[1]}م`,
                     fix: false,
                     source: `${BOOK}، ص ۲۰`
                 };
@@ -76,7 +78,8 @@ export default createPatternRule(() => ({
             check: (m) => {
                 if (!KNOWN.has(m[1])) return null;
                 return {
-                    message: `در گفت‌وگو نشانهٔ جمع «ها» به کار می‌رود: «${m[1]}${Z}ها»`,
+                    message: `در گفت‌وگو نشانهٔ جمع «ها» به کار می‌رود: «${m[1]}${"اآدذرزژو".includes(m[1].slice(-1)) ? "" : Z}ها»`,
+                    replacement: `${m[1]}${"اآدذرزژو".includes(m[1].slice(-1)) ? "" : Z}ها`,
                     fix: false,
                     source: `${BOOK}، ص ۲۳`
                 };
@@ -85,7 +88,7 @@ export default createPatternRule(() => ({
         {
             // «چه می‌خوای؟» → «چی می‌خوای؟» (ص ۲۷)
             pattern: new RegExp(`${START}چه(?= +ن?می${Z})`, "g"),
-            check: () => ({ message: "در گفت‌وگو «چه» بیشتر «چی» گفته می‌شود: «چی»", fix: false, source: `${BOOK}، ص ۲۷` })
+            check: () => ({ message: "در گفت‌وگو «چه» بیشتر «چی» گفته می‌شود: «چی»", replacement: "چی", fix: false, source: `${BOOK}، ص ۲۷` })
         },
         {
             // «سرد است» → «سرده»؛ not after ه/ا (ص ۲۴) or و
@@ -95,6 +98,7 @@ export default createPatternRule(() => ({
                 if ("هاآو".includes(last) || m[1] === "کی" || m[1] === "چی") return null; // «کیه، چیه»: listed above
                 return {
                     message: `در گفت‌وگو «است» را می‌توان شکسته نوشت: «${m[1]}ه»`,
+                    replacement: `${m[1]}ه`,
                     fix: false,
                     source: `${BOOK}، ص ۲۳`
                 };

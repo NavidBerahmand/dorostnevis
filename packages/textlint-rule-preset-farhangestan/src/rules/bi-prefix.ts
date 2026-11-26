@@ -18,6 +18,7 @@
  *   نمی‌شناسد و شکل جدا را می‌شناسد. «بیمار»، «بیرون»، «بیگانه» دست نمی‌خورند.
  *   استثناهای کتاب بر داده‌های Hazm مقدّم‌اند (Hazm «بی‌هوش» و «بی‌عار» دارد).
  */
+import { otherReading, homographMessage } from "../util/homograph";
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, WORD, ZWNJ } from "../util/persian";
 import hazmBi from "../dict/hazm-bi.json";
@@ -56,6 +57,9 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const separated = JOINED_TO_SEPARATED[m[0]];
                 if (!separated || ALL_EXCEPTIONS.has(m[0])) return null;
+                // «بینشان»: also «بین» + «شان»
+                const other = otherReading(m[0], separated);
+                if (other) return { message: homographMessage(m[0], separated, other), replacement: separated, alternatives: [m[0]], fix: false };
                 return {
                     message: `پیشوند «بی» با نیم‌فاصله نوشته می‌شود: «${separated}»`,
                     replacement: separated

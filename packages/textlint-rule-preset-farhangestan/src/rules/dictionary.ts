@@ -15,6 +15,7 @@
  * - دو مدخل با حروف یکسان و معنای متفاوت («آبرو»، «آب‌رو») فقط گزارش
  *   می‌شوند، بی اصلاح خودکار.
  */
+import { otherReading, homographMessage } from "../util/homograph";
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, WORD, ZWNJ, NON_JOINING, toPersianDigits } from "../util/persian";
 import { FARHANG, FARHANG_OVERRIDES, BOOK_JOINED } from "../util/words";
@@ -50,7 +51,8 @@ export default createPatternRule(() => ({
                 if (!row) return null;
                 const [preferred, others, page] = row;
                 const override = FARHANG_OVERRIDES[key];
-                const target = override ?? preferred;
+                // the ezafe mark is always «هٔ» (since 1.4.0), also where the farhang prints «ۀ»
+                const target = (override ?? preferred)?.replace(/ۀ/g, "هٔ") ?? null;
                 const seen = visibleForm(word);
                 if (target && seen === visibleForm(target)) return null;
                 if (!override && [preferred ?? "", ...others].some((f) => visibleForm(f) === seen)) {
@@ -73,10 +75,18 @@ export default createPatternRule(() => ({
                 if (!target) {
                     return {
                         message: `این کلمه در فرهنگ به چند شکل و با معنای متفاوت آمده: «${others.join("»، «")}»`,
+                        // one button per form the farhang gives, for the writer to choose by meaning
+                        ...(() => {
+                            const forms = others.filter((f) => visibleForm(f) !== seen).map((f) => f.replace(/ۀ/g, "هٔ"));
+                            return forms.length ? { replacement: forms[0], alternatives: forms.slice(1) } : {};
+                        })(),
                         fix: false,
                         source
                     };
                 }
+                // «کمکم»: also «کمک» + «م», a different word: never red
+                const other = otherReading(word, target);
+                if (other) return { message: homographMessage(word, target, other), replacement: target, alternatives: [word], fix: false, source };
                 return { message: `املای مرجّح «${target}» است`, replacement: target, source };
             }
         }

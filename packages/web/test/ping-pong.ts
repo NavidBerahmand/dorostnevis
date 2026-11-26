@@ -5,14 +5,14 @@
  * - every single fix is made and the text linted again: a new message on the changed
  *   letters must not give the old text back, bring the fixing rule back over a further step,
  *   object from a rule of higher precedence, or object without a fix (lint-setup.ts, conflictsOf);
- * - «اعمال همهٔ اصلاح‌های قطعی» is run to its end: it must stop (no cycle, at most four
+ * - «درست‌کن» (the certain fixes only, as the page makes them) is run to its end: it must stop (no cycle, at most four
  *   rounds), and no red mark may be left on the letters it changed;
  * - the automatic typing fixes are made as the page makes them (five rounds): none may be
  *   left over, and no fix the page offers on their letters may be taken back by them.
  * Used by test/no-ping-pong-test.ts; the same logic ran over ~15,000 texts for 1.3.1.
  */
 import { TextlintKernel } from "@textlint/kernel";
-import { Msg, Settings, lintOptions, conflictsOf, isAuto, isStyle, editsOf, touches, applyFix, splitMessage, rank } from "../src/lint-setup";
+import { Msg, Settings, lintOptions, conflictsOf, isAuto, isCertainMsg, isTentative, applyCertain, editsOf, touches, applyFix, splitMessage, rank } from "../src/lint-setup";
 
 const kernel = new TextlintKernel();
 const vis = (s: string) => s.replace(/‌/g, "‹").replace(/\n/g, "⏎");
@@ -47,7 +47,6 @@ function spansOf(a: string, b: string): Array<[number, number]> {
 export async function pingPong(text: string, settings: Settings): Promise<string[]> {
     const problems: string[] = [];
     const full = lintOptions(settings);
-    const forFix = lintOptions(settings, true);
     const auto = lintOptions(settings, false, true);
     const cache = new Map<string, Msg[]>();
     const lint = async (t: string) => {
@@ -64,16 +63,18 @@ export async function pingPong(text: string, settings: Settings): Promise<string
         if (!m.fix) continue;
         const fixed = applyFix(text, m.fix);
         for (const c of await conflictsOf(lint, text, m, msgs)) {
-            if (c.kind !== "changes") say(`${c.kind}: ${desc(m, text)}  ⇒  ${desc(c.by, fixed)}`);
+            // a yellow/blue suggestion a rule objects to is left out by the page's guard: not a conflict
+            if (c.kind === "changes" || (isTentative(m) && c.kind !== "restores")) continue;
+            say(`${c.kind}: ${desc(m, text)}  ⇒  ${desc(c.by, fixed)}`);
         }
     }
 
-    // «اعمال همه», to its end
+    // «درست‌کن», to its end
     let cur = text;
     const seen = [text];
     let rounds = 0;
     for (; rounds < 8; rounds++) {
-        const next = (await kernel.fixText(cur, forFix)).output;
+        const next = applyCertain(cur, await lint(cur));
         if (next === cur) break;
         if (seen.includes(next)) {
             say(`apply-all cycles: «${vis(next)}»`);
@@ -86,8 +87,8 @@ export async function pingPong(text: string, settings: Settings): Promise<string
     if (cur !== text) {
         const spans = spansOf(text, cur);
         for (const d of await lint(cur)) {
-            if (!d.fix || isStyle(d) || /احتمال/.test(d.message) || d.ruleId === "spelling") continue; // red marks only
-            if (editsOf(cur, d.fix.range, d.fix.text).some((e2) => spans.some(([s, e]) => touches(e2, s, e)))) {
+            if (!isCertainMsg(d) || d.ruleId === "spelling") continue; // red marks only
+            if (editsOf(cur, d.fix!.range, d.fix!.text).some((e2) => spans.some(([s, e]) => touches(e2, s, e)))) {
                 say(`apply-all leaves a red mark on its own fix: «${vis(cur)}»  ⇒  ${desc(d, cur)}`);
             }
         }
