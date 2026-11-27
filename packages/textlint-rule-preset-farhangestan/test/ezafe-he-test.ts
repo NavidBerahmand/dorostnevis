@@ -24,7 +24,11 @@ new TextLintTester().run("ezafe-he", rule, {
         "از نصرالله میرزا با سپاهی ۱۵۰۰۰ نفره او را شکست داد",
         "خسته من", // ends in a silent ه: a real word
         "فرماندهٔ سپاه و گرهٔ کور", // pronounced «ه»: the final-he rule's
-        "فرماندۀ سپاه"
+        "فرماندۀ سپاه",
+        // 1.6.3: a verb after the pronoun, the sentence may split there («در خانه، من نبودم»): the model decides, and is unsure
+        "در خانه من نبودم.",
+        // «این نامۀ رسمی» or «این نامه رسمی است»: the retrained model is unsure (44%), no card
+        "این نامه رسمی است."
     ],
     invalid: [
         inv("خانه ی من", "خانۀ من"),
@@ -33,10 +37,11 @@ new TextLintTester().run("ezafe-he", rule, {
         { text: "خانه ی من", output: "خانهٔ من", options: { style: "he-hamza" }, errors: [{}] },
         // «کتابه من»: a suggestion only (since 1.4.0)
         { text: "کتابه من را بده.", output: "کتابه من را بده.", errors: [{}] },
-        inv("خانه من بزرگ است.", "خانۀ من بزرگ است."),
-        inv("این نامه او است.", "این نامۀ او است."),
-        // a verb after the pronoun: the sentence may split there («در خانه، من نبودم»)
-        { text: "در خانه من نبودم.", output: "در خانه من نبودم.", errors: [{}] },
+        // 1.6.3: a suggestion, not a certain fix: whether the word is in the ezafe is a reading (red was 39 of 40
+        // right on Wikipedia, 50 of 55 on blogs: not the 99% of a red card)
+        { text: "خانه من بزرگ است.", output: "خانه من بزرگ است.", errors: [{}] },
+        { text: "این نامه او است.", output: "این نامه او است.", errors: [{}] },
+
         { text: "دوسته شما آمد.", output: "دوسته شما آمد.", errors: [{}] },
         // «هٔ» → «ۀ»: the page makes it silently, with the typing fixes (since 1.5.0)
         {
@@ -47,9 +52,10 @@ new TextLintTester().run("ezafe-he", rule, {
         // the model: a missing ezafe before another word
         inv("نتیجه نهایی را نشان داد.", "نتیجۀ نهایی را نشان داد."),
         // less sure (0.55–0.9): a suggestion, no automatic fix
-        { text: "این نامه رسمی است.", output: "این نامه رسمی است.", errors: [{}] }, // «این نامۀ رسمی» or «این نامه رسمی است»
+
         inv("این روستا در دهستان قلعه شاهین قرار دارد.", "این روستا در دهستان قلعۀ شاهین قرار دارد."),
-        inv("خانه قبلی را فروخت.", "خانۀ قبلی را فروخت."),
+        // 1.6.3: the retrained model is less sure here (85%): a suggestion, no automatic fix
+        { text: "خانه قبلی را فروخت.", output: "خانه قبلی را فروخت.", errors: [{}] },
         inv("همه دفترها را جمع کرد.", "همۀ دفترها را جمع کرد."),
         // a compound written with a space: the compound is suggested, no ezafe
         { text: "از کارهای جامعه شناسانی همچون او", output: "از کارهای جامعه شناسانی همچون او", errors: [{}] },

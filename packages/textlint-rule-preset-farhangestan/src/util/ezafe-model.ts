@@ -94,6 +94,61 @@ function tag(w: string): string {
     return "UNK";
 }
 
+/*
+ * Spoken-aware tags for the ezafe model (since 1.6.3; the «را» model keeps tag()). Mirrors tag2() and
+ * spoken_verb() in features.py.
+ */
+const SPOKEN_STEMS = new Set([
+    "گ", "ر", "د", "ش", "تون", "خوا", "دون", "خون", "مون", "رسون", "ذار", "زار", "آ", "یا", "گیر", "کن", "زن",
+    "بین", "خور", "دو", "پوش", "بر", "گرد", "شکن", "کش", "سوز", "ترس", "پرس", "فهم", "ریز", "خند", "شین", "پلک", "گرد‌ون", "چرخون"
+]);
+const SPOKEN_PERSON = ["یم", "ین", "ید", "ند", "م", "ی", "ه", "ن", "د"];
+const SPOKEN_BARE = new Set([
+    "داره", "نداره", "دارن", "ندارن", "دارین", "باشه", "نباشه", "باشن", "باشین", "بشه", "نشه", "بشن", "بره", "نره", "کنه", "شه",
+    "گه", "تونه", "هستن", "نیستن", "هستین", "نیستین", "هس", "نیس", "میشه", "نمیشه"
+]);
+
+function spokenVerb(w: string): boolean {
+    if (SPOKEN_BARE.has(w)) return true;
+    for (const pre of ["نمی" + ZWNJ, "می" + ZWNJ, "نمی", "می"]) {
+        if (!w.startsWith(pre)) continue;
+        const rest = w.slice(pre.length);
+        for (const e of [...SPOKEN_PERSON, ""]) {
+            if (!(rest.length > e.length && rest.endsWith(e))) continue;
+            const st = rest.slice(0, rest.length - e.length);
+            if (PRESENT.has(st) || SPOKEN_STEMS.has(st) || PRESENT.has("آ" + st) || PAST.has(st)) return true;
+            if (st.slice(0, 1) === "ا" && (SPOKEN_STEMS.has("آ" + st.slice(1)) || PRESENT.has("آ" + st.slice(1)))) return true;
+        }
+        return false;
+    }
+    for (const pre of ["ب", "ن"]) {
+        if (!(w.startsWith(pre) && w.length > 3)) continue;
+        const rest = w.slice(1);
+        for (const e of ["ه", "ن", "ین"]) {
+            if (rest.length > e.length + 1 && rest.endsWith(e) && (PRESENT.has(rest.slice(0, -e.length)) || SPOKEN_STEMS.has(rest.slice(0, -e.length)))) return true;
+        }
+    }
+    return w.endsWith("ین") && PAST.has(w.slice(0, -2));
+}
+
+function tag2(w: string): string {
+    const t = tag(w);
+    if (t !== "UNK") return t;
+    if (w.endsWith("ن") && PAST.has(w.slice(0, -1))) return "INF";
+    if (spokenVerb(w)) return "V";
+    return t;
+}
+
+/**
+ * A finite verb, written or spoken («گفتم»، «می‌ده»، «بشه»، «نکرد»), that is no noun as well (since 1.6.3: «پرداخت»،
+ * «ساخت»، «خرید» are nouns too and may be an ezafe's second part: «نحوۀ پرداخت»).
+ */
+export function isFiniteVerb(w: string): boolean {
+    if (tag2(w) !== "V") return false;
+    const t = POS.get(w);
+    return !t || !t.split(",").includes("N");
+}
+
 function context(toks: string[], i: number, step: number, n: number): string[] {
     const out: string[] = [];
     let j = i + step;
@@ -131,13 +186,16 @@ function features(toks: string[], i: number): string[] {
         "m1w0=" + m1 + "|" + w0,
         "w1w2=" + w1 + "|" + w2,
         "w0w1s=" + w0 + "|" + w1.slice(-2),
-        "w0t=" + tag(w0),
-        "w1t=" + tag(w1),
-        "w2t=" + tag(w2),
-        "m1t=" + tag(m1),
-        "w1tw2t=" + tag(w1) + "|" + tag(w2),
-        "m1tw1t=" + tag(m1) + "|" + tag(w1),
-        "w0w1t=" + w0 + "|" + tag(w1)
+        "w0t=" + tag2(w0),
+        "w1t=" + tag2(w1),
+        "w2t=" + tag2(w2),
+        "m1t=" + tag2(m1),
+        "w1tw2t=" + tag2(w1) + "|" + tag2(w2),
+        "m1tw1t=" + tag2(m1) + "|" + tag2(w1),
+        "w0w1t=" + w0 + "|" + tag2(w1),
+        // since 1.6.3: the word after next («اطلاع دارید»: a compound verb begins at w1), and the words around
+        "w1w2t=" + w1 + "|" + tag2(w2),
+        "m1w1=" + m1 + "|" + w1
     ];
 }
 

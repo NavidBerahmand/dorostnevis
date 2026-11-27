@@ -4,7 +4,7 @@ Train the ezafe model (logistic regression) and write src/dict/ezafe-model.json.
 
 Usage:
     python3 -I extract_wiki.py fawiki-slice.xml > articles.jsonl
-    python3 train.py articles.jsonl book.txt
+    python3 train.py articles.jsonl book.txt [blogs.jsonl.gz]
     python3 calibrate.py book.txt      # always after train.py: it rewrites the model file
 
 Training data is Persian Wikipedia, which marks the ezafe after a silent «ه»
@@ -14,7 +14,14 @@ ezafe is rare, so only articles that mark it consistently are used (at least
 about 28%, so these are the articles that mark it everywhere). Weights under
 0.3 are dropped: on the book that loses nothing and shrinks the file 4x. Articles are split 90/10 by title hash for testing. The book
 (دستور خط، which marks every ezafe with «ۀ») is a second, independent test.
+
+Since 1.6.3 also Persian blog and forum text (blogs.jsonl.gz: one paragraph per line, {"t": text, "dom":
+site}): the sites that mark the ezafe consistently (the same rule as for articles, per site; 314 sites, 15
+thousand cases) teach the model spoken words and spoken verbs. Their examples weigh BLOG_WEIGHT (5) times
+as much; sites are split 80/20 by hash for testing. The features know spoken verbs since then (features.py,
+tag2()).
 """
+import gzip
 import hashlib
 import json
 import os
@@ -31,7 +38,8 @@ from features import candidates  # noqa: E402
 OUT = os.path.join(os.path.dirname(__file__), "..", "..", "src", "dict", "ezafe-model.json")
 MIN_COUNT = 3
 MIN_RATIO = float(os.environ.get("MIN_RATIO", "0.3"))
-PRUNE = float(os.environ.get("PRUNE", "0.3"))
+PRUNE = float(os.environ.get("PRUNE", "0.35"))
+BLOG_WEIGHT = float(os.environ.get("BLOG_WEIGHT", "5"))
 POS_WEIGHT = float(os.environ.get("POS_WEIGHT", "1"))
 C = float(os.environ.get("C", "0.5"))
 
@@ -52,6 +60,24 @@ def load(path):
     return train, test
 
 
+def load_blogs(path):
+    """Blog paragraphs of the sites that mark the ezafe consistently: train (weighted) and test rows."""
+    paras = [json.loads(l) for l in gzip.open(path, "rt", encoding="utf-8")]
+    per_site = {}
+    for u in paras:
+        ys = [y for _, y, _ in candidates(u["t"])]
+        a = per_site.setdefault(u["dom"], [0, 0]); a[0] += len(ys); a[1] += sum(ys)
+    good = {d for d, (n, pos) in per_site.items() if pos >= 5 and pos / max(n, 1) >= MIN_RATIO}
+    train, test = [], []
+    for u in paras:
+        if u["dom"] not in good:
+            continue
+        bucket = int(hashlib.md5(u["dom"].encode()).hexdigest(), 16) % 10
+        (test if bucket in (0, 1) else train).extend((f, y) for f, y, _ in candidates(u["t"]))
+    print(f"blog sites kept: {len(good)}; train {len(train)}, test {len(test)}", file=sys.stderr)
+    return train, test
+
+
 def to_dicts(rows):
     return [{k: 1 for k in f} for f, _ in rows], np.array([y for _, y in rows])
 
@@ -66,8 +92,11 @@ def report(name, y, p):
     print(f"{name}: accuracy {acc:.3f}, positives {int(y.sum())}/{len(y)}", file=sys.stderr)
 
 
-def main(articles, book):
+def main(articles, book, blogs=None):
     train, test = load(articles)
+    blog_train, blog_test = load_blogs(blogs) if blogs else ([], [])
+    weights = np.array([1.0] * len(train) + [BLOG_WEIGHT] * len(blog_train))
+    train = train + blog_train
     counts = Counter(k for f, _ in train for k in f)
     keep = {k for k, c in counts.items() if c >= MIN_COUNT}
     train = [([k for k in f if k in keep], y) for f, y in train]
@@ -75,8 +104,8 @@ def main(articles, book):
     vec = DictVectorizer()
     X = vec.fit_transform(Xd)
     X.indices = X.indices.astype(np.int32); X.indptr = X.indptr.astype(np.int32)
-    model = LogisticRegression(C=C, max_iter=2000, solver="liblinear", class_weight={0: 1.0, 1: POS_WEIGHT})
-    model.fit(X, y)
+    model = LogisticRegression(C=C, max_iter=3000, solver="liblinear", class_weight={0: 1.0, 1: POS_WEIGHT})
+    model.fit(X, y, sample_weight=weights)
 
     def score(rows):
         Xt = vec.transform([{k: 1 for k in f} for f, _ in rows])
@@ -84,6 +113,9 @@ def main(articles, book):
 
     p, yt = score(test)
     report("wiki-test", yt, p)
+    if blog_test:
+        pb_, yb_ = score(blog_test)
+        report("blog-test", yb_, pb_)
     book_rows = [(f, y) for line in open(book, encoding="utf-8") for f, y, _ in candidates(line)]
     pb, yb = score(book_rows)
     report("book", yb, pb)
@@ -91,13 +123,13 @@ def main(articles, book):
     # export: feature → weight, pruned and rounded to keep the file small
     names = vec.get_feature_names_out()
     w = model.coef_[0]
-    weights = {n: round(float(v), 2) for n, v in zip(names, w) if abs(v) >= PRUNE}
-    weights["b"] = round(float(weights.get("b", 0.0)) + float(model.intercept_[0]), 3)
+    weights_out = {n: round(float(v), 2) for n, v in zip(names, w) if abs(v) >= PRUNE}
+    weights_out["b"] = round(float(weights_out.get("b", 0.0)) + float(model.intercept_[0]), 3)
     with open(OUT, "w", encoding="utf-8") as fh:
-        json.dump({"source": "scripts/ezafe-model/train.py on Persian Wikipedia (CC BY-SA)", "weights": weights}, fh, ensure_ascii=False, separators=(",", ":"))
+        json.dump({"source": "scripts/ezafe-model/train.py on Persian Wikipedia (CC BY-SA) and Persian blogs that mark the ezafe", "weights": weights_out}, fh, ensure_ascii=False, separators=(",", ":"))
         fh.write("\n")
-    print(f"features kept: {len(weights)}; file {os.path.getsize(OUT) // 1024} KB", file=sys.stderr)
+    print(f"features kept: {len(weights_out)}; file {os.path.getsize(OUT) // 1024} KB", file=sys.stderr)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)

@@ -10,8 +10,12 @@ cautious: at 0.9 it fixed only 15–23% of real ezafes. Two clean sets fix the
 scale (Platt scaling, p = sigmoid(a·z + b)):
 - the text of دستور خط, which marks every ezafe («ۀ»): 842 cases;
 - hand-labels.jsonl: 300 random cases from unmarked Wikipedia articles (not
-  used in training), labelled by hand.
-Each set is also checked with the scale fitted on the other one.
+  used in training), labelled by hand;
+- since 1.6.3, hand-labels-blog.jsonl: 143 cards the site showed on blog and
+  forum text (1.6.2), judged by hand.
+Each set is also checked with the scale fitted on the other one. The features are
+computed again from each case's context («m2 m1 [w0] w1 w2»), so the labels stay
+good when the features change.
 """
 import json
 import os
@@ -21,7 +25,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 
 sys.path.insert(0, os.path.dirname(__file__))
-from features import candidates  # noqa: E402
+from features import candidates, features  # noqa: E402
 
 HERE = os.path.dirname(__file__)
 MODEL = os.path.join(HERE, "..", "..", "src", "dict", "ezafe-model.json")
@@ -31,8 +35,11 @@ def main(book):
     data = json.load(open(MODEL, encoding="utf-8"))
     w = data["weights"]
     z = lambda f: sum(w.get(k, 0) for k in f)  # noqa: E731
-    hand = [json.loads(l) for l in open(os.path.join(HERE, "hand-labels.jsonl"), encoding="utf-8")]
-    hz = np.array([z(h["features"]) for h in hand]); hy = np.array([h["label"] for h in hand])
+    def ctx_features(ctx):
+        t = ctx.split(); i = [k for k, x in enumerate(t) if x.startswith("[")][0]
+        return features([x.strip("[]") for x in t], i)
+    hand = [json.loads(l) for f in ("hand-labels.jsonl", "hand-labels-blog.jsonl") for l in open(os.path.join(HERE, f), encoding="utf-8")]
+    hz = np.array([z(ctx_features(h["context"])) for h in hand]); hy = np.array([h["label"] for h in hand])
     rows = [(f, y) for line in open(book, encoding="utf-8") for f, y, _ in candidates(line)]
     bz = np.array([z(f) for f, _ in rows]); by = np.array([y for _, y in rows])
 

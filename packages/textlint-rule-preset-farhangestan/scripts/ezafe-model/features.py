@@ -105,6 +105,55 @@ def tag(w: str) -> str:
     return "UNK"
 
 
+# --- spoken-aware tags for the ezafe model (since 1.6.3; the «را» model keeps tag()) --------------
+# Spoken present stems («میگه»، «میره»، «میتونه»): the keys of SPOKEN_STEMS in src/util/colloquial.ts.
+SPOKEN_STEMS = {
+    "گ", "ر", "د", "ش", "تون", "خوا", "دون", "خون", "مون", "رسون", "ذار", "زار", "آ", "یا", "گیر", "کن", "زن",
+    "بین", "خور", "دو", "پوش", "بر", "گرد", "شکن", "کش", "سوز", "ترس", "پرس", "فهم", "ریز", "خند", "شین", "پلک", "گرد‌ون", "چرخون",
+}
+SPOKEN_PERSON = ["یم", "ین", "ید", "ند", "م", "ی", "ه", "ن", "د"]
+# Spoken verbs without a prefix that are no common noun («داره»، «باشه»، «هستن»).
+SPOKEN_BARE = {
+    "داره", "نداره", "دارن", "ندارن", "دارین", "باشه", "نباشه", "باشن", "باشین", "بشه", "نشه", "بشن", "بره", "نره", "کنه", "شه",
+    "گه", "تونه", "هستن", "نیستن", "هستین", "نیستین", "هس", "نیس", "میشه", "نمیشه",
+}
+
+
+def spoken_verb(w: str) -> bool:
+    """A verb as it is said: «میگه»، «می‌رن»، «نمیتونم»، «بخورین»، «بکنه»، «رفتین»."""
+    if w in SPOKEN_BARE:
+        return True
+    for pre in ("نمی" + ZWNJ, "می" + ZWNJ, "نمی", "می"):
+        if w.startswith(pre):
+            rest = w[len(pre):]
+            for e in SPOKEN_PERSON + [""]:
+                if len(rest) > len(e) and rest.endswith(e):
+                    st = rest[: len(rest) - len(e)]
+                    if st in PRESENT or st in SPOKEN_STEMS or "آ" + st in PRESENT or st in PAST or (st[:1] == "ا" and "آ" + st[1:] in SPOKEN_STEMS | PRESENT):
+                        return True
+            return False
+    for pre in ("ب", "ن"):
+        if w.startswith(pre) and len(w) > 3:
+            rest = w[1:]
+            for e in ("ه", "ن", "ین"):
+                if len(rest) > len(e) + 1 and rest.endswith(e) and (rest[: -len(e)] in PRESENT or rest[: -len(e)] in SPOKEN_STEMS):
+                    return True
+    # «رفتین»، «گفتین»: a past stem + the spoken «ین»
+    return w.endswith("ین") and w[:-2] in PAST
+
+
+def tag2(w: str) -> str:
+    """tag(), with spoken verbs as «V» and a past stem + «ن» («گفتن»: an infinitive, or «گفتند» said) as «INF»."""
+    t = tag(w)
+    if t != "UNK":
+        return t
+    if w.endswith("ن") and w[:-1] in PAST:
+        return "INF"
+    if spoken_verb(w):
+        return "V"
+    return t
+
+
 def context(toks: list[str], i: int, step: int, n: int) -> list[str]:
     """n tokens before (step -1) or after (step 1) i, stopping at punctuation."""
     out = []
@@ -144,13 +193,16 @@ def features(toks: list[str], i: int) -> list[str]:
         "m1w0=" + m1 + "|" + w0,
         "w1w2=" + w1 + "|" + w2,
         "w0w1s=" + w0 + "|" + w1[-2:],
-        "w0t=" + tag(w0),
-        "w1t=" + tag(w1),
-        "w2t=" + tag(w2),
-        "m1t=" + tag(m1),
-        "w1tw2t=" + tag(w1) + "|" + tag(w2),
-        "m1tw1t=" + tag(m1) + "|" + tag(w1),
-        "w0w1t=" + w0 + "|" + tag(w1),
+        "w0t=" + tag2(w0),
+        "w1t=" + tag2(w1),
+        "w2t=" + tag2(w2),
+        "m1t=" + tag2(m1),
+        "w1tw2t=" + tag2(w1) + "|" + tag2(w2),
+        "m1tw1t=" + tag2(m1) + "|" + tag2(w1),
+        "w0w1t=" + w0 + "|" + tag2(w1),
+        # since 1.6.3: the word after next («اطلاع دارید»، «رنگ گذاشتین»: a compound verb begins at w1)
+        "w1w2t=" + w1 + "|" + tag2(w2),
+        "m1w1=" + m1 + "|" + w1,
     ]
     return f
 

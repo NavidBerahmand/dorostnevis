@@ -121,6 +121,18 @@ export default createPatternRule(() => ({
                         source
                     };
                 }
+                // «فرمانده‌ی سپاه»: «فرمانده» + an ezafe written «ی» (the book: «فرماندهِ سپاه»), or «فرماندهی» (command).
+                // Before another word both readings stand: a choice, never red (1.6.3; before, «فرماندهی» in red)
+                const ye = word.match(new RegExp(`^(.+ه)${ZWNJ}ی$`));
+                if (ye && target === key && isKnown(ye[1]) && /^ +[\p{L}]/u.test(m.input.slice(m.index + word.length))) {
+                    return {
+                        message: `اگر «${ye[1]}» در حالت اضافه است، کسره می‌گیرد: «${ye[1]}\u0650»؛ اگر یک کلمه است: «${target}»`,
+                        replacement: ye[1] + "\u0650",
+                        alternatives: [target],
+                        fix: false,
+                        source: "دستور خط، «کسرۀ اضافه»، ص ۴۷"
+                    };
+                }
                 // «کمکم»: also «کمک» + «م», a different word: never red
                 const other = otherReading(word, target);
                 // «کمکم کنید»، «کمکم کرد»: the noun with its pronoun before a light verb, not «کم‌کم» (1.6.1)

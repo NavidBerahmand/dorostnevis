@@ -25,11 +25,11 @@
  * کسرۀ اضافۀ جاافتاده («خانه قبلی» ← «خانۀ قبلی»): اینکه کلمه در حالت اضافه
  * است یا نه را قاعده نمی‌تواند بگوید؛ یک مدل آماری کوچک (src/util/ezafe-model.ts)
  * از روی کلمه‌های اطراف حدس می‌زند. اگر مدل دست‌کم ۹۰٪ مطمئن باشد و کلمه
- * شناخته‌شده باشد اصلاح خودکار، و از ۶۰٪ به بالا فقط پیشنهاد. با گزینۀ
- * { "model": false } خاموش می‌شود.
+ * شناخته‌شده باشد اصلاح خودکار (در صفحه همیشه زرد)، و از ۸۰٪ به بالا فقط پیشنهاد؛ در سطر
+ * محاوره‌ای فقط برای چند کلمه (از ۱.۶.۳). با گزینۀ { "model": false } خاموش می‌شود.
  */
 import { createPatternRule } from "../util/pattern-rule";
-import { START, END, LETTER, ZWNJ, toPersianDigits } from "../util/persian";
+import { START, END, LETTER, LETTER_RANGE, ZWNJ, toPersianDigits } from "../util/persian";
 import { isKnown, isDictionaryWord, endsWithSilentHe, hasPronouncedHe } from "../util/words";
 import hazmCompounds from "../dict/hazm-compounds.json";
 
@@ -51,21 +51,43 @@ function spacedCompound(w0: string, w1: string): string | null {
 }
 import { verbForm, isParticiple, isPresentStem } from "./mi-prefix";
 import { missingMadd } from "../util/madd";
-import { isSpokenStem, spoken as spokenForm } from "../util/colloquial";
+import { isSpokenStem, spoken as spokenForm, registerSegments } from "../util/colloquial";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 import commonNouns from "../dict/hazm-common-nouns.json";
-import { ezafeCandidates, EzafeCandidate } from "../util/ezafe-model";
+import { ezafeCandidates, EzafeCandidate, isFiniteVerb } from "../util/ezafe-model";
+import { inBank } from "../util/colloquial-bank";
 import { accepted, spellingReady } from "../util/speller";
 
 /**
- * Thresholds on the calibrated probability (scripts/ezafe-model/calibrate.py).
- * At 0.9: 94–96% precision and 48–65% recall on the book and on 300
- * hand-labelled Wikipedia cases. Fixed automatically from 0.9, suggested from 0.6.
+ * Thresholds on the calibrated probability (scripts/ezafe-model/train.py, calibrate.py). Since 1.6.3 the bar
+ * is set by hand-judged cards (see README): a card only where at least 9 in 10 are right.
  */
 const MODEL_FIX = 0.9;
-const MODEL_SUGGEST = 0.6;
-/** In a spoken sentence the model (trained on Wikipedia) is surer of less: suggested from 0.8 (1.6.1). */
+/**
+ * 1.6.3, measured on cards judged by hand (Wikipedia, written sentences): 90% right from 0.6 to 0.7, 78% from
+ * 0.7 to 0.8, 95% from 0.8 to 0.9 and above 0.9. Below 0.8 the cards fall under the bar (1.6.2: 0.6).
+ */
+const MODEL_SUGGEST = 0.8;
+/**
+ * In a spoken sentence, or a line that has one (blogs, forums), no threshold reached the bar: 73% right from 0.8
+ * to 0.9, 85% from 0.9 to 0.95, 83% above (180 judged cards); a written sentence in such a line 84% from 0.8.
+ * There only the words that were right every time are suggested (60 of 60 judged): «همه»، «درباره»، «ادامه»،
+ * «زمینه»، «نسخه» («همۀ کارها»، «دربارۀ این فیلم»، «ادامۀ مطلب»، «زمینۀ کاری»، «نسخۀ جدید»).
+ */
 const MODEL_SUGGEST_SPOKEN = 0.8;
+/** Before a pronoun the model's probability is low even where the ezafe is right; below this, none was. */
+const PRONOUN_MIN_P = 0.3;
+/** A compound written with a space («جامعه شناسان»): suggested as in 1.6.2. */
+const COMPOUND_SUGGEST = 0.6;
+const COMPOUND_SUGGEST_SPOKEN = 0.8;
+const SPOKEN_HEADS = new Set(["همه", "درباره", "ادامه", "زمینه", "نسخه"]);
+/** Does the line around `index` have a spoken sentence (informal text)? */
+function informalLine(input: string, index: number): boolean {
+    const a = input.lastIndexOf("\n", index - 1) + 1;
+    const e = input.indexOf("\n", index);
+    const b = e < 0 ? input.length : e;
+    return registerSegments(input).some((x) => x.spoken && x.start < b && x.end > a);
+}
 /** A pronoun ending or a copula written as a word: «تونو»، «ش»، «اشون»، «هاتونو»، «ست»، «اس». */
 const CLITIC_WORD = /^(?:(?:ها|های)?(?:م|ت|ش|مان|تان|شان|مون|تون|شون|ام|ات|اش|امون|اتون|اشون)(?:و|رو|ه|ست|اس)?|ها(?:و|رو)?|ست|اس)$/;
 /** A light verb that is also a noun («داد» cry): still an ezafe's second part. */
@@ -206,6 +228,84 @@ const NOT_EZAFE = new Set([
     "هماره", "یکباره", "وگرنه", "نه", "آهسته", "ناگه", "شبانه", "روزانه", "همانا", "زیراکه", "چنانکه", "آنکه", "اینکه"
 ]);
 
+/*
+ * 1.6.3 (the owner: «کسرۀ اضافه رو درست کن»). 300 cards judged by hand on blog and Wikipedia text found the
+ * certain pronoun check wrong in «با این همه وی…»، «در نتیجه او…»، «اعضای خانواده او را … صدا می‌زدند»،
+ * «بله من…»، «چهارشنبه تو راه» (spoken «تو» = in) and the model wrong on names, numbers before a counter
+ * word, verbs and words that begin a new phrase. What follows narrows both.
+ */
+/** Interjections, adverbs and pronouns in «ه» that are never an ezafe's head («بله من»، «خوشبختانه تو»، «بنده تو»). */
+const NEVER_HEAD = new Set(["بله", "آره", "اره", "بالله", "کاره", "نه", "خب", "بنده", "خوشبختانه", "متاسفانه", "متأسفانه", "شاید", "یکدفعه", "یه‌دفعه", "همه‌اش", "خلاصه", "تازه", "واسه", "دیگه", "اگه", "آخه", "چونکه"]);
+/** «با این همه»، «در نتیجه»، «هر دفعه»، «یه دفعه»: a word that with the word before it is an adverb. */
+const IDIOM_BEFORE: Record<string, Set<string>> = {
+    همه: new Set(["این", "اون", "آن", "اینهمه"]),
+    نتیجه: new Set(["در"]),
+    دفعه: new Set(["هر", "یه", "یک", "این", "اون", "آن", "اولین", "دومین"]),
+    لحظه: new Set(["هر", "یه", "یک"]),
+    هفته: new Set(["هر"]),
+    خلاصه: new Set(["در"]),
+    ادامه: new Set(["در"])
+};
+/** Given names in «ه» that are no common word: «هاله جون»، «فاطمه خانم» (no ezafe). */
+const NAMES = new Set([
+    "فاطمه", "زهره", "طاهره", "سمیه", "حمزه", "هاله", "ژاله", "راضیه", "مرضیه", "منیژه", "نجمه", "صدیقه", "معصومه", "رقیه", "سکینه",
+    "خدیجه", "ملیحه", "نفیسه", "حانیه", "هانیه", "فائزه", "فایزه", "شهره", "ساره", "ریحانه", "محبوبه", "منیره", "سمانه", "طیبه", "نسیبه",
+    "نجیبه", "مائده", "فریده", "حمیده", "سعیده", "وحیده", "مجیده", "عطیه", "راحله", "جمیله", "سهیله", "نبیله", "عقیله", "فهیمه", "کریمه",
+    "رحیمه", "حلیمه", "سلیمه", "زکیه", "رضیه", "نادیه", "ماریه", "آسیه", "آمنه", "زبیده", "صفیه", "مهدیه", "طه", "معاویه", "عایشه", "عاطفه",
+    "یحیی‌زاده", "هله"
+]);
+/** Kinship words before a name («خاله صدف»، «عمه مریم»): a title, no ezafe. */
+const KIN = new Set(["خاله", "عمه", "دایی‌زاده", "خاله‌زاده", "عمه‌زاده", "ننه", "بابا", "داداش", "آبجی"]);
+/** After a name or a kinship word: «جون»، «خانم» (no ezafe: «هاله جون»). */
+const ADDRESS = new Set(["جون", "جان", "خانم", "خانوم", "آقا", "بانو"]);
+/** Counter words: «۲۴ قطعه سنگ»، «دو حلقه فیلم»، «یه بسته سیگار» (no ezafe after a number). */
+const COUNTERS = new Set(["قطعه", "حلقه", "دانه", "بسته", "شاخه", "دسته", "تخته", "تکه", "قلاده", "کیسه", "شیشه", "جعبه", "کاسه", "لقمه", "کوزه", "بوته", "جلده", "رشته", "نسخه", "فقره", "پاره", "سری"]);
+const NUMBER_WORDS = new Set(["یک", "یه", "دو", "سه", "چهار", "پنج", "شش", "شیش", "هفت", "هشت", "نه", "ده", "چند", "چندین", "دوتا", "سه‌تا", "صد", "هزار", "نیم"]);
+const isNumberWord = (w: string) => NUMBER_WORDS.has(w) || /^[0-9۰-۹]+$/.test(w);
+/** The word before `index` in `input` («» at the start or after a mark), and whether a digit comes right before. */
+function wordBefore(input: string, index: number): string {
+    const m = input.slice(Math.max(0, index - 40), index).match(/([\p{L}\u200c]+|[0-9۰-۹]+)[ \u200c]*$/u);
+    return m?.[1] ?? "";
+}
+/** No ezafe on `word` before `next`, whatever the model says (1.6.3). */
+function notEzafeHead(word: string, prev: string, next: string): boolean {
+    if (NEVER_HEAD.has(word) || NAMES.has(word) || ADDRESS.has(next) || IDIOM_BEFORE[word]?.has(prev)) return true;
+    // «خاله صدف»: a kinship word before what is no common noun (a name); «خالۀ مادرم» keeps its ezafe
+    if (KIN.has(word) && !COMMON_NOUNS.has(next) && !/(?:م|ت|ش|مان|تان|شان|مون|تون|شون)$/.test(next)) return true;
+    if (COUNTERS.has(word) && isNumberWord(prev)) return true;
+    if (word === "گونه" && /^(هیچ|هر|این|آن|همین|همان|چه|بدین)$/.test(prev)) return true;
+    // a verb next (written or spoken), that is no noun as well
+    return isFiniteVerb(next);
+}
+
+const COPULAS = new Set(["است", "هست", "نیست", "بود", "نبود", "باشد", "نباشد", "بودند", "هستند", "نیستند"]);
+/** Places in «ه» before a pronoun: «پس از اشغال فرانسه او…» is no ezafe (the model decides). */
+const PLACES = new Set(["فرانسه", "ترکیه", "روسیه", "سوریه", "مقدونیه", "مکه", "مدینه", "کوفه", "بصره", "قونیه", "کره"]);
+/** Words before a noun that make «X او» a phrase of its own («این دفعه من»، «پس از این حمله او»، «هر دفعه من»). */
+const DETERMINERS = new Set(["این", "آن", "اون", "همین", "همان", "همون", "هر", "یه", "یک", "چند", "چه", "هیچ", "کدام", "کدوم"]);
+/**
+ * Can «word pron» («خانه من») only be read as an ezafe? `next`: the word after the pronoun (undefined at a mark or
+ * the end), `prev`: the word before. (Red until 1.6.2, a suggestion since 1.6.3.)
+ */
+function pronounCertain(word: string, pron: string, next: string | undefined, prev: string, spoken: boolean): boolean {
+    if (isPronouncedHe(word) || !endsWithSilentHe(word) || !isKnown(word) || NOT_EZAFE.has(word) || inBank(word) || missingMadd(word)) return false;
+    // adjectives and participles rarely take a pronoun as ezafe: «خسته من»، «رفته او»
+    if ((ADJECTIVES.has(word) && !COMMON_NOUNS.has(word)) || verbForm(word.slice(0, -1)) || verbLike(word, spoken)) return false;
+    if (notEzafeHead(word, prev, pron) || PLACES.has(word)) return false;
+    // after «این/هر/یه…» only before a copula («این نامۀ او است»), not «این دفعه من میومدم»، «پس از این حمله او یک چشم…»
+    if (DETERMINERS.has(prev) && !(next !== undefined && COPULAS.has(next))) return false;
+    // «تو» is also «in» («چهارشنبه تو راه مدرسه»): only before a mark or a copula; «ما بین» is «مابین»
+    if (pron === "تو" && (spoken || (next !== undefined && !COPULAS.has(next)))) return false;
+    if (pron === "ما" && next === "بین") return false;
+    if (next === undefined) return true;
+    // «اعضای خانواده او را … صدا می‌زدند»، «در خانه من نبودم»، «پس از این حمله او یک چشم…»: the sentence may split there
+    if (next === "را" || next === "رو" || DETERMINERS.has(next) || isNumberWord(next)) return false;
+    // «همه ما می‌دانیم»: «همه» before a plural pronoun is its ezafe, a verb next or not
+    if (word === "همه" && /^(ما|شما|آنها|آن‌ها|ایشان)$/.test(pron)) return true;
+    const verbNext = next !== "است" && (verbForm(next) !== null || isFiniteVerb(next) || (/^(ن?می|ب|ن)/.test(next) && verbForm(next.replace(/^(ن?می|ب|ن)/, "")) !== null));
+    return !verbNext;
+}
+
 export default createPatternRule<Options>((options) => {
     const hamza = options.style === "he-hamza";
     const target = hamza ? "هٔ" : "ۀ";
@@ -214,9 +314,12 @@ export default createPatternRule<Options>((options) => {
         checks: [
             {
                 // word ending in ه + (space|ZWNJ) + ی (optionally with kasra) as a separate token
-                pattern: new RegExp(`${START}(${LETTER}*ه)[ ${ZWNJ}]ی\\u0650?${END}`, "g"),
+                pattern: new RegExp(`${START}(${LETTER}+ه)[ ${ZWNJ}]ی\\u0650?${END}`, "g"),
                 check: (m) => {
                     if (isPronouncedHe(m[1])) return null;
+                    // 1.6.3: «بشه ی کمک» (a verb + «یه»)، «واسه ی» (spoken «برای»)، a word of the colloquial bank («خونه ی»:
+                    // spelled as said, no card), «ن و ه ی» (letters)
+                    if (isFiniteVerb(m[1]) || SPOKEN_NOT_EZAFE.has(m[1]) || NEVER_HEAD.has(m[1]) || inBank(m[1])) return null;
                     return {
                         message: `نشانۀ اضافه پس از «ه»ی غیرملفوظ «${target}» است، نه «ی» جدا`,
                         replacement: m[1].slice(0, -1) + target
@@ -244,23 +347,26 @@ export default createPatternRule<Options>((options) => {
                 }
             },
             {
-                // «خانه من» → «خانۀ من»: before a personal pronoun the word is an ezafe.
-                // When a verb follows the pronoun the sentence may split there
-                // («در خانه من نبودم»), so that case is only suggested.
-                pattern: new RegExp(`${START}(${LETTER}{2,}ه) (${EZAFE_PRONOUNS.join("|")})${END}(?: +(${LETTER}+))?`, "g"),
+                // «خانه من» → «خانۀ من»: before a personal pronoun the word is an ezafe, suggested where nothing
+                // else can be read (1.6.3: the pronoun ends the sentence or a phrase, or a noun, an adjective or a
+                // preposition follows it). Elsewhere («در نتیجه او…»، «خانواده او را … صدا زدند»، «این دفعه من…»)
+                // the model below decides, as for any other word.
+                pattern: new RegExp(`${START}(${LETTER}{2,}ه) (${EZAFE_PRONOUNS.join("|")})${END}(?: +([${LETTER_RANGE}${ZWNJ}]+))?`, "g"),
                 check: (m) => {
-                    const word = m[1];
-                    if (isPronouncedHe(word) || !endsWithSilentHe(word) || !isKnown(word) || NOT_EZAFE.has(word)) return null;
-                    // adjectives and participles rarely take a pronoun as ezafe: «خسته من»، «رفته او»
-                    if ((ADJECTIVES.has(word) && !COMMON_NOUNS.has(word)) || verbForm(word.slice(0, -1)) || verbLike(word, options.formal === false)) return null;
-                    const next = m[3];
-                    const verbNext = next !== undefined && next !== "است" && (verbForm(next) !== null || /^(ن?می|ب|ن)/.test(next) && verbForm(next.replace(/^(ن?می|ب|ن)/, "")) !== null);
-                    const fixed = word.slice(0, -1) + target;
+                    if (!pronounCertain(m[1], m[2], m[3], wordBefore(m.input, m.index), options.formal === false)) return null;
+                    // «اعوذ بالله من الشیطان»، «او حفره من حفر النیران»: Arabic
+                    if (m[2] === "من" && /^[\s\p{L}\u200c]{0,25}?(?:^|\s)ال\p{L}/u.test(m.input.slice(m.index + m[0].length).replace(/^ +/, " "))) return null;
+                    // what the model makes very unlikely: «با این همه وی…»، «پس از این حمله او…» (none right below 0.3)
+                    const c = candidateAt(m.input, m.index);
+                    if (c && c.p < PRONOUN_MIN_P && !(m[3] !== undefined && COPULAS.has(m[3]))) return null;
+                    const fixed = m[1].slice(0, -1) + target;
                     return {
                         message: `نشانۀ اضافه پس از «ه»ی غیرملفوظ «${target}» است: «${fixed} ${m[2]}»`,
                         replacement: fixed,
-                        end: word.length,
-                        fix: verbNext ? false : undefined
+                        end: m[1].length,
+                        // a suggestion (yellow), not a red card: whether the word is in the ezafe is a reading; on cards
+                        // judged by hand 39 of 40 right on Wikipedia, 50 of 55 on blogs (1.6.3), not the 99% of red
+                        fix: false
                     };
                 }
             },
@@ -268,17 +374,27 @@ export default createPatternRule<Options>((options) => {
                 // the model: «خانه قبلی» → «خانۀ قبلی». Pronouns are handled above.
                 pattern: new RegExp(`${START}(${LETTER}{2,}ه)(?= +(${LETTER}+))`, "g"),
                 check: (m) => {
-                    if (options.model === false || EZAFE_PRONOUNS.includes(m[2]) || hasPronouncedHe(m[1])) return null;
+                    // «بهانه ء»: the ezafe typed as a separate hamza (the check below)
+                    if (options.model === false || hasPronouncedHe(m[1]) || /^[ءٔ]/.test(m[2])) return null;
                     // «اره» (آره)، «اینده» (آینده): the «آ» left out, typing-shortcuts' (1.6.0)
                     if (m[1] === "اره" || missingMadd(m[1])) return null;
                     // a verb, or a word that never comes before an ezafe's second part (1.5.2)
                     const spoken = options.formal === false;
                     const prev = m.input.slice(0, m.index).match(/([\p{L}\u200c]+)[ \u200c]*$/u)?.[1] ?? "";
                     if (verbLike(m[1], spoken, prev, m[2]) || NEVER_EZAFE_BEFORE.has(m[2]) || CLITICS.has(m[2])) return null;
+                    // a pronoun next: the check above reports the clear ones; the model decides the rest
+                    if (EZAFE_PRONOUNS.includes(m[2])) {
+                        const after = m.input.slice(m.index + m[0].length).match(/^ +[\p{L}\u200c]+ +([\p{L}\u200c]+)/u)?.[1];
+                        if (pronounCertain(m[1], m[2], after, wordBefore(m.input, m.index), spoken) || (m[2] === "ما" && after === "بین")) return null;
+                    }
+                    // 1.6.3: names, a counter after a number, a word written apart, a verb next, «با این همه»…
+                    if (notEzafeHead(m[1], wordBefore(m.input, m.index), m[2]) || inBank(m[1])) return null;
                     // «می پره»: «می» written apart
                     if (/(?:^|[^\p{L}\u200c])ن?می +$/u.test(m.input.slice(0, m.index))) return null;
                     if (spoken) {
                         if (m[2] === "رو" || SPOKEN_CLITICS.has(m[2]) || SPOKEN_NOT_EZAFE.has(m[1]) || IDIOM_AFTER[m[1]]?.has(prev) || spokenCopula(m[1])) return null;
+                        // «۲ ساله ول معطلم»: «ساله» after a number is «سال» + «است» or an adjective (1.6.3)
+                        if (/^(ساله|ماهه|روزه|ساعته|دقیقه|هفته)$/.test(m[1]) && isNumberWord(wordBefore(m.input, m.index))) return null;
                         // a verb next: a compound verb or the end of a clause («استفاده کنه»، «کشته بشه»)
                         if (LIGHT_VERBS.has(m[2]) || verbLike(m[2], true) && !isParticiple(m[2])) return null;
                     }
@@ -296,11 +412,15 @@ export default createPatternRule<Options>((options) => {
                     //   (in a spoken sentence; in a written one it is mostly a name: «جزیرۀ هومونهون»)
                     if (spoken && spellingReady() && !isKnown(m[2]) && !accepted(m[2]) && !spokenForm(m[2])) return null;
                     const c = candidateAt(m.input, m.index);
-                    if (!c || c.p < (spoken ? MODEL_SUGGEST_SPOKEN : MODEL_SUGGEST)) return null;
+                    if (!c) return null;
+                    const informal = spoken || informalLine(m.input, m.index);
                     // a compound written with a space: suggest the compound, not an ezafe
                     const compound = spacedCompound(m[1], m[2]);
                     // a compound of the farhang: the spaced-compounds rule reports it (one card, 1.6.1)
                     if (compound && isDictionaryWord(compound.replace(/\s.*$/, ""))) return null;
+                    // «ایده ال» (ایده‌آل)، «همه جا»: one word written apart, no ezafe (1.6.3)
+                    if (!compound && [m[1] + m[2], m[1] + ZWNJ + m[2], m[1] + ZWNJ + m[2].replace(/^ا/, "آ")].some((w) => isKnown(w))) return null;
+                    if (compound ? c.p < (informal ? COMPOUND_SUGGEST_SPOKEN : COMPOUND_SUGGEST) : informal ? !SPOKEN_HEADS.has(m[1]) || c.p < MODEL_SUGGEST_SPOKEN : c.p < MODEL_SUGGEST) return null;
                     if (compound) {
                         return {
                             message: `اگر «${m[1]} ${m[2]}» یک ترکیب است، با نیم‌فاصله نوشته می‌شود: «${compound}»`,
