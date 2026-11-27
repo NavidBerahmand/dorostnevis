@@ -4,6 +4,9 @@ import { inv, z } from "./helpers";
 
 new TextLintTester().run("lexicon", rule, {
     valid: [
+        // 1.4.1: a listed word plus an affix is not another word: «تقویت» is not «تقوی» + «ت»
+        "این تمرین عضلات را تقویت می‌کند.", z("تقویت‹کننده و تقویم و تقویم‹نویس"), z("بی‹تقویم"), "رایش سوم", "رایان آمد", "نباش",
+        "معنیت چیست و مولیت کیست؛ دعویت چه بود", "مجریان برنامه و مبتلیان به بیماری",
         // 1.4.0, alif maqsura by usage: «معنی»، «دعوی»، «مولی»، «متوفی»، «عقبی»… are written as much or
         // more than the «ا» form, and stay; «مبنی بر» is the idiom
         "معنی دارد", z("بی‹معنی"), z("معنی‹دار"), z("معنی‹ست"), "معنیش", "مولی", "متوفی", "دعوی", "صندلی عقبی", "مستثنی", "اقصی نقاط",
@@ -23,6 +26,9 @@ new TextLintTester().run("lexicon", rule, {
         }
     ],
     invalid: [
+        inv("فتویت را بده", "فتوایت را بده"), // «فتوا» + «ت»: no other word
+        // a rarer form that may be a word of its own («راستر»): asked, never fixed
+        { text: "تصویر راستر", output: "تصویر راستر", errors: [{}] },
         inv("تاثیرات آن", "تأثیرات آن"),
         inv("ماموران آمدند", "مأموران آمدند"),
         inv("متاسفانه", "متأسفانه"),

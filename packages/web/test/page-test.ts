@@ -69,6 +69,13 @@ describe("the page's items", function () {
         assert.ok(on.some((m) => m.fix!.text === "شباهت‌های"), JSON.stringify(on));
     });
 
+    it("1.4.1: «تقویت» is not «تقوی» + «ت»: no marks at all", async () => {
+        for (const t of ["این تمرین عضلات را تقویت می‌کند.", "تقویم سال نو را خرید.", "رایش سوم فروپاشید."]) {
+            const msgs = await lint(t);
+            assert.deepStrictEqual(msgs.map((m) => `${m.ruleId}: ${splitMessage(m).text}`), [], t);
+        }
+    });
+
     it("recommendations are blue and never red", async () => {
         const msgs = await lint("شباهتهای آنها و این خانه توسط پدرم ساخته شد.");
         const ha = msgs.find((m) => m.ruleId === "plural-ha")!;

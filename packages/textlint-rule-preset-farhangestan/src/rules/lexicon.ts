@@ -25,6 +25,29 @@ import compounds from "../dict/compounds.json";
 import hamza from "../dict/hamza.json";
 import arabic from "../dict/arabic.json";
 import { isKnown } from "../util/words";
+import { corpusBucket } from "../util/speller";
+
+/**
+ * «تقویت» is not «تقوی» + «ت», nor «تقویم» «تقوی» + «م» (1.4.1). A match that takes a listed
+ * word plus an affix never fires on a token that is itself a word (Hazm, the farhang, or seen
+ * at least 16 times in the corpus), unless the corrected form is attested too and about as
+ * common: then it is the same word misspelt («ماموریت» ← «مأموریت»، «جزییات» ← «جزئیات»),
+ * not another word («رایش»، «رایان»، «نباش»). "word": leave it; "maybe" (a rarer form, seen 4 to 15
+ * times: «راستر» or «سوالاتش»?): ask, never red; null: the affix reading stands.
+ */
+export function anotherWord(token: string, to: string): "word" | "maybe" | null {
+    const bt = corpusBucket(token);
+    const known = isKnown(token) || (bt !== null && bt >= 4);
+    if (!known && !(bt !== null && bt >= 2)) return null;
+    const parts = to.split(/ +/);
+    if (isKnown(to) || parts.every(isKnown)) return null;
+    if (bt === null) return "word"; // not loaded yet: a known word stays as it is
+    const bto = Math.min(...parts.map((p) => (isKnown(p) ? 99 : corpusBucket(p) ?? -1)));
+    if (bto >= 0 && bto >= bt - 3) return null;
+    return known ? "word" : "maybe";
+}
+/** The message for a «maybe»: the token may be a word of its own. */
+const maybeMessage = (token: string, to: string) => `اگر «${token}» همان واژهٔ فهرست با پسوند است، «${to}» نوشته می‌شود؛ ولی «${token}» خودش هم می‌تواند واژه یا نام باشد`;
 
 export interface Options {
     dictionaries?: {
@@ -125,6 +148,10 @@ export default createPatternRule<Options>((options) => {
                               if (!m[1] && !m[3]) return null;
                               const entry = map.get(m[2])!;
                               const to = (m[1] ? "بی" + ZWNJ : "") + entry.to + (m[3] ? "ی" + m[3] : "");
+                              // «تقویت»، «تقویم»، and «بی‌تقویم» (not «بی» + «تقوی» + «م»)
+                              const other = anotherWord(m[0], to) ?? (m[1] && m[3] ? anotherWord(m[2] + m[3], entry.to + "ی" + m[3]) : null);
+                              if (other === "word") return null;
+                              if (other === "maybe") return { message: maybeMessage(m[0], to), replacement: to, fix: false, source: entry.source };
                               return { message: messageFor(entry, m[0], to), replacement: to, source: entry.source };
                           }
                       }
@@ -141,6 +168,9 @@ export default createPatternRule<Options>((options) => {
                     const to = entry.to + suffix;
                     // the base plus the suffix can be another word: «رای» + «انه» is «رایانه», «جزئ» + «ی» is «جزئی»
                     if (suffix && isKnown(m[1] + suffix) && !isKnown(to)) return null;
+                    const another = suffix ? anotherWord(m[1] + suffix, to) : null;
+                    if (another === "word") return null;
+                    if (another === "maybe") return { message: maybeMessage(m[1] + suffix, to), replacement: to, fix: false, source: entry.source };
                     if (entry.wholeWordOnly && m.input[m.index + m[0].length] === ZWNJ) return null;
                     if (entry.notBefore && new RegExp(entry.notBefore).test(m.input.slice(m.index + m[0].length))) return null;
                     if (entry.fix === false) {

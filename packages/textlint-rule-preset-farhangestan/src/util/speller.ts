@@ -58,6 +58,16 @@ function lex(): Map<string, number> | null {
     return LEX;
 }
 
+/**
+ * How common a form is in the corpus: floor(log2(count)), -1 if never seen; null while the
+ * lexicon is not loaded (the page fetches it after it opens).
+ */
+export function corpusBucket(raw: string): number | null {
+    const L = lex();
+    if (!L || L.size === 0) return null;
+    return L.get(skeleton(normalize(raw))) ?? -1;
+}
+
 export function spellingReady(): boolean {
     return lex() !== null && LEX!.size > 0;
 }
