@@ -73,6 +73,8 @@ const SPOKEN_STEMS: Record<string, string> = {
     بین: "بین", خور: "خور", دو: "دو", پوش: "پوش", بر: "بر", گرد: "گرد", شکن: "شکن", کش: "کش", سوز: "سوز",
     ترس: "ترس", پرس: "پرس", فهم: "فهم", ریز: "ریز", خند: "خند", شین: "نشین", پلک: "پلک", گرد‌ون: "گردان", چرخون: "چرخان"
 };
+/** Is `s` a present stem as people say it («گ» of «میگه»، «ر» of «میره»، «تون» of «میتونه»)? */
+export const isSpokenStem = (s: string) => s in SPOKEN_STEMS;
 /** Spoken personal endings → written («ه» → «د»، «ن» → «ند»، «ین» → «ید»). */
 const ENDS: Array<[string, string]> = [["یم", "یم"], ["ین", "ید"], ["ید", "ید"], ["ند", "ند"], ["م", "م"], ["ی", "ی"], ["ه", "د"], ["ن", "ند"]];
 const SPOKEN_ENDS = new Set(["ه", "ن", "ین"]);
@@ -132,11 +134,18 @@ const SUFFIXES: Array<[string, string]> = [
 type Spoken = { formal: string; sure: boolean; hint?: "von" | "pron" | "plural" | "copula" | "ra" };
 
 /**
+ * «به» + a pronoun («بهش، بهت، بهم، بهشون، بهتون، بهمون»): never marked, in any register (1.5.2,
+ * the user's decision). They still count as spoken words for the register.
+ */
+export const BE_PRONOUN = /^به‌?(ش|ت|م|اش|ات|ام|شون|تون|مون|شان|تان|مان)$/;
+
+/**
  * The written form to offer for a spoken word in a written sentence (blue), or null: a sure
  * spoken word; one that only fits «-ون»، «-مون»، «-ا» (plural) when the corpus has never seen it
  * (names: «ایمون»، «سالو»); never «-ن» for «اند» or «-و» for «را» («چرمن»، «پدرو»).
  */
 export function writtenForm(word: string): string | null {
+    if (BE_PRONOUN.test(word)) return null;
     const s = spoken(word);
     if (!s) return null;
     if (s.sure) return s.formal;

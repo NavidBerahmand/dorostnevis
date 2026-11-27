@@ -18,6 +18,7 @@ import hazmVerbs from "../dict/hazm-verbs.json";
 import multiSpelling from "../dict/multi-spelling.json";
 import hamza from "../dict/hamza.json";
 import arabic from "../dict/arabic.json";
+import names from "../dict/names.json";
 
 const PAST_STEMS = new Set<string>(hazmVerbs.past);
 /** Forms the word lists already correct («اطاق»، «رییس»): the lexicon rule reports them. */
@@ -87,9 +88,35 @@ function normalize(w: string): string {
 }
 
 
+/*
+ * Persian given names (1.5.2: «مهردخت» was offered «مهرداد»): the lists in dict/names.json, and
+ * names made of parts: «سید/محمد/امیر…» + a name, a name + «علی/سادات/دخت/بانو…», two names
+ * («مهرانگیز» = «مهر» + «انگیز» is in the list; «ماه‌دخت»، «گل‌بانو»), and family names: a name or
+ * a word + «پور/زاده/نیا/فر/راد/نژاد…» («رضاپور»، «کریمی‌نیا»، «حسین‌زاده»).
+ */
+const NAMES = new Set<string>((names as { names: string }).names.split(" "));
+const NAME_PREFIXES = ["سید", "میرزا", "میر", "محمد", "امیر", "ملک", "شاه", "آقا", "حاجی", "حاج", "کربلایی", "مشهدی", "غلام", "ابو", "عبد", "بی‌بی"];
+const NAME_SUFFIXES = ["السادات", "سادات", "بیگم", "بگم", "خانم", "خاتون", "دخت", "بانو", "ناز", "علی", "قلی", "الدین", "الدوله", "السلطنه", "الله", "اله", "رضا", "حسین", "بخش", "جان", "گل", "آقا", "خان"];
+const FAMILY_SUFFIXES = ["زاده", "پور", "نیا", "فر", "راد", "نژاد", "وند", "لو", "کیا", "منش", "فرد", "زاد", "دوست", "مهر", "آبادی", "خانی", "یان"];
+/** A name, or a word common enough to be one's part («مهر»، «گل»، «کریمی»). */
+function namePart(w: string, L: Map<string, number>): boolean {
+    return w.length >= 2 && (NAMES.has(w) || (L.get(w) ?? -1) >= 5 || isKnown(w));
+}
+function isName(w: string, L: Map<string, number>): boolean {
+    if (NAMES.has(w)) return true;
+    for (const p of NAME_PREFIXES) {
+        const rest = w.slice(p.length);
+        if (w.startsWith(p) && rest.length >= 3 && (NAMES.has(rest) || (L.get(rest) ?? -1) >= 8 || isName(rest, L))) return true;
+    }
+    for (const s of NAME_SUFFIXES) if (w.endsWith(s) && w.length - s.length >= 2 && (NAMES.has(w.slice(0, -s.length)) || (L.get(w.slice(0, -s.length)) ?? -1) >= 5)) return true;
+    for (const s of FAMILY_SUFFIXES) if (w.endsWith(s) && w.length - s.length >= 2 && namePart(w.slice(0, -s.length), L)) return true;
+    return false;
+}
+
+const NO_LEX = new Map<string, number>();
 function acceptedSkeleton(w: string, depth: number): boolean {
-    const L = lex()!;
-    if (w.length <= 2 || L.has(w) || isKnown(w) || verbForm(w) || LISTED.has(w)) return true;
+    const L = lex() ?? NO_LEX; // the page fetches the lexicon after it opens
+    if (w.length <= 2 || L.has(w) || isKnown(w) || verbForm(w) || LISTED.has(w) || isName(w, L)) return true;
     // infinitives: «انجامیدن» ← «انجامید»
     if (w.endsWith("ن") && PAST_STEMS.has(w.slice(0, -1))) return true;
     if (depth === 0) return false;

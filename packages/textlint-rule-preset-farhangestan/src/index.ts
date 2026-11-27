@@ -22,6 +22,7 @@ import misspellings from "./rules/misspellings";
 import finalHe from "./rules/final-he";
 import gozar from "./rules/gozar";
 import spelling from "./rules/spelling";
+import typingShortcuts from "./rules/typing-shortcuts";
 export { loadSpellingLexicon, spellingReady } from "./util/speller";
 
 export default {
@@ -49,7 +50,8 @@ export default {
         "final-he": finalHe,
         gozar,
         spelling,
-        dictionary
+        dictionary,
+        "typing-shortcuts": typingShortcuts
     },
     rulesConfig: {
         "normalize-characters": true,
@@ -75,6 +77,7 @@ export default {
         "final-he": true,
         gozar: true,
         spelling: true,
-        dictionary: true
+        dictionary: true,
+        "typing-shortcuts": true
     }
 };

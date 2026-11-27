@@ -105,12 +105,40 @@ function spacedPrefix(prefix: string, rest: string): PatternResult | null {
     return { message: `«${prefix}» ${how} به جزء بعد می‌چسبد: «${fixed}»`, replacement: fixed, source: S_PREFIX };
 }
 
-function joinedWord(word: string): PatternResult | null {
+/** Words after which «این همه» is «this» + «all» («این همه در…»، «این همه را»), not «so much»: «این همه» first. */
+const AFTER_THIS_ALL = new Set(["در", "به", "از", "را", "با", "برای", "او", "وی", "پس", "هنوز", "باید", "نباید", "یا", "تا", "که", "و", "هم", "نیز", "بر", "این", "آن", "است", "بود", "هست", "نیست", "رو", "مال", "مال", "اینا", "اونا"]);
+
+/**
+ * «اینهمه»، «آنهمه» (1.5.2): written joined they are wrong either way, but which way is a reading.
+ * «این‌همه» (so much, the farhang's form and the book's «و نظایر آن»: «بااین‌همه»، ص ۳۴) before a
+ * noun or after «با»; «این همه» («this» + «all») before a preposition, a pronoun or a verb. One
+ * yellow card with both replacements, the likelier first (Persian Wikipedia: «این همه سال/چیز/
+ * تلاش» but «این همه در/به/از/را»).
+ */
+function thisMuch(d: string, prev: string, next: string): PatternResult {
+    const zw = d + ZWNJ + "همه";
+    const sp = d + " همه";
+    const spacedFirst = prev !== "با" && (next === "" || AFTER_THIS_ALL.has(next) || verbForm(next) !== null || /^ن?می/.test(next));
+    const [first, second] = spacedFirst ? [sp, zw] : [zw, sp];
+    return {
+        message: `اگر «${zw}» (این‌قدر) است با نیم‌فاصله، و اگر «${d}» + «همه» است با فاصله: «${first}» یا «${second}»`,
+        replacement: first,
+        alternatives: [second],
+        fix: false,
+        source: S_DEMONSTRATIVE
+    };
+}
+
+function joinedWord(word: string, prev = "", next = ""): PatternResult | null {
     if (isKnown(word) || BOOK_JOINED.has(word)) return null;
     for (const d of ["این", "آن"]) {
         if (!word.startsWith(d)) continue;
         const rest = word.slice(d.length);
         if (rest === "ست" || rest === "رو") return null; // «اینست»، «ازاینرو»: in the word lists
+        if (rest === "همه") return thisMuch(d, prev, next);
+        // a compound the farhang writes with a half-space («این‌قدر»، «آن‌چنان»، «این‌چنین»): the farhang's
+        // rule reports it; «این» + space here would contradict it (1.5.2)
+        if (isDictionaryWord(d + ZWNJ + rest)) return null;
         if (CONJUNCTION_PARTS.has(rest)) {
             const fixed = d + ZWNJ + rest;
             return { message: `در حروف ربط مرکّب، «${d}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: S_DEMONSTRATIVE };
@@ -127,7 +155,8 @@ function joinedWord(word: string): PatternResult | null {
             };
         }
     }
-    if (word.startsWith("به")) {
+    // «بهتون، بهشون، بهمون»: «به» + a spoken pronoun, never marked (1.5.2; «تون» is also a noun)
+    if (word.startsWith("به") && !/^به(شون|تون|مون|شان|تان|مان)$/.test(word)) {
         const rest = word.slice(2);
         if (rest.length >= 2 && (commonNoun(rest) || BE_ZWNJ.has(rest))) {
             const fixed = afterBe(rest);
@@ -176,7 +205,11 @@ export default createPatternRule(() => ({
         {
             // «آنروز»، «بهبرادرم»
             pattern: new RegExp(`${START}(?:این|آن|به)${LETTER}{2,}(?=${ZWNJ}|${END})`, "g"),
-            check: (m) => joinedWord(m[0])
+            check: (m) => {
+                const prev = m.input.slice(0, m.index).match(/(\p{L}+)[ \u200c]*$/u)?.[1] ?? "";
+                const next = m.input.slice(m.index + m[0].length).match(/^ +(\p{L}[\p{L}\u200c]*)/u)?.[1] ?? "";
+                return joinedWord(m[0], prev, next);
+            }
         },
         {
             // «چه‌کسی»

@@ -77,6 +77,65 @@ function unmatchedAt(text: string, index: number): boolean {
     }
     return unmatched.has(index);
 }
+/*
+ * Guillemets typed the wrong way round (1.5.2: the keyboard mirrors them, «»سلام«» for «سلام»), and
+ * a space on the wrong side of one («فلک »حتی» for «فلک» حتی»). Per line:
+ * - balanced as typed: a space inside a quote moves outside (no space inside, one outside, none
+ *   before a mark: «فلک»،»);
+ * - balanced only with every «» swapped, and the spaces agree (each one opens a word and the other
+ *   closes one): typed backwards, swapped (red, with the typing fixes);
+ * - neither: a quote with a space on its inner side may be either; one yellow card, both readings.
+ */
+type QuoteLine = { kind: "ok" | "mirrored" | "unclear"; quotes: number[] };
+let quoteText = "";
+let quoteLines = new Map<number, QuoteLine>();
+const balanced = (cs: string[]) => {
+    let d = 0;
+    for (const c of cs) if ((d += c === "«" ? 1 : -1) < 0) return false;
+    return d === 0;
+};
+function quoteLine(text: string, index: number): QuoteLine {
+    if (text !== quoteText) {
+        quoteText = text;
+        quoteLines = new Map();
+    }
+    const start = text.lastIndexOf("\n", index - 1) + 1;
+    let q = quoteLines.get(start);
+    if (q) return q;
+    let end = text.indexOf("\n", start);
+    if (end < 0) end = text.length;
+    const quotes: number[] = [];
+    for (let i = start; i < end; i++) if (text[i] === "«" || text[i] === "»") quotes.push(i);
+    const cs = quotes.map((i) => text[i]);
+    const swapped = cs.map((c) => (c === "«" ? "»" : "«"));
+    // the spaces say «opens» (space or start before, a letter after) or «closes» (the reverse)
+    const opens = (i: number) => (i === start || /[\s(\[«—–-]/.test(text[i - 1])) && i + 1 < end && !/\s/.test(text[i + 1]);
+    const closes = (i: number) => i > start && !/\s/.test(text[i - 1]) && (i + 1 >= end || /[\s.،؛:!؟…)\]»]/.test(text[i + 1]));
+    let kind: QuoteLine["kind"] = "unclear";
+    if (balanced(cs)) kind = "ok";
+    else if (cs.length >= 2 && balanced(swapped) && quotes.every((i, k) => (swapped[k] === "«" ? !closes(i) : !opens(i)))) kind = "mirrored";
+    q = { kind, quotes };
+    quoteLines.set(start, q);
+    return q;
+}
+/** The fix for the quote at `i` as `glyph` (opening «, closing »): from the spaces around it to its spacing. */
+function quoteFix(text: string, i: number, glyph: string): { from: number; to: number; text: string } {
+    let a = i;
+    while (a > 0 && text[a - 1] === " ") a--;
+    let b = i + 1;
+    while (b < text.length && text[b] === " ") b++;
+    const before = a > 0 ? text[a - 1] : "\n";
+    const after = b < text.length ? text[b] : "\n";
+    if (glyph === "«") {
+        // one space before it (not at a line's start or after another opening mark), none after
+        const sp = /[\n(\[«\u200c]/.test(before) || a === 0 ? "" : " ";
+        return { from: a, to: b, text: sp + "«" };
+    }
+    // none before it, one after (not before a mark or at a line's end)
+    const sp = /[\n.،؛:!؟…)\]»]/.test(after) ? "" : " ";
+    return { from: a, to: b, text: "»" + sp };
+}
+
 const FA = "\\u0600-\\u06FF";
 const FA_LETTER = "[\\u0621-\\u063A\\u0641-\\u064A\\u0671-\\u06D3\\u06CC\\u06A9\\u06AF\\u067E\\u0686\\u0698]";
 
@@ -177,6 +236,16 @@ export default createPatternRule<Options>((options) => {
             check: (m) => {
                 if (!persianContext(m.input, m.index) || !unmatchedAt(m.input, m.index)) return null;
                 const c = m[0];
+                // a guillemet typed backwards, or one the guillemet check asks about (1.5.2): that check's
+                if (c === "«" || c === "»") {
+                    const line = quoteLine(m.input, m.index);
+                    if (line.kind === "mirrored") return null;
+                    const t = m.input;
+                    const i = m.index;
+                    const inner = c === "«" ? t[i + 1] === " " : t[i - 1] === " ";
+                    const outer = c === "«" ? t[i - 1] : t[i + 1];
+                    if (line.kind === "unclear" && inner && outer && !/\s/.test(outer)) return null;
+                }
                 const open = OPEN[c] !== undefined;
                 const message = open ? `«${c}» باز شده و بسته نشده است` : `«${c}» بسته شده ولی باز نشده است`;
                 const text = m.input;
@@ -239,6 +308,26 @@ export default createPatternRule<Options>((options) => {
                 // «آمد...دیوارها»: and a space after it, before the next word
                 const glued = new RegExp(`^${FA_LETTER}`).test(m.input.slice(m.index + m[0].length)) && m.index > 0 && /\S/.test(m.input[m.index - 1]);
                 return { message, replacement: glued ? "… " : "…", source: SOURCE };
+            }
+        });
+        checks.push({
+            // «می‌گیری.. دنیا»: two dots are a full stop typed twice, or a short ellipsis (1.5.2). Red
+            // with «.», and «…» as a second button (not in URLs, numbers «1..5» or Latin)
+            pattern: new RegExp(`(?<=${FA_LETTER}|[»)]) *\\.\\.(?!\\.)(?<!\\.\\.\\.)`, "g"),
+            check: (m) => {
+                if (!persianContext(m.input, m.index) || inForeignToken(m.input, m.index + m[0].length - 1)) return null;
+                const after = m.input.slice(m.index + m[0].length);
+                const sp = new RegExp(`^${FA_LETTER}|^«`).test(after) ? " " : "";
+                // «..!»، «..؟»: the mark after it ends the sentence; the dots go, or become «…»
+                if (/^ *[!؟?]/.test(after)) {
+                    return { message: "دو نقطه پشت سر هم نشانه نیست: «!/؟» کافی است، یا سه‌نقطه «…»", replacement: "", alternatives: ["…"], source: SOURCE };
+                }
+                return {
+                    message: "دو نقطه پشت سر هم نشانه نیست: نقطه «.» یا سه‌نقطه «…»",
+                    replacement: "." + sp,
+                    alternatives: ["…" + sp],
+                    source: SOURCE
+                };
             }
         });
         checks.push({
@@ -338,13 +427,66 @@ export default createPatternRule<Options>((options) => {
                 }
             },
             {
-                // spaces inside brackets and quotes: «( متن )» → «(متن)»
-                pattern: new RegExp(`([(\\[{«]) +(?=\\S)|(?<=\\S) +([)\\]}»])`, "g"),
+                // spaces inside brackets: «( متن )» → «(متن)»; the space goes outside if a word is
+                // glued there («فلک )حتی» → «فلک) حتی») — guillemets are the next check's
+                pattern: new RegExp(`([(\\[{]) +(?=\\S)|(?<=\\S) +([)\\]}])`, "g"),
                 check: (m) => {
                     if (!persianContext(m.input, m.index)) return null;
+                    const t = m.input;
+                    const end = m.index + m[0].length;
+                    const replacement = m[1]
+                        ? (m.index > 0 && /[\p{L}\p{N}]/u.test(t[m.index - 1]) ? " " : "") + m[1]
+                        : m[2] + (end < t.length && /[\p{L}\p{N}«(]/u.test(t[end]) ? " " : "");
+                    return { message: "داخل پرانتز و گیومه، کنار نشانه فاصله نمی‌آید", replacement, source: SOURCE };
+                }
+            },
+            {
+                // guillemets: a space on the inner side, or the pair typed backwards (quoteLine above)
+                pattern: /[«»]/g,
+                check: (m) => {
+                    if (!persianContext(m.input, m.index)) return null;
+                    const t = m.input;
+                    const i = m.index;
+                    const line = quoteLine(t, i);
+                    const k = line.quotes.indexOf(i);
+                    const at = (f: { from: number; to: number; text: string }) => ({ start: f.from - i, end: f.to - i, replacement: f.text });
+                    const spaceInside = (g: string) => (g === "«" ? t[i + 1] === " " : t[i - 1] === " ");
+                    if (line.kind === "mirrored") {
+                        const g = t[i] === "«" ? "»" : "«";
+                        const f = quoteFix(t, i, g);
+                        return { message: "گیومه‌ها وارونه تایپ شده‌اند: گیومۀ باز «، گیومۀ بسته »", ...at(f), source: SOURCE };
+                    }
+                    if (line.kind === "ok") {
+                        if (!spaceInside(t[i])) return null;
+                        const f = quoteFix(t, i, t[i]);
+                        if (t.slice(f.from, f.to) === f.text) return null;
+                        return { message: "داخل پرانتز و گیومه، کنار نشانه فاصله نمی‌آید", ...at(f), source: SOURCE };
+                    }
+                    // unclear: a quote with a space inside and a word on its other side may be either
+                    if (!spaceInside(t[i])) return null;
+                    const other = t[i] === "«" ? "»" : "«";
+                    const otherSide = t[i] === "«" ? t[i - 1] : t[i + 1];
+                    const keep = quoteFix(t, i, t[i]);
+                    if (!otherSide || /\s/.test(otherSide)) {
+                        if (t.slice(keep.from, keep.to) === keep.text) return null;
+                        return { message: "داخل پرانتز و گیومه، کنار نشانه فاصله نمی‌آید", ...at(keep), source: SOURCE };
+                    }
+                    const flip = quoteFix(t, i, other);
+                    // the likelier first: flipped only if that, and not the glyph as typed, pairs up the line
+                    const cs = line.quotes.map((j) => t[j]);
+                    const flipped = cs.map((c, j) => (j === k ? other : c));
+                    const keepFirst = !(balanced(flipped) && !balanced(cs));
+                    const [a, b] = keepFirst ? [keep, flip] : [flip, keep];
+                    const w0 = t.slice(0, a.from).match(/[\p{L}\u200c]*$/u)![0];
+                    const w1 = t.slice(a.to).match(/^[\p{L}\u200c]*/u)![0];
+                    const show = (f: { text: string }) => `${w0}${f.text}${w1}`;
                     return {
-                        message: "داخل پرانتز و گیومه، کنار نشانه فاصله نمی‌آید",
-                        replacement: m[1] ?? m[2],
+                        message: `گیومه یا جای فاصله‌اش اشتباه است یا خودش وارونه تایپ شده: «${show(a)}» یا «${show(b)}»`,
+                        start: a.from - i,
+                        end: a.to - i,
+                        replacement: a.text,
+                        alternatives: [b.text],
+                        fix: false,
                         source: SOURCE
                     };
                 }

@@ -80,8 +80,10 @@ const SHEKASTE_RULES = new Set([...Object.keys(shekaste.rules), ...Object.keys(s
  *   words, since 1.4.0), a comma next to another mark («هستند،:» → «هستند:»), the dash «—»
  *   with one space each side between words, the inner one no-break (سمیعی، ص ۲۳۹: «ساختمان—مثل»،
  *   «فرقه - حشاشیون»), a no-break space in «۲۰ درصد»، «ص ۲۳۹»، «۲۵ مهر», spaces inside «» () [],
- *   repeated spaces, spaces at a line's end. Not: digits, «...», dashes, «!!!», «(( ))»,
+ *   repeated spaces, spaces at a line's end. Not: digits, dashes, «!!!», «(( ))»,
  *   and never the space between a number and a word (the book joins «۷۵درصدی»: ص ۶۵).
+ *   Since 1.5.2 also «...» → «…» (one character; its spacing as before, the dialogue dash's
+ *   space kept) and guillemets typed the wrong way round when the line pairs them up («»سلام«»).
  * Left out entirely: dictionary and compound choices (lexicon, dictionary, joined-words,
  * spaced-compounds, word-spacing, compound-verbs, misspellings, final-he, gozar,
  * hamza-tanvin, arabic-prefixes, verb-prefix-alef, bi-prefix and copula-attachment, whose
@@ -100,7 +102,7 @@ export const AUTO_FIX: Record<string, { only?: RegExp; skip?: RegExp }> = {
     "hamza-tanvin": { only: /^تنوین نصب «اً» نوشته می‌شود/ },
     lexicon: { only: /^تنوین نصب «اً» نوشته می‌شود/ },
     punctuation: {
-        only: /^در متن فارسی «[،؛؟]»|^در متن فارسی گیومۀ فارسی|^پیش از نشانه فاصله|^پس از نشانه یک فاصله|^پس از نقطه یک فاصله|^پس از سه‌نقطه یک فاصله|^داخل پرانتز و گیومه|^فاصلۀ اضافه در پایان سطر|^بین دو کلمه یک فاصله|^ویرگول پیش یا پس از نشانۀ دیگر|^خط تیره \(—\) میان دو واژه|^خط تیرۀ آغاز گفت‌وگو|^میان (?:عدد و واحدش|نشانۀ ارجاع و شماره‌اش|روز و ماه) فاصلۀ نشکن/
+        only: /^در متن فارسی «[،؛؟]»|^گیومه‌ها وارونه تایپ شده‌اند|^سه‌نقطه یک نویسه است|^در متن فارسی گیومۀ فارسی|^پیش از نشانه فاصله|^پس از نشانه یک فاصله|^پس از نقطه یک فاصله|^پس از سه‌نقطه یک فاصله|^داخل پرانتز و گیومه|^فاصلۀ اضافه در پایان سطر|^بین دو کلمه یک فاصله|^ویرگول پیش یا پس از نشانۀ دیگر|^خط تیره \(—\) میان دو واژه|^خط تیرۀ آغاز گفت‌وگو|^میان (?:عدد و واحدش|نشانۀ ارجاع و شماره‌اش|روز و ماه) فاصلۀ نشکن/
     }
 };
 
@@ -471,4 +473,99 @@ export async function conflictsOf(lint: Lint, text: string, m: Msg, before: Msg[
  */
 export function outranked(m: Msg, conflicts: Conflict[]): boolean {
     return conflicts.some((c) => c.kind === "restores" || c.kind === "cycle" || c.kind === "outranked");
+}
+
+/*
+ * One span, one answer (1.5.2: «اینهمه» had two red cards, «این همه» and «این‌همه»). Two reports
+ * that change the same letters in different ways are never shown as two cards:
+ * - if making the higher one's fix leaves the lower one nothing to say, the lower one is moot
+ *   («میکنه» → «می‌کنه»: the ezafe on «میکنه» has nothing left to say);
+ * - if one rule ranks above the other, the lower one keeps quiet (it may speak after the fix);
+ * - two of the same rank that still disagree are one yellow card with both replacements as
+ *   buttons, the higher one's first, and «درست‌کن» makes neither.
+ * «Higher»: the lower rank, then red before yellow before blue.
+ */
+export const severity = (m: Msg) => (isCertainMsg(m) ? 0 : isBlue(m) ? 2 : 1);
+const byPrecedence = (a: Msg, b: Msg) => rank(a) - rank(b) || severity(a) - severity(b);
+/** Do `a` and `b` change the same letters of `text` to different results? Not one rule's alternatives. */
+export function contradict(text: string, a: Msg, b: Msg): boolean {
+    if (!a.fix || !b.fix) return false;
+    if (a.ruleId === b.ruleId && a.range[0] === b.range[0] && a.range[1] === b.range[1]) return false;
+    if (applyFix(text, a.fix) === applyFix(text, b.fix)) return false;
+    const ea = editsOf(text, a.fix.range, a.fix.text);
+    const eb = editsOf(text, b.fix.range, b.fix.text);
+    const span = (e: Edit): [number, number] => [e.pos, e.pos + e.removed.length];
+    return ea.some((x) =>
+        eb.some((y) => {
+            const [s1, e1] = span(x);
+            const [s2, e2] = span(y);
+            if (x.removed === y.removed && x.inserted === y.inserted && s1 === s2) return false; // the same edit
+            // two insertions at one point; an insertion inside the other's letters; overlapping removals
+            // (a closing «)» and a closing «]» at one point go together: «…(۱۴۵۲ میلادی» + «)]»)
+            if (s1 === e1 && s2 === e2) return s1 === s2 && !(/^[()[\]{}«»]+$/.test(x.inserted) && /^[()[\]{}«»]+$/.test(y.inserted));
+            // (an insertion right after the other's letters is no conflict: «300» → «۳۰۰» and «300پیکسل» → «300 پیکسل»)
+            if (s1 === e1) return s2 <= s1 && s1 < e2;
+            if (s2 === e2) return s1 <= s2 && s2 < e1;
+            return s1 < e2 && s2 < e1;
+        })
+    );
+}
+/** Every edit of `a` is one of `b`'s (b makes a's change and more: «علی‌ای» within «علی‌ای‌حال»). */
+function within(text: string, a: Msg, b: Msg): boolean {
+    const key = (e: Edit) => `${e.pos}|${e.removed}|${e.inserted}`;
+    const eb = new Set(editsOf(text, b.fix!.range, b.fix!.text).map(key));
+    return editsOf(text, a.fix!.range, a.fix!.text).every((e) => eb.has(key(e)));
+}
+/** Marks a report as a judgement (yellow, never in «درست‌کن») that shares its card with others. */
+export type Grouped = Msg & { group?: string };
+/**
+ * `msgs` as the page shows them: moot and outranked contradicting reports left out, equal ones
+ * grouped (`group`, the same for the reports of one card; their messages marked as judgements).
+ */
+export async function oneAnswerPerSpan(
+    lint: Lint,
+    text: string,
+    msgs: Msg[],
+    piece: (s: number, e: number) => [number, number] = () => [0, text.length]
+): Promise<Grouped[]> {
+    const fixed = msgs.filter((m) => m.fix).sort(byPrecedence);
+    const drop = new Set<Msg>();
+    const groupOf = new Map<Msg, string>();
+    for (let i = 0; i < fixed.length; i++) {
+        const hi = fixed[i];
+        if (drop.has(hi)) continue;
+        for (let j = i + 1; j < fixed.length; j++) {
+            const lo = fixed[j];
+            if (drop.has(lo) || !contradict(text, hi, lo)) continue;
+            // one makes the other's change and more: the fuller one stays
+            if (within(text, lo, hi)) {
+                drop.add(lo);
+                continue;
+            }
+            if (within(text, hi, lo) && rank(lo) <= rank(hi)) {
+                drop.add(hi);
+                break;
+            }
+            // moot: after the higher fix, the lower rule says nothing on those letters
+            // the line around it is enough (the register is found within a line)
+            const [ps, pe] = piece(Math.min(hi.fix!.range[0], lo.fix!.range[0]), Math.max(hi.fix!.range[1], lo.fix!.range[1]));
+            const local = { range: [hi.fix!.range[0] - ps, hi.fix!.range[1] - ps] as [number, number], text: hi.fix!.text };
+            const after = applyFix(text.slice(ps, pe), local);
+            const [ws, we] = wordAround(after, local.range[0], local.range[0] + local.text.length);
+            const still = (await lint(after)).some((d) => {
+                if (d.ruleId !== lo.ruleId) return false;
+                const [ds, de] = d.fix ? [Math.min(d.range[0], d.fix.range[0]), Math.max(d.range[1], d.fix.range[1])] : d.range;
+                return ds < we && de > ws;
+            });
+            if (!still || rank(lo) > rank(hi)) {
+                drop.add(lo);
+                continue;
+            }
+            const g = groupOf.get(hi) ?? `${hi.ruleId}@${hi.range[0]}`;
+            groupOf.set(hi, g);
+            groupOf.set(lo, g);
+        }
+    }
+    const mark = (m: Msg): Msg => (/^⁤?⁣/.test(m.message) ? m : { ...m, message: "⁣" + m.message.replace(/^⁤/, "") });
+    return msgs.filter((m) => !drop.has(m)).map((m) => (groupOf.has(m) ? { ...mark(m), group: groupOf.get(m) } : m));
 }

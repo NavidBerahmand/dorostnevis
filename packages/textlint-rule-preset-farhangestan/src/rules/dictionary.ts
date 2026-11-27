@@ -29,6 +29,8 @@ const SOURCE = "فرهنگ املایی خطّ فارسی";
  * listing every common word the dictionary would split (see README).
  */
 const HOMOGRAPHS = new Set(["آشکار", "بینا", "بلبل", "سنگسر", "جهانگیر", "جهانبخش", "ایرانمهر", "شیء"]);
+/** Joined «اینهمه/آنهمه»: «این‌همه» or «این همه» is a reading; word-spacing asks (one card, 1.5.2). */
+const ASKED_ELSEWHERE = new Set(["اینهمه", "آنهمه"]);
 
 /** ZWNJ after a non-joining letter changes nothing on screen: ignore it when comparing. */
 const INVISIBLE_ZWNJ = new RegExp(`(?<=[${NON_JOINING}])${ZWNJ}|^${ZWNJ}+|${ZWNJ}+$`, "g");
@@ -45,7 +47,7 @@ export default createPatternRule(() => ({
             pattern: new RegExp(`${START}${WORD}${END}`, "g"),
             check: (m) => {
                 const word = m[0];
-                if (BOOK_JOINED.has(word) || HOMOGRAPHS.has(word)) return null;
+                if (BOOK_JOINED.has(word) || HOMOGRAPHS.has(word) || ASKED_ELSEWHERE.has(word)) return null;
                 const key = word.replace(new RegExp(ZWNJ, "g"), "");
                 const row = FARHANG[key];
                 if (!row) return null;

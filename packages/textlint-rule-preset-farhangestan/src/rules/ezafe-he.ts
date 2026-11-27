@@ -49,7 +49,8 @@ function spacedCompound(w0: string, w1: string): string | null {
     }
     return null;
 }
-import { verbForm, isParticiple } from "./mi-prefix";
+import { verbForm, isParticiple, isPresentStem } from "./mi-prefix";
+import { isSpokenStem, spoken as spokenForm } from "../util/colloquial";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 import commonNouns from "../dict/hazm-common-nouns.json";
 import { ezafeCandidates, EzafeCandidate } from "../util/ezafe-model";
@@ -105,10 +106,77 @@ const PRONOUNS = new Set([
     "من", "تو", "او", "ما", "شما", "آنها", "آن‌ها", "ایشان", "اون", "اونا", "اونها", "اون‌ها",
     "خودم", "خودت", "خودش", "خودمان", "خودتان", "خودشان", "خودمون", "خودتون", "خودشون"
 ]);
-/** Words after which «Xه» is more likely the definite marker or copula than an ezafe. */
-const NOT_EZAFE_NEXT = new Set([
-    "که", "را", "رو", "و", "هم", "از", "به", "با", "در", "تا", "یا", "اگه", "اگر", "چی", "کو",
-    "است", "هست", "نیست", "بود", "شد", "می", "نمی", "خیلی", "دیگه", "دیگر", "اینجا", "اونجا"
+
+/*
+ * A verb never takes the ezafe (1.5.2: «قبول میکنه مدارک رو» was offered «میکنۀ»). Verb forms in
+ * «ه»: «می/نمی» + a stem + an ending (written «می‌کند» or spoken «میکنه، میره، میگه»); spoken
+ * subjunctives and present forms («بره، بشه، باشه، بکنه، داره»); and participles («شده، کرده،
+ * گرفته»). In a written sentence a participle that is also a noun or an adjective keeps its
+ * ezafe («بستۀ نرم‌افزاری»، «نوشتۀ او»، «خستۀ راه»); in a spoken one every verb-like word is left alone.
+ */
+const SPOKEN_ENDS = ["ه", "ن", "م", "ی", "یم", "ین", "ید", "ند", "د"];
+/** Spoken present forms without a prefix that are no common noun («داره» is not «اداره»). */
+const SPOKEN_BARE = new Set(["داره", "نداره", "باشه", "نباشه", "بشه", "نشه", "بره", "نره", "کنه", "شه", "ره", "گه", "تونه"]);
+/** A present stem, also as said after «می» («میندازه» = «می» + «انداز»، «میفته» = «می» + «افت»). */
+const anyStem = (st: string) => isPresentStem(st) || isSpokenStem(st) || isPresentStem("ا" + st) || isPresentStem("آ" + st);
+const stemWithEnd = (rest: string) =>
+    SPOKEN_ENDS.some((e) => rest.length > e.length && rest.endsWith(e) && anyStem(rest.slice(0, -e.length))) || verbForm(rest) !== null;
+/** After a participle in writing, words that start a new phrase: «تبدیل شده این همخوان»، «نخواسته خود را». */
+const PHRASE_START = new Set(["این", "آن", "خود", "خودش", "خودشان", "او", "وی", "ما", "آنها", "آن‌ها", "ایشان", "همه", "هر", "هیچ", "یک"]);
+const NOT_CONTENT = new Set(["که", "را", "نیز", "هم", "او", "وی", "من", "ما", "تو", "شما", "آنها", "آن‌ها", "ایشان", "این", "آن", "هرگز", "هنوز", "تنها", "اگر", "چون"]);
+/**
+ * `prev`/`next`: the words around it, if known. In writing a participle keeps its ezafe as an adjective
+ * after the word it belongs to («شناخته‌شدۀ هرات»، «خشک‌شدۀ پسته»، «اشغال‌شدۀ این کشور» is the one
+ * kind of miss), never as the verb of a clause («تبدیل شده این همخوان»، «او نخواسته خود را»).
+ */
+export function verbLike(word: string, spoken: boolean, prev?: string, next?: string): boolean {
+    const mi = word.match(/^(?:بر|در|باز|ور|وا)?ن?می\u200c?(.{1,})$/);
+    if (mi && stemWithEnd(mi[1])) return true;
+    if (SPOKEN_BARE.has(word) && (spoken || !COMMON_NOUNS.has(word))) return true; // «برۀ کوچک» in writing
+    // a participle: in speech only a noun keeps its ezafe («رشتۀ»، «بستۀ مدارک»), in writing an adjective too
+    if (isParticiple(word)) {
+        if (COMMON_NOUNS.has(word)) return false;
+        if (spoken) return true;
+        if (ADJECTIVES.has(word)) return false;
+        if (prev === undefined) return true;
+        return !prev || NOT_CONTENT.has(prev) || (next !== undefined && PHRASE_START.has(next));
+    }
+    if (spoken && !COMMON_NOUNS.has(word)) {
+        // «بشه، بگه، نکنه، بذاره»: «ب/ن» + a stem + an ending (not a noun: «نمونه»)
+        const sub = word.match(/^[بن](.{2,})$/);
+        if (sub && stemWithEnd(sub[1])) return true;
+    }
+    return false;
+}
+
+/** Light verbs after a noun in speech: «استفاده کنه»، «ادامه بدین»، «علاقه دارم» (a compound verb, no ezafe). */
+const LIGHT_VERBS = new Set(
+    ["کن", "کنه", "کنم", "کنی", "کنیم", "کنین", "کنید", "کنن", "کنند", "کرد", "کردم", "کردی", "کردیم", "کردین", "کردید", "کردن", "کردند",
+     "بده", "بدم", "بدی", "بدیم", "بدین", "بدید", "بدن", "داد", "دادم", "دادی", "دادن", "دادند", "داره", "دارم", "داری", "داریم", "دارین", "دارید", "دارن", "دارند",
+     "داشت", "داشتم", "داشتی", "داشتن", "بشه", "بشم", "بشی", "بشن", "شد", "شدم", "شدی", "شدن", "شدند", "بزن", "بزنه", "زد", "زدم", "زدن", "بکن", "بکنه", "بگیر", "بگیره", "گرفت", "باشه", "بود", "بودم"]
+);
+/** Pronoun endings written apart («خانه ام»، «شماره ات»، «درباره اش»): the next word is no ezafe's second part. */
+const CLITICS = new Set(["ام", "ات", "اش", "ای", "ایم", "اید", "اند", "تان", "شان", "مان", "ها", "های", "هایی", "هایم", "هایت", "هایش", "هایمان", "هایتان", "هایشان"]);
+/** …and in speech («هامون» is also a lake). */
+const SPOKEN_CLITICS = new Set(["تون", "شون", "مون", "هام", "هات", "هاش", "هامون", "هاتون", "هاشون", "هاس"]);
+/** In speech: «یه لحظه صبر کن»، «یه دفعه»، «در اون باره». */
+const IDIOM_AFTER: Record<string, Set<string>> = { لحظه: new Set(["یه", "یک"]), دفعه: new Set(["یه", "یک"]), ذره: new Set(["یه", "یک"]), خورده: new Set(["یه", "یک"]), باره: new Set(["این", "اون", "آن", "همین", "همون"]) };
+/** Spoken words in «ه» that are never an ezafe's head: «آره»، «واسه». */
+const SPOKEN_NOT_EZAFE = new Set(["آره", "واسه", "دیگه", "اگه", "چیه", "کیه", "ممکنه", "لازمه", "همینه", "همونه"]);
+/**
+ * In speech, a word + «ه» for «است» or the definite marker («منه»، «همینه»، «ممکنه»، «مسئوله»): the
+ * word without «ه» is known, the word with it is not, and it is not a spoken form of a word in «ه» («خونه»).
+ */
+function spokenCopula(word: string): boolean {
+    const st = word.slice(0, -1);
+    if (isKnown(word) || st.length < 2 || !isKnown(st)) return false;
+    const f = spokenForm(word);
+    return !(f && f.formal.endsWith("ه"));
+}
+
+/** Words after which a word in «ه» is never in the ezafe: «خانه که»، «نامه به»، «کتاب‌خانه از». */
+const NEVER_EZAFE_BEFORE = new Set([
+    "که", "را", "و", "هم", "از", "به", "با", "تا", "یا", "اگه", "اگر", "است", "هست", "نیست", "بود", "شد", "می", "نمی", "خیلی", "اینجا", "اونجا"
 ]);
 
 /** «کتابه» written for «کتابِ»: the stem, if this is that mistake. */
@@ -156,7 +224,9 @@ export default createPatternRule<Options>((options) => {
                     // («پیشرانه»، «فردینه ماه»، «نزده ولی»: 756 in 6000 articles, almost none right).
                     // Only a common noun before a pronoun, and only as a suggestion: «کتابه من».
                     const stem = ezafeWrittenAsHe(m[1]);
-                    if (!stem || !COMMON_NOUNS.has(stem) || !PRONOUNS.has(m[2])) return null;
+                    if (!stem || !COMMON_NOUNS.has(stem) || !PRONOUNS.has(m[2]) || verbLike(m[1], options.formal === false)) return null;
+                    // «می تونه»، «مسئوله شما» in speech: a verb, or «است» as «ه»
+                    if (/(?:^|[^\p{L}\u200c])ن?می +$/u.test(m.input.slice(0, m.index)) || (options.formal === false && spokenCopula(m[1]))) return null;
                     if (/[0-9۰-۹]\s*$/.test(m.input.slice(0, m.index))) return null; // «۱۵۰۰۰ نفره»
                     return {
                         message: `اگر کسرۀ اضافه است، با «ه» نوشته نمی‌شود: «${stem} ${m[2]}» (یا «${stem}ِ ${m[2]}»)`,
@@ -175,7 +245,7 @@ export default createPatternRule<Options>((options) => {
                     const word = m[1];
                     if (isPronouncedHe(word) || !endsWithSilentHe(word) || !isKnown(word) || NOT_EZAFE.has(word)) return null;
                     // adjectives and participles rarely take a pronoun as ezafe: «خسته من»، «رفته او»
-                    if ((ADJECTIVES.has(word) && !COMMON_NOUNS.has(word)) || verbForm(word.slice(0, -1))) return null;
+                    if ((ADJECTIVES.has(word) && !COMMON_NOUNS.has(word)) || verbForm(word.slice(0, -1)) || verbLike(word, options.formal === false)) return null;
                     const next = m[3];
                     const verbNext = next !== undefined && next !== "است" && (verbForm(next) !== null || /^(ن?می|ب|ن)/.test(next) && verbForm(next.replace(/^(ن?می|ب|ن)/, "")) !== null);
                     const fixed = word.slice(0, -1) + target;
@@ -192,6 +262,17 @@ export default createPatternRule<Options>((options) => {
                 pattern: new RegExp(`${START}(${LETTER}{2,}ه)(?= +(${LETTER}+))`, "g"),
                 check: (m) => {
                     if (options.model === false || EZAFE_PRONOUNS.includes(m[2]) || hasPronouncedHe(m[1])) return null;
+                    // a verb, or a word that never comes before an ezafe's second part (1.5.2)
+                    const spoken = options.formal === false;
+                    const prev = m.input.slice(0, m.index).match(/([\p{L}\u200c]+)[ \u200c]*$/u)?.[1] ?? "";
+                    if (verbLike(m[1], spoken, prev, m[2]) || NEVER_EZAFE_BEFORE.has(m[2]) || CLITICS.has(m[2])) return null;
+                    // «می پره»: «می» written apart
+                    if (/(?:^|[^\p{L}\u200c])ن?می +$/u.test(m.input.slice(0, m.index))) return null;
+                    if (spoken) {
+                        if (m[2] === "رو" || SPOKEN_CLITICS.has(m[2]) || SPOKEN_NOT_EZAFE.has(m[1]) || IDIOM_AFTER[m[1]]?.has(prev) || spokenCopula(m[1])) return null;
+                        // a verb next: a compound verb or the end of a clause («استفاده کنه»، «کشته بشه»)
+                        if (LIGHT_VERBS.has(m[2]) || verbLike(m[2], true) && !isParticiple(m[2])) return null;
+                    }
                     const c = candidateAt(m.input, m.index);
                     if (!c || c.p < MODEL_SUGGEST) return null;
                     // a typo («طایقه») is the spelling rule's: no ezafe advice on it

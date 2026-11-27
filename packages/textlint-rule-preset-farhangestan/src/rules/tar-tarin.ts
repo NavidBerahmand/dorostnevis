@@ -71,8 +71,8 @@ export default createPatternRule(() => ({
         },
         {
             // «بزرگ تر»: «تر» after a known adjective is the comparative, not «wet»
-            // «لباس تر را پهن کرد»: before «را» it is the adjective «wet»
-            pattern: new RegExp(`${START}(${LETTER}+) +(تری|تر)${END}(?! +(?:از|را)${END})`, "g"),
+            // «لباس تر را پهن کرد»: before «را» (and the spoken «رو», 1.5.2) it is the adjective «wet»
+            pattern: new RegExp(`${START}(${LETTER}+) +(تری|تر)${END}(?! +(?:از|را|رو)${END})`, "g"),
             check: (m) => {
                 if (!(ADJECTIVES.has(m[1]) || ANY_ADJECTIVE.has(m[1]) || spokenAdjective(m[1])) || BLOCKED.has(m[1]) || NOT_A_STEM.has(m[1])) return null;
                 const fixed = joinWithHalfSpace(m[1], m[2]);

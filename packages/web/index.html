@@ -138,7 +138,7 @@
   @media (max-width: 430px) {
     .bar { justify-content: stretch; }
     .toolbar { flex-wrap: nowrap; gap: 4px; width: 100%; justify-content: space-between; }
-    .toolbar .btn { padding: 0 14px; flex: 1 1 auto; max-width: 120px; }
+    .toolbar .btn { padding: var(--pill-shift) 14px 0; flex: 1 1 auto; max-width: 120px; }
   }
   .status-row { display: flex; flex-wrap: wrap; gap: 2px 16px; align-items: baseline; min-height: 1.4em; }
   .status { color: var(--ok); font-size: 0.85rem; margin: 0; }
@@ -173,6 +173,9 @@
     white-space: pre-wrap;
     overflow-wrap: break-word;
     direction: rtl;
+    /* each paragraph its own bidi paragraph (1.5.2): without it, WebKit (iPhone) put the caret of a tap
+       after a line's end at the end of the next line */
+    unicode-bidi: plaintext;
     text-align: right;
     color: var(--ink);
     caret-color: var(--lapis);
@@ -245,13 +248,14 @@
   .btn {
     font: inherit; font-weight: 450;
     border: 0; background: var(--lapis); color: var(--bg);
-    border-radius: 999px; min-height: 40px; padding: 0 18px; cursor: pointer;
+    border-radius: 999px; min-height: 40px; padding: var(--pill-shift) 18px 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px; line-height: 1;
     transition: transform .12s, opacity .15s;
   }
   .btn:active { transform: scale(.97); }
   .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
   .btn-quiet { background: var(--surface-2); color: var(--ink); }
-  .btn-small { min-height: 30px; padding: 0 12px; font-size: 0.85rem; }
+  .btn-small { min-height: 30px; padding: var(--pill-shift) 12px 0; font-size: 0.85rem; }
   .btn-report { margin-inline-start: auto; background: transparent; color: var(--muted); font-weight: 350; }
   .btn-report:hover { color: var(--judge); background: var(--surface-2); }
   textarea:focus-visible, select:focus-visible, button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible {
@@ -284,7 +288,8 @@
   .pop-nav .grow { flex: 1; }
   .pop-nav button {
     font: inherit; color: var(--lapis); background: transparent; border: 1px solid var(--line);
-    border-radius: 999px; padding: 0 10px; cursor: pointer; line-height: 1.7;
+    border-radius: 999px; padding: calc(0.25em + var(--pill-shift)) 10px calc(0.25em - var(--pill-shift)); cursor: pointer; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center;
   }
   .pop-nav button:disabled { opacity: 0.4; cursor: default; }
   .pop-close { border: 0 !important; font-size: 1.1rem !important; color: var(--muted) !important; }
@@ -301,11 +306,22 @@
   .dots { display: flex; gap: 3px; direction: ltr; }
   .dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--line); background: transparent; }
   .issue-head { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chip { font-size: 0.72rem; font-weight: 450; color: var(--lapis); background: var(--lapis-soft); border-radius: 999px; padding: 0 8px; }
+  /*
+   * Pills and buttons: the label centred in its box both ways (1.5.2). Kahroba's ascent is much
+   * taller than its descent, so a normal line box leaves the letters high: the box is a flexbox with
+   * line-height 1 and a little more padding on top than below (--pill-shift).
+   */
+  :root { --pill-shift: 0.12em; }
+  .chip {
+    font-size: 0.72rem; font-weight: 450; color: var(--lapis); background: var(--lapis-soft); border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+    padding: calc(0.3em + var(--pill-shift)) 0.75em calc(0.3em - var(--pill-shift)); min-height: 1.9em; box-sizing: border-box;
+  }
   .chip-judge { color: var(--judge); background: var(--judge-soft); }
   .chip-style { color: var(--ok); background: var(--bg); border: 1px solid var(--line); }
   .chip-advice { color: var(--advice); background: var(--advice-soft); }
   .change { margin: 0; font-size: 1.15rem; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+  .change-words { font-size: 0.85rem; }
   .from { text-decoration: line-through; text-decoration-color: var(--muted); color: var(--muted); }
   .issue-judge .from, .no-fix .from { text-decoration: none; color: var(--ink); }
   .to { font-weight: 500; color: var(--ok); }

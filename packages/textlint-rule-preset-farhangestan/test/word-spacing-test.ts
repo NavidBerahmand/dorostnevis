@@ -4,6 +4,8 @@ import { inv, z } from "./helpers";
 
 new TextLintTester().run("word-spacing", rule, {
     valid: [
+        // 1.5.2: a compound the farhang writes with a half-space is the farhang's rule («آن‌قدر»): never «آن قدر» here
+        "آنقدر خوب", "اینچنین گفت", "آنچنان رفت",
         "بیماری وبا آمد",
         "شهر ونیز",
         "وهم و خیال",
@@ -33,7 +35,8 @@ new TextLintTester().run("word-spacing", rule, {
         inv("آنروز رفت.", "آن روز رفت."),
         inv("اینکار را کرد.", "این کار را کرد."),
         inv("اینگونه گفت.", z("این‹گونه گفت.")),
-        inv("آنقدر خوب", z("آن‹قدر خوب")),
+        // «اینهمه»: «این‌همه» or «این همه» is a reading: one yellow card, both replacements (1.5.2)
+        { text: "اینهمه تلاش کردیم", output: "اینهمه تلاش کردیم", errors: [{}] },
         // a possible name: suggestion only
         { text: "آندریا آمد.", output: "آندریا آمد.", errors: [{}] },
         inv("بهبرادرم گفتم.", "به برادرم گفتم."),

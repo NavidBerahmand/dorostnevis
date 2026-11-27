@@ -5,7 +5,7 @@
 // - a full HTML document around index.html (claude.ai adds that wrapper itself);
 // - cache headers.
 import { createDecipheriv } from "node:crypto";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, copyFileSync } from "node:fs";
 
 await import("./build.mjs");
 const here = (p) => new URL(p, import.meta.url);
@@ -46,7 +46,12 @@ function writePage(src, out, { description, url }) {
 <meta property="og:description" content="${description}">
 <meta property="og:url" content="${url}">
 <meta property="og:locale" content="fa_IR">
-<meta name="theme-color" content="#f5f2e8">
+<meta name="theme-color" content="#f5f2e8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1c15" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-title" content="واج‌بان">
+<meta name="application-name" content="واج‌بان">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="canonical" href="${url}">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%235f6549'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle' fill='%23f5f2e8' font-family='Tahoma'%3E%D9%88%3C/text%3E%3C/svg%3E">
 <style>html,body{margin:0}</style>
@@ -62,7 +67,40 @@ writePage("./about.html", "./dist/about.html", {
     description: "واج‌بان چیست، رنگ‌ها یعنی چه، متن شما کجا می‌رود، و منابع و مجوزها.",
     url: "https://vajban.com/about"
 });
-writeFileSync(here("./dist/_headers"), `/app.js
+// the home-screen app (1.5.2): its name is «واج‌بان», not the page title; icons rendered from
+// «و» in Vazirmatn (OFL) on the site's colours (assets/*.png)
+for (const f of ["apple-touch-icon.png", "icon-192.png", "icon-512.png", "icon-maskable-512.png"]) copyFileSync(here(`./assets/${f}`), here(`./dist/${f}`));
+writeFileSync(
+    here("./dist/manifest.webmanifest"),
+    JSON.stringify(
+        {
+            name: "واج‌بان",
+            short_name: "واج‌بان",
+            description: "املا و نگارش فارسی طبق دستور خط فرهنگستان",
+            lang: "fa",
+            dir: "rtl",
+            start_url: "/",
+            scope: "/",
+            display: "standalone",
+            theme_color: "#5f6549",
+            background_color: "#f5f2e8",
+            icons: [
+                { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+                { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+                { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+                { src: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }
+            ]
+        },
+        null,
+        1
+    )
+);
+writeFileSync(here("./dist/_headers"), `/manifest.webmanifest
+  Content-Type: application/manifest+json; charset=utf-8
+  Cache-Control: public, max-age=86400
+/*.png
+  Cache-Control: public, max-age=604800
+/app.js
   Cache-Control: public, max-age=31536000, immutable
 /spelling-lexicon.json
   Cache-Control: public, max-age=86400

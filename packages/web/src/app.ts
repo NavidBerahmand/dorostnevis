@@ -7,49 +7,13 @@ import { loadSpellingLexicon } from "../../textlint-rule-preset-farhangestan/src
 import { openReport, sentenceAround, setupOwnerPanel, Report } from "./report";
 import {
     Msg, Settings, lintText, isAuto, isStyle, isEditing, baseRule, wordAround, splitMessage, NOT_IN_BOOK, rank,
-    conflictsOf, outranked, editsOf, applyFix as applyEdit, isTentative, isCertainMsg, applyCertain, isBlue
+    conflictsOf, outranked, editsOf, applyFix as applyEdit, isTentative, isCertainMsg, applyCertain, isBlue,
+    oneAnswerPerSpan, severity, Grouped
 } from "./lint-setup";
+import { RULE_LABELS, explainChange } from "./labels";
 
 
-const RULE_LABELS: Record<string, string> = {
-    "normalize-characters": "نویسه‌ها",
-    "zwnj-cleanup": "نیم‌فاصله",
-    "mi-prefix": "می-",
-    "bi-prefix": "بی-",
-    "plural-ha": "ها",
-    "tar-tarin": "تر/ترین",
-    "ezafe-he": "کسرۀ اضافه",
-    "copula-attachment": "ام/است",
-    lexicon: "فهرست‌های کتاب",
-    "joined-words": "ترکیب‌ها",
-    "compound-verbs": "فعل مرکب",
-    numbers: "عدد",
-    "verb-prefix-alef": "بـ/نـ پیش از ا",
-    "hamza-tanvin": "همزه و تنوین",
-    "arabic-prefixes": "سوء/ضد/غیر",
-    dictionary: "فرهنگ املایی",
-    "word-spacing": "فاصله‌گذاری",
-    spelling: "غلط تایپی",
-    punctuation: "نشانه‌گذاری",
-    "over-broken": "شکستن بی‌جا",
-    "may-break": "شکستن روا",
-    "redundant-verbs": "فعل زائد",
-    "arabic-plurals": "جمع عربی",
-    prepositions: "حرف اضافه",
-    calques: "ترجمه‌زدگی",
-    redundancy: "حشو",
-    "repeated-words": "تکرار",
-    "long-sentences": "جملۀ بلند",
-    invisible: "فاصله و نویسۀ نادیدنی",
-    "spaced-compounds": "ترکیب‌ها",
-    misspellings: "غلط رایج",
-    "ra-placement": "جای «را»",
-    "comma-before-va": "ویرگول پیش از «و»",
-    "word-choice": "واژه‌گزینی",
-    phrases: "تعبیر نادرست",
-    "final-he": "«ه»ی پایانی",
-    gozar: "گذار/گزار"
-};
+
 
 const kernel = new TextlintKernel();
 
@@ -259,26 +223,32 @@ type Card = Msg & { alts?: Msg[] };
  * `alternatives`): the same rule, range and message. Each went through the no-ping-pong guard
  * by itself; the ones left make one card.
  */
-function collapseAlts(msgs: Msg[]): Card[] {
+function collapseAlts(msgs: Grouped[]): Card[] {
+    // one rule's alternatives, or reports of several rules that disagree on one word (oneAnswerPerSpan's `group`)
+    const keyOf = (m: Grouped) => (m.group ? `group|${m.group}` : `${m.ruleId}|${m.range}|${m.message.replace(/[\u2063\u2064]/g, "")}`);
     const groups = new Map<string, Msg[]>();
     for (const m of msgs) {
         if (!m.fix) continue;
-        const k = `${m.ruleId}|${m.range}|${m.message.replace(/[\u2063\u2064]/g, "")}`;
+        const k = keyOf(m);
         groups.set(k, [...(groups.get(k) ?? []), m]);
     }
     const out: Card[] = [];
     const done = new Set<Msg>();
     for (const m of msgs) {
         if (done.has(m)) continue;
-        const k = m.fix ? `${m.ruleId}|${m.range}|${m.message.replace(/[\u2063\u2064]/g, "")}` : "";
+        const k = m.fix ? keyOf(m) : "";
         const g = k ? groups.get(k)! : [m];
         if (g.length < 2 || !g.some((x) => /^\u2064?\u2063/.test(x.message))) {
             out.push(m);
             done.add(m);
             continue;
         }
-        // the certain one (no mark), if any, leads: it keeps the card red and «درست‌کن» makes it
-        const sorted = [...g].sort((a, b) => a.message.length - b.message.length);
+        // the certain one (no mark), if any, leads: it keeps the card red and «درست‌کن» makes it.
+        // A group of several rules: in the order oneAnswerPerSpan gave (precedence), the same replacement once
+        const grouped = !!(m as Grouped).group;
+        const sorted = grouped
+            ? g.filter((x, i) => g.findIndex((y) => applyEdit(input.value, y.fix!) === applyEdit(input.value, x.fix!)) === i)
+            : [...g].sort((a, b) => a.message.length - b.message.length);
         for (const x of g) done.add(x);
         out.push({ ...sorted[0], alts: sorted });
     }
@@ -362,6 +332,15 @@ function isAdvice(i: number): boolean {
     return [messages[i], ...extras[i]].every(isBlue);
 }
 
+/** A card's colour: 0 red, 1 yellow, 2 blue (the same test as its class in buildCards). */
+function cardSeverity(i: number): number {
+    return isCertain(i) ? 0 : isAdvice(i) ? 2 : 1;
+}
+/** A card's precedence (lint-setup.ts, rank): its highest rule's. */
+function cardRank(i: number): number {
+    return Math.min(...[messages[i], ...extras[i]].map(rank));
+}
+
 /** The Range of span k in the box (kept until the text changes). */
 let ranges: Range[] = [];
 
@@ -391,6 +370,13 @@ function renderMarks(text: string) {
         } else {
             layer.push({ s: it.s, e: it.e, items: [it.i], red: isCertain(it.i), blue: isAdvice(it.i), sentence: it.sentence });
         }
+    }
+    // the cards of one mark: red, then yellow, then blue; within a colour by precedence (1.5.2: the
+    // red card that made the mark red is on top). The mark has the colour of its first card.
+    for (const sp of [...words, ...sentences]) {
+        sp.items.sort((a, b) => cardSeverity(a) - cardSeverity(b) || cardRank(a) - cardRank(b) || messages[a].range[0] - messages[b].range[0]);
+        sp.red = cardSeverity(sp.items[0]) === 0;
+        sp.blue = cardSeverity(sp.items[0]) === 2;
     }
     // «قبلی/بعدی» go through both, in reading order (a sentence's note before its words)
     spans = [...words, ...sentences].sort((a, b) => a.s - b.s || Number(!!b.sentence) - Number(!!a.sentence));
@@ -562,8 +548,8 @@ function buildCards(text: string) {
         const styleOnly = members.every(isStyle);
         // a flat error by an editing book («با این وجود»، «مثمر ثمر»): red, and applied with the rest
         const editingCertain = !styleOnly && members.some((x) => isEditing(x) && !isStyle(x));
-        const certain = isCertain(i);
-        const advice = !certain && isAdvice(i);
+        const certain = cardSeverity(i) === 0;
+        const advice = cardSeverity(i) === 2;
         const cls = (advice ? "issue issue-style" : certain ? "issue" : "issue issue-judge") + (m.fix ? "" : " no-fix") + (meter.includes("confidence-none") ? " has-note" : " has-confidence");
         // show the whole word around the change, so «ي ← ی» reads «رييس ← رئیس»
         const [ws, we] = wordAround(text, Math.min(m.range[0], m.fix?.range[0] ?? m.range[0]), Math.max(m.range[1], m.fix?.range[1] ?? m.range[1]));
@@ -571,6 +557,8 @@ function buildCards(text: string) {
         const original = text.slice(ws, we);
         const fixed = m.fix ? fixedBy(m) : "";
         const alts = (m as Card).alts;
+        // a change that looks the same on both sides: said in words too (1.5.2)
+        const unseen = m.fix && !(alts && alts.length > 1) ? explainChange(original, fixed) : null;
         reports.push({
             rule: members.map((x) => x.ruleId).join(", "),
             ruleLabel: labels.join("، "),
@@ -593,6 +581,7 @@ function buildCards(text: string) {
                 <span class="from">${show(clip(original)) || "&nbsp;"}</span>
                 ${m.fix ? `<span class="arrow" aria-hidden="true">←</span><span class="to">${(alts ?? [m]).map((x) => show(clip(fixedBy(x))) || "(حذف)").join('<span class="or"> یا </span>')}</span>` : ""}
             </p>
+            ${unseen ? `<p class="change change-words"><span class="from">${esc(unseen[0])}</span><span class="arrow" aria-hidden="true">←</span><span class="to">${esc(unseen[1])}</span></p>` : ""}
             <p class="msg">${esc(msg)}</p>
             ${sources.map((src) => `<p class="source">${citation(src)}</p>`).join("")}
             <div class="actions">
@@ -703,8 +692,20 @@ async function check() {
 
 /** What the page shows for `msgs` (a lint of `text`): not ignored, not made silently, nothing that ping-pongs. */
 async function visible(text: string, msgs: Msg[]): Promise<Msg[]> {
-    const shown = msgs.filter((m) => !(m.ruleId === "spelling" && personal.has(text.slice(m.range[0], m.range[1]))) && !ignored.has(key(m, text)) && !(autoBox.checked && isAuto(m, text) && !declined.has(autoKey(m, text))));
-    return noPingPong(text, shown);
+    const shown = msgs.filter((m) => !((m.ruleId === "spelling" || m.ruleId === "typing-shortcuts") && personal.has(text.slice(...wordAround(text, m.range[0], m.range[1])))) && !ignored.has(key(m, text)) && !(autoBox.checked && isAuto(m, text) && !declined.has(autoKey(m, text))));
+    const sk = settingsKey();
+    const pieceLint = async (piece: string): Promise<Msg[]> => {
+        const k = sk + "\0" + piece;
+        let r = pieceCache.get(k);
+        if (!r) {
+            r = await lint(piece);
+            if (pieceCache.size > 4000) pieceCache.clear();
+            pieceCache.set(k, r);
+        }
+        return r;
+    };
+    // never two cards that contradict on one word (1.5.2)
+    return oneAnswerPerSpan(pieceLint, text, await noPingPong(text, shown), (s, e) => pieceAround(text, s, e));
 }
 
 function schedule() {
@@ -1125,14 +1126,50 @@ function markRects(k: number): DOMRect[] {
     return r ? [...r.getClientRects()].filter((x) => x.width > 0 || x.height > 0) : [];
 }
 
-/** The marked span under a point, if any. */
+/** The text offset of the caret a tap at (x, y) would place, or null if the browser cannot say. */
+function offsetAtPoint(x: number, y: number): number | null {
+    const d = document as any;
+    if (d.caretPositionFromPoint) {
+        const p = d.caretPositionFromPoint(x, y);
+        if (p && box.contains(p.offsetNode)) return offsetOf(p.offsetNode, p.offset);
+    } else if (d.caretRangeFromPoint) {
+        const r: Range | null = d.caretRangeFromPoint(x, y);
+        if (r && box.contains(r.startContainer)) return offsetOf(r.startContainer, r.startOffset);
+    }
+    return null;
+}
+/** Is (x, y) on a letter of [s, e), not in the empty space past a line's end? */
+function onLetters(x: number, y: number, s: number, e: number): boolean {
+    const at = offsetAtPoint(x, y);
+    if (at === null) return true;
+    for (const i of [at - 1, at]) {
+        if (i < s || i >= e) continue;
+        const r = document.createRange();
+        const [a, ao] = pointAt(i);
+        const [b, bo] = pointAt(i + 1);
+        r.setStart(a, ao);
+        r.setEnd(b, bo);
+        if ([...r.getClientRects()].some((c) => x >= c.left - 2 && x <= c.right + 2 && y >= c.top && y <= c.bottom)) return true;
+    }
+    return false;
+}
+/**
+ * The marked span under a point, if any. Only a tap on a mark's own letters (1.5.2: a mark over a
+ * line break has, in WebKit, a box that runs to the line's end, so a tap in the empty space after
+ * the last word of a line opened a note instead of placing the caret there).
+ */
 function spanAt(x: number, y: number): number {
     // a word's own mark first; a sentence note where no word mark is
     const order = [...spans.keys()].sort((a, b) => Number(!!spans[a].sentence) - Number(!!spans[b].sentence));
     for (const k of order) {
         // a one-letter mark («»» alone) still takes a finger: at least 24px wide
         const slop = (r: DOMRect) => Math.max(2, (24 - r.width) / 2);
-        if (markRects(k).some((r) => x >= r.left - slop(r) && x <= r.right + slop(r) && y >= r.top && y <= r.bottom)) return k;
+        const rects = markRects(k);
+        const hit = rects.find((r) => x >= r.left - slop(r) && x <= r.right + slop(r) && y >= r.top && y <= r.bottom);
+        if (!hit) continue;
+        // a short mark on one line takes the finger's slop; anything longer only its letters
+        if (rects.length === 1 && hit.width < 24 && !spans[k].sentence) return k;
+        if (onLetters(x, y, spans[k].s, spans[k].e)) return k;
     }
     return -1;
 }

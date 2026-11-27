@@ -49,6 +49,16 @@ export default createPatternRule(() => ({
                     start
                 };
             }
+        },
+        {
+            // «سواستفاده»، «سو استفاده»، «سؤتفاهم»: «سوء» without its hamza (1.5.2), only before its compounds
+            // («به این سو» is a direction)
+            pattern: new RegExp(`${START}(سو|سؤ|سوئ)[ \u200c]?(${[...SU_COMPOUNDS].join("|")})${END}`, "g"),
+            check: (m) => ({
+                message: `«سوء» با همزه و بی‌فاصله: «سوء${m[2]}»`,
+                replacement: "سوء" + m[2],
+                source: "دستور خط، همزه، ص ۲۸؛ فرهنگ املایی"
+            })
         }
     ]
 }));

@@ -22,7 +22,9 @@ new TextLintTester().run("over-broken", rule, {
         "خون، خونی، روند",                           // blood, bloody, trend: not verbs
         "تو هم بیا",
         "اصلا حتما مطمئنا دقیقا",                    // tanvin left out (lexicon's), not «اصل» + plural «ا»
-        "باید حفظ کنن"                               // «کنند», a verb: not «کن‌اند»
+        "باید حفظ کنن",                              // «کنند», a verb: not «کن‌اند»
+        // 1.5.2: «به» + a pronoun is never marked (the user's decision)
+        "بهش بگو", "بهشون گفتم", "بهت گفتم", "بهتون گفتم", "بهم گفت", "بهمون گفت", "بهاش گفتم"
     ],
     invalid: [
         // the letters change: a suggestion
@@ -32,7 +34,6 @@ new TextLintTester().run("over-broken", rule, {
         ask("شکوفه اینجا نیس"),
         ask("یه خرده صبر کن"),
         ask("میزو تمیز کن"),
-        ask("بهش بگو"), // p. 21: «به‌اش»
         ask("هنوزم دیر نیست"), // p. 26
         ask("بفرمایین تو"), // p. 19
         ask(z("می‹کنین؟")),
@@ -52,7 +53,6 @@ new TextLintTester().run("over-broken", rule, {
         ask("کتاب را خوندم"),
         { text: "اون گفت", errors: [{}] },          // «آن» or «او»: report only
         // only the half-space: the spelling of the spoken form, a fix
-        inv("بهشون گفتم", z("به‹شون گفتم")),
         inv("رفتم پیش خالهم.", z("رفتم پیش خاله‹م.")), // p. 21
         inv("تهش چیزی نماند.", z("ته‹ش چیزی نماند.")) // p. 42
     ]
