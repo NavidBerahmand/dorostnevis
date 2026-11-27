@@ -44,23 +44,46 @@ const SUFFIXES = [
 const FUNCTION_WORDS = new Set(["و", "در", "از", "به", "با", "که", "را", "این", "آن", "تا", "بر", "هم", "یا", "هر"]);
 /** Buckets are floor(log2(count)): 9 ≈ 500 occurrences, 10 ≈ 1000. */
 const SUGGEST_BUCKET = 9;
+/** A letter left out or a homophone swapped: a word from ≈ 128 occurrences (1.6.4). */
+const SURE_EDIT_BUCKET = 7;
 const SPLIT_BUCKET = 10;
-const SOUND_ALIKE_BONUS = 5.6; // ≈ log2(50)
 
 let LEX: Map<string, number> | null = null;
+/**
+ * Names, loanwords and spoken forms the corpora know but the Wikipedia lexicon does not (1.6.4,
+ * scripts/spelling/build-accept.cjs): words of at least ten blog and forum sites, of two Wikipedia
+ * articles, or of a Wikipedia title. Accepted by the checker only (never offered, never a reason
+ * for another rule): checked after the run-together words («فکرکنم» stays «فکر کنم»).
+ */
+let ACCEPT = new Set<string>();
+/**
+ * Words of Wikipedia that blogs and forums hardly use (at least 50 times in Wikipedia, under one in seven
+ * as often in blogs): mostly names («ژوکوف»، «کاستیا»، «موریسون»، «آپولون»). Never offered for a word one
+ * letter away: «ژوکف»، «کستیا»، «مورسون»، «آپولن» are the same names spelled another way (1.6.4).
+ */
+let ENCYCLOPEDIC = new Set<string>();
+/** First names: words that begin Wikipedia titles of two or three words («کارل»، «یوهان»، «کاترین»; 1.6.4). */
+let NAME_FIRST = new Set<string>();
+/** Is `w` a first name (the next word is then a name)? */
+export function nameFirst(w: string): boolean {
+    return NAME_FIRST.has(skeleton(normalize(w))) || NAMES.has(w);
+}
 
 /** Load the lexicon (the site loads it lazily; Node loads the bundled file). */
-export function loadSpellingLexicon(data: { buckets: Record<string, string> }): void {
+export function loadSpellingLexicon(data: { buckets: Record<string, string>; accept?: string; encyclopedic?: string; namefirst?: string }): void {
     const m = new Map<string, number>();
     for (const [b, words] of Object.entries(data.buckets)) {
         if (!words) continue;
         for (const w of words.split(" ")) m.set(w, Number(b));
     }
     LEX = m;
+    ACCEPT = new Set(data.accept ? data.accept.split(" ") : []);
+    ENCYCLOPEDIC = new Set(data.encyclopedic ? data.encyclopedic.split(" ") : []);
+    NAME_FIRST = new Set(data.namefirst ? data.namefirst.split(" ") : []);
 }
 
 function lex(): Map<string, number> | null {
-    if (!LEX && (lexiconData as { buckets?: Record<string, string> }).buckets) loadSpellingLexicon(lexiconData as { buckets: Record<string, string> });
+    if (!LEX && (lexiconData as { buckets?: Record<string, string> }).buckets) loadSpellingLexicon(lexiconData as { buckets: Record<string, string>; accept?: string; encyclopedic?: string; namefirst?: string });
     return LEX;
 }
 
@@ -215,20 +238,74 @@ function passes(w: string, cand: string): number | null {
     return c;
 }
 const ALEFS = "اآأإ";
-/** A homophone letter swapped («ضمینه» ← «زمینه») or one letter left out («مطمن» ← «مطمئن»): ranked first (1.6.0). */
-function homophoneOrMissing(w: string, cand: string): boolean {
+/**
+ * What kind of edit turns `w` into `cand` (1.6.4). The judged cards of 1.6.3 (157 on blogs, 160 on
+ * held-out Wikipedia) showed which kinds are typos: a letter left out («مشمل» ← «مشتمل»، «متسط» ←
+ * «متوسط») or a homophone swapped («سراق» ← «سراغ») were real typos 17 times in 23, a neighbouring key
+ * or two letters swapped mostly so; but a guess with a letter too many («ماهلر» → «ماهر»، «طاقک» →
+ * «طاق»، «دانلودز» → «دانلود») or another letter changed («سنح» → «سطح»، «دخیا» → «دریا»، «شریع» →
+ * «شروع») was right only 5 times in 56: names, loanwords, the wrong word. Only the first kinds are offered.
+ */
+export type EditKind = "missing" | "homophone" | "near" | "swap" | "double" | "extra" | "other";
+/** Letters that are one letter written another way («مٶسسه» ← «مؤسسه»). */
+const VARIANTS = ["ؤٶ", "یىيې", "کك", "هەة"];
+export function editKind(w: string, cand: string): EditKind {
     if (cand.length === w.length + 1) {
-        for (let i = 0; i < cand.length; i++) if (cand.slice(0, i) + cand.slice(i + 1) === w) return true;
-        return false;
+        for (let i = 0; i < cand.length; i++) if (cand.slice(0, i) + cand.slice(i + 1) === w) return "missing";
+        return "other";
     }
-    if (cand.length !== w.length) return false;
-    let diff = -1;
-    for (let i = 0; i < w.length; i++) {
-        if (w[i] === cand[i]) continue;
-        if (diff >= 0) return false;
-        diff = i;
+    if (cand.length === w.length - 1) {
+        for (let i = 0; i < w.length; i++) {
+            if (w.slice(0, i) + w.slice(i + 1) !== cand) continue;
+            // a letter typed twice («اصللا»): a slip of the finger, not another word
+            return (i > 0 && w[i] === w[i - 1]) || (i < w.length - 1 && w[i] === w[i + 1]) ? "double" : "extra";
+        }
+        return "other";
     }
-    return diff >= 0 && SOUND_ALIKE.some((g) => g.includes(w[diff]) && g.includes(cand[diff]));
+    if (cand.length !== w.length) return "other";
+    const d: number[] = [];
+    for (let i = 0; i < w.length; i++) if (w[i] !== cand[i]) d.push(i);
+    if (d.length === 2 && d[1] === d[0] + 1 && w[d[0]] === cand[d[1]] && w[d[1]] === cand[d[0]]) return "swap";
+    if (d.length !== 1) return "other";
+    const [a, b] = [w[d[0]], cand[d[0]]];
+    if ([...SOUND_ALIKE, ...VARIANTS].some((g) => g.includes(a) && g.includes(b))) return "homophone";
+    const pa = KEY_POS.get(a);
+    const pb = KEY_POS.get(b);
+    if (pa && pb && Math.abs(pa[0] - pb[0]) <= 1 && Math.abs(pa[1] - pb[1]) <= 1) return "near";
+    return CONFUSED.some((g) => g.includes(a) && g.includes(b)) ? "near" : "other";
+}
+/** The kinds offered, and how much more a candidate counts for its kind than for its frequency alone. */
+const EDIT_BONUS: Partial<Record<EditKind, number>> = { missing: 7, homophone: 7, double: 5, swap: 4, near: 3 };
+/** Frequency counts up to ≈ 4,000 occurrences: past that a likelier edit wins («مشمل» ← «مشتمل», not «مشکل»). */
+const RANK_BUCKET_CAP = 12;
+
+/** Closed-class words: two frequent words run together are offered apart only with one of these or a verb. */
+const CLOSED = new Set(
+    ("و در از به با بر که را رو این آن اون تا هر هم یا اما ولی تنها فقط حتی نیز یعنی همه همه‌ی چند کمی خیلی بسیار دیگر دیگه هنوز " +
+        "دقیقا اصلا واقعا مثلا من تو او ما شما ایشان آنها اینها اونا همین همان چه چی کی کجا چرا چطور برای واسه توسط روی بین " +
+        "مثل مثه بدون بعد قبل ها های ای یه یکی هیچ کل کلی یک دو سه چهار پنج شش هفت هشت نه ده صد هزار").split(" ")
+);
+/**
+ * Two words run together worth offering apart: one closed-class word or a verb among them. A short
+ * closed word («ها»، «یا»، «کی»، «در») only at the end, after a word that is no name: «هاکارت»، «خزریا»،
+ * «کیبرگ»، «حسیندر» were names. Not «زیر»، «پیش»، «پس»: they make words («زیرهنگ»، «زیرمیدان»).
+ */
+export function closedPair(a: string, b: string): boolean {
+    if (a.length < 2 || b.length < 2) return false;
+    // (a verb, not a stem with «ی»: «وادارسازی»، «جلدبندی»، «دوربری» are nouns of their own)
+    const verb = (x: string) => verbish(x) && !x.endsWith("ی");
+    if (a.length <= 2 && !verb(b)) return false;
+    if (b.length <= 2 && (!END_CLOSED.has(b) || a.length < 3 || NAMES.has(a))) return false;
+    // (not part of a name: «نیونیز» is «Núñez», not «نیو نیز»)
+    if (ENCYCLOPEDIC.has(a) || ENCYCLOPEDIC.has(b)) return false;
+    return CLOSED.has(a) || CLOSED.has(b) || verb(a) || verb(b);
+}
+const END_CLOSED = new Set(["از", "که", "را", "هم", "به", "با", "تا", "دو", "سه"]);
+/** A verb form, an infinitive or a participle: «کنم»، «دادن»، «داشته»، «دارند»، «رسید». */
+function verbish(x: string): boolean {
+    if (verbForm(x) || PAST_STEMS.has(x) || /^ن?می/.test(x)) return true;
+    if (/[نه]$/.test(x) && PAST_STEMS.has(x.slice(0, -1))) return true;
+    return false;
 }
 
 /** Spoken endings: «بازیکنا»، «گوشیمو»، «سایتشون»، «رکوردشو»، «کتابارو» (1.6.0). */
@@ -307,6 +384,8 @@ export function spellingCheck(raw: string, spokenSentence = false): SpellResult 
  * two words, when the rest is a word (1.6.1; before, a word two letters away was guessed).
  */
 function runTogether(w: string, L: Map<string, number>): string | null {
+    // «وقصه»: four letters too when the rest is a frequent word (1.6.4; it was guessed «وقفه»)
+    if (w.startsWith("و") && w.length === 4 && !w.startsWith("وو") && (L.get(w.slice(1)) ?? -1) >= 9) return "و " + w.slice(1);
     if (w.startsWith("و") && w.length >= 5) {
         const rest = w.slice(1);
         if (!rest.startsWith("و") && (L.get(rest) ?? -1) >= 4 && accepted(rest)) return "و " + rest;
@@ -337,67 +416,69 @@ function checkWord(word: string, L: Map<string, number>, spokenSentence = false)
             const b = w.slice(i);
             const aOk = SPOKEN_FUNCTION.includes(a) || (L.get(a) ?? -1) >= 11;
             const bOk = SPOKEN_FUNCTION.includes(b) || ((L.get(b) ?? -1) >= 10 && (b.length >= 3 || (L.get(b) ?? -1) >= 12));
-            if (aOk && bOk) return { suggestions: [a + " " + b] };
+            // two frequent words: with a closed-class word or a verb among them (1.6.4: «ماهیران»، «ریپیر»، «پرفایل»)
+            if (aOk && bOk && (SPOKEN_FUNCTION.includes(a) || SPOKEN_FUNCTION.includes(b) || closedPair(a, b))) return { suggestions: [a + " " + b] };
         }
         const r = checkWord(word, L, false);
         if (!r || !("suggestions" in r)) return r;
-        const one = r.suggestions.filter((c) => c.includes(" ") || editCost(w, skeleton(c)) <= 1);
+        const one = r.suggestions.filter((c) => c.includes(" ") || editCost(w, skeleton(normalize(c))) <= 1 || /اً$/.test(c));
         return one.length ? { suggestions: one } : { note: true };
     }
     // a function word run into the next word: «درکانادا» → «در کانادا» (checked first:
-    // the affix rules would otherwise accept «در» + «کانادا» as a prefixed word)
+    // the affix rules would otherwise accept «در» + «کانادا» as a prefixed word); not a word the writer
+    // joined with a ZWNJ on purpose («به‌نشان»، «به‌مرکزیت»: the book's compound prepositions; 1.6.4)
     const sk = skeleton(word);
     if (!L.has(sk) && !isKnown(word) && !isKnown(sk)) {
         for (const f of ["و", "در", "از", "به", "با", "که", "را", "این", "آن", "تا", "هر"]) {
-            if (!sk.startsWith(f)) continue;
+            if (!sk.startsWith(f) || word.startsWith(f + ZWNJ)) continue;
             const rest = sk.slice(f.length);
-            if (rest.length >= 3 && (L.get(rest) ?? -1) >= SPLIT_BUCKET && !verbForm(rest)) return { suggestions: [f + " " + rest] };
+            // («آنامی» is a name, not «آن امی»: after «آن/این» four letters at least)
+            if (rest.length >= (f === "آن" || f === "این" ? 4 : 3) && (L.get(rest) ?? -1) >= SPLIT_BUCKET && !verbForm(rest)) return { suggestions: [f + " " + rest] };
         }
     }
     if (accepted(word) || spokenInflection(sk)) return null;
+    const w = sk;
+    // a tanvin typed as «آ» or «أ» («واقعآ»، «قبلأ»، «حدودآ»): the word with «اً» (1.6.4; it was guessed «واقع»، «قبل»)
+    if (/[آأ]$/.test(w) && w.length >= 4 && (L.get(w.slice(0, -1) + "ا") ?? -1) >= 8) return { suggestions: [w.slice(0, -1) + "اً"] };
     const run = runTogether(sk, L);
     if (run) return { suggestions: [run] };
     // Arabic names and terms with the article: «المعلی»، «الدروس»
     if (word.startsWith("ال") && word.length >= 5) return null;
-    const w = skeleton(word);
-    // frequent words one edit away; two only if none of those passes (and, as before 1.5.0,
-    // the old search went two edits away for long words with nothing one edit away)
-    const loose = new Map<string, number>();
-    for (const c of edits1(w)) {
-        const b = L.get(c);
-        if (b !== undefined && b >= SUGGEST_BUCKET) loose.set(c, b);
-    }
-    const pass = new Map<string, number>();
-    for (const [c, b] of loose) {
-        const cost = passes(w, c);
-        if (cost !== null) pass.set(c, b + (homophoneOrMissing(w, c) ? SOUND_ALIKE_BONUS : 0));
-    }
-    // two edits away: never offered (1.6.1: «وعمدی» → «واحدی»، «وبودر» → «ورودی» were the guesses people
-    // judged wrong); only a reason for the note «در واژه‌نامه نیست»
-    if (pass.size === 0 && loose.size === 0 && w.length >= 6) {
-        search: for (const c1 of edits1(w)) {
-            for (const c2 of edits1(c1)) {
-                const b = L.get(c2);
-                if (b === undefined || b < SUGGEST_BUCKET) continue;
-                loose.set(c2, b);
-                break search;
-            }
-        }
-    }
-    const ranked = [...pass.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
-    const out = ranked.slice(0, 3);
-    // two words run together: «درکانادا» → «در کانادا» (a function word first), or two frequent words
+    // two words run together: a function word and a frequent word («همهاز»), or two frequent words
+    // with a closed-class word or a verb among them («فکرکنم»، «تنهامحصول»، «باوردارند»; 1.6.4: not
+    // two nouns, «چاهدراز»، «اسکندرشهر»، «پرفایل» were names and compounds)
     let looseSplit = false;
+    let split: string | null = null;
     for (let i = 1; i < w.length - 1; i++) {
         const a = w.slice(0, i);
         const b = w.slice(i);
         if ((FUNCTION_WORDS.has(a) || (L.get(a) ?? -1) >= SPLIT_BUCKET) && (L.get(b) ?? -1) >= SPLIT_BUCKET) {
             looseSplit = true;
-            if (FUNCTION_WORDS.has(a) && b.length >= 2) out.unshift(a + " " + b);
-            else if (a.length >= 3 && b.length >= 3) out.push(a + " " + b); // «ثروتمندشدن»، not «خان ما»
+            if (FUNCTION_WORDS.has(a) && b.length >= 2) split = a + " " + b;
+            else if (!word.includes(ZWNJ) && closedPair(a, b)) split = a + " " + b;
             break;
         }
     }
+    if (split && FUNCTION_WORDS.has(split.split(" ")[0])) return { suggestions: [split] };
+    // a name, a loanword or a spoken form many sites or Wikipedia use (1.6.4)
+    if (ACCEPT.has(w)) return null;
+    // frequent words one edit away, of the kinds that are typos (editKind); two edits: never offered
+    // (1.6.1: «وعمدی» → «واحدی»، «وبودر» → «ورودی» were the guesses people judged wrong)
+    // (a letter left out or a homophone: a less frequent word too, «غرمجاز» ← «غیرمجاز», «اویز» ← «آویز»)
+    const loose = new Map<string, number>();
+    const pass = new Map<string, number>();
+    for (const c of edits1(w)) {
+        const b = L.get(c);
+        if (b === undefined || b < SURE_EDIT_BUCKET || ENCYCLOPEDIC.has(c)) continue;
+        const kind = editKind(w, c);
+        if (b < SUGGEST_BUCKET && kind !== "missing" && kind !== "homophone") continue;
+        loose.set(c, b);
+        const bonus = EDIT_BONUS[kind];
+        if (bonus !== undefined && passes(w, c) !== null) pass.set(c, Math.min(b, RANK_BUCKET_CAP) + bonus);
+    }
+    const ranked = [...pass.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+    const out = ranked.slice(0, 3);
+    if (split) out.push(split);
     if (out.length) return { suggestions: out.slice(0, 3) };
     return loose.size || looseSplit ? { note: true } : null;
 }

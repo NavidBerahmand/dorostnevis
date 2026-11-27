@@ -16,6 +16,8 @@ import { createPatternRule } from "../util/pattern-rule";
 import { START, END, ZWNJ, WORD, WORD_CHAR, LETTER, toPersianDigits } from "../util/persian";
 import data from "../dict/spaced-compounds.json";
 import commonNouns from "../dict/hazm-common-nouns.json";
+import { isKnown } from "../util/words";
+import { registerSegments, spokenAt } from "../util/colloquial";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 
 /** Words of their own: «دست سازمان» is «دست» + «سازمان», not «دست‌ساز» + «مان». */
@@ -109,6 +111,50 @@ function findCompound(m: RegExpExecArray): { len: number; e: Entry; suf: string;
 const LIGHT_VERB = new RegExp(
     `^\\s+(?:ن?می${ZWNJ}?|ب|ن)?(?:کرد|کن|شد|شو|داد|ده|زد|زن|گرفت|گیر|آمد|آی|آورد|آور|خورد|خور|کشید|کش|داشت|دار|ساخت|ساز|نمود|نما|گشت|گرد|رفت|رو|بست|بند|افتاد|افت|انداخت|انداز|یافت|یاب)`
 );
+/** A number word as the first part: «یک بار»، «دو دل»، «پنج ساله». */
+const NUMBER_WORD = /^(?:یک|یه|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|یازده|دوازده|سیزده|چهارده|پانزده|شانزده|هفده|هجده|نوزده|بیست|سی|چهل|پنجاه|شصت|هفتاد|هشتاد|نود|صد|هزار|چند)$/;
+/** The last word with its suffix a word of another kind: «دارای» (not «مجموعه‌دار» + «ای»)، «روی»، «گاهی»، «یکی» («این مکان یکی از …»). */
+const OTHER_WORD = new Set(["دارای", "روی", "گاهی", "یکی"]);
+/**
+ * The pair as two words, by what is around it (1.6.4; the judged yellow cards of 1.6.3 were wrong 26
+ * times in 160 on blogs, 33 on Wikipedia): `prev`/`next` the words before and after, `first`/`last`
+ * the pair's first and last word as written (with its suffix), `more` what follows the last word after a ZWNJ
+ * («ها» of «سال‌ها»), `spoken` a spoken sentence.
+ */
+function twoWords(first: string, last: string, tok: string, suf: string, more: string, prev: string, next: string, after: string, spoken: boolean): boolean {
+    // a number counting on («سی و یک ساله»، «یکی دو هفته»، «هر کدام یک مروارید») or with the «ی» of «a»
+    // («یک صدای کریستالی»)، a spoken «ه» («دو روزه تازه خریدین»: «دو روز است»)
+    if (NUMBER_WORD.test(first)) {
+        if (prev === "و" || prev === "یکی" || prev === "یکی‌دو" || NUMBER_WORD.test(prev) || /^[0-9۰-۹]+$/.test(prev)) return true;
+        if ((suf === "ی" || suf === "ای") && /[اوی]$/.test(last.slice(0, last.length - suf.length))) return true;
+        // a spoken «ه» after a time word, not after a noun it describes: «تو این چند ساله»، «دو روزه تازه خریدین»
+        // (but «سفر چند روزه»)
+        if (spoken && /^(روزه|ساله|ماهه|ساعته)$/.test(tok) && (!prev || /^(که|این|اون|تو|از|هم|و|الان|همین|اما|ولی)$/.test(prev))) return true;
+    }
+    // «در زیر سطح قمر»، «در کنار دریا»: a place word after a preposition is the place, with an ezafe
+    if (/^(زیر|روی|پشت|کنار|بالای|پایین|جلوی|میان|بین|درون|بیرون)$/.test(first) && /^(در|از|به|تا|با)$/.test(prev)) return true;
+    // «ای جان عزیزم!»: a call; «صدایی مثل چی»: a question word
+    if (prev === "ای" || /^(چی|کی|کجا|چه)$/.test(last)) return true;
+    if (prev === "هر" && first === "کدام") return true;
+    // «بر پایه یک اصل»: «یک» counts the next word
+    if (last === "یک" && next && !/^(و|یا|است|هست|هستند|بود|بودند|را|هم)$/.test(next)) return true;
+    // the spoken «تو» (in) and «رو» (را، روی): «تو کار خودتو بکن»، «پنجره‌ها رو باز گذاشت»، «رو دست بیاد»
+    if (first === "تو" || first === "رو") return true;
+    // «یه کم آب»: «a little water»
+    if (first === "کم" && /^(یه|یک|یکم)$/.test(prev)) return true;
+    // «من بعد از عصب‌کشی»، «دل پر از گلایه»: a preposition's object follows
+    if (next === "از" && /^(بعد|قبل|پیش|پس|پر|دور|بیرون|خارج|جدا)$/.test(last)) return true;
+    // «سر خود را»: the reflexive
+    if (last === "خود" && /^(را|رو)$/.test(next)) return true;
+    // («سال‌های»: the plural after a ZWNJ is `more`)
+    if (OTHER_WORD.has(tok) || (/^(سال|روز|ماه|قرن|دهه|هفته)$/.test(last.slice(0, last.length - suf.length)) && /^ها/.test(suf + more))) return true;
+    if (first === "تمام" && /^ها/.test(suf + more)) return true;
+    // the last word makes a word with the next one: «کتاب بین المللی»، «چراغ ترمز دستی»
+    if (next.length >= 3 && !suf && (isKnown(last + next) || isKnown(last + ZWNJ + next))) return true;
+    // «بازی کن…»: an imperative before the end of the sentence, not «بازیکن»
+    if (tok === "کن" && /^\s*(?:$|[.!؟?…،,:؛\n]|و\s)/.test(after)) return true;
+    return false;
+}
 /** Spaces between the parts, the special Unicode ones too (another rule makes those plain). */
 const SPACE = "[ \\u00A0\\u2000-\\u200A\\u202F\\u205F\\u3000]";
 // one report per run of words: a later word inside a reported compound starts nothing
@@ -150,6 +196,9 @@ export default createPatternRule(() => ({
                 // «هر دو روی لحاف»: «both on», not «دوروی» (two-faced)
                 const prevWord = m.input.slice(0, m.index).trimEnd().split(/\s+/).pop() ?? "";
                 if (prevWord === "هر" && /^(دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده)$/.test(m[1])) return null;
+                // «یک سر پستانک مانند دارند»: the last part goes with «مانند» («پستانک‌مانند»), not with the first
+                // (1.6.4); but «قبایل سرخ پوست مانند هاپی» is «such as»
+                if (!suf && /^\s+(?:مانند|مانندی|وار|واره)(?![\p{L}])\s*(?:$|[.،؛:!؟?)\n]|(?:دار|است|هست|بود|شد|کرد|ن?می)[\p{L}\u200c]*)/u.test(m.input.slice(m.index + end))) return null;
                 // the ezafe mark is always «ۀ» (the farhang's «ۀ» is the same letter)
                 const to = (e.to + suf).replace(/هٔ/g, "ۀ").replace(/(?<=[اآدذرزژو])\u200c/g, "");
                 const how = e.to.includes(ZWNJ) ? "با نیم‌فاصله" : "پیوسته";
@@ -158,11 +207,20 @@ export default createPatternRule(() => ({
                     : `فرهنگ املایی، ص ${toPersianDigits(e.page)}`;
                 if (amb) {
                     if (LIGHT_VERB.test(m.input.slice(m.index + end))) return null;
+                    // the last word goes on after a ZWNJ into a word of its own: «کتاب بین‌المللی» (1.6.4)
+                    const rest = m.input.slice(m.index + end).match(/^\u200c[\p{L}\u200c]+/u)?.[0];
+                    if (rest && isKnown(m.input.slice(m.index, m.index + end).split(/\s+/).pop()! + rest)) return null;
                     // the two-word reading, surely (1.6.1): the last word is the spoken «را» or a pronoun («دو رو»
                     // = «دو را»، «بدن ما»), or a number counts on («یک بار دو بار»)
                     const lastWord = m.input.slice(m.index, m.index + end).split(/\s+/).pop() ?? "";
                     if (TWO_WORDS_LAST.has(lastWord)) return null;
                     if (/^(یک|یه|دو|سه) /.test(e.spaced) && /^\s*(یک|دو|سه|چهار|پنج|[0-9۰-۹])/.test(m.input.slice(m.index + end))) return null;
+                    const words = m.input.slice(m.index, m.index + end).split(/\s+/);
+                    const after = m.input.slice(m.index + end);
+                    const prev = m.input.slice(0, m.index).trimEnd().split(/\s+/).pop() ?? "";
+                    const next = after.match(/^\s+([\p{L}\u200c]+)/u)?.[1] ?? "";
+                    const spoken = spokenAt(registerSegments(m.input), m.index);
+                    if (twoWords(words[0], words[words.length - 1], lastWord, suf, (rest ?? "").replace(/^\u200c/, ""), prev, next, after, spoken)) return null;
                     return {
                         message: `اگر «${m.input.slice(m.index, m.index + end).replace(/\s+/g, " ")}» یک واژه است، ${how} نوشته می‌شود: «${to}»`,
                         replacement: to,

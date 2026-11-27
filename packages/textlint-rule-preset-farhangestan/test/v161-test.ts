@@ -66,6 +66,7 @@ describe("1.6.1: data and the spelling checker", function () {
         assert.deepStrictEqual(spellingCheck("حالتیکه"), { suggestions: ["حالتی که"] });
         assert.ok(!spellingCheck("وبودر") || !("suggestions" in spellingCheck("وبودر")!));
         for (const w of ["میسازنا", "ننداخته", "گفتینو", "شدتون", "میومدن", "دستامو"]) assert.strictEqual(spellingCheck(w), null, w);
-        assert.deepStrictEqual(spellingCheck("عشخ"), { suggestions: ["عشق"] });
+        // 1.6.4: «خ» for «ق» is neither a homophone nor a neighbouring key: not offered (editKind «other»)
+        assert.ok(!spellingCheck("عشخ") || !("suggestions" in spellingCheck("عشخ")!));
     });
 });

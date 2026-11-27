@@ -1,6 +1,6 @@
 {
   "name": "vajban-web",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "private": true,
   "description": "صفحهٔ واج‌بان: textlint و قواعد فرهنگستان در مرورگر",
   "scripts": {
