@@ -26,7 +26,10 @@ new TextLintTester().run("over-broken", rule, {
         // 1.5.2: «به» + a pronoun is never marked (the user's decision)
         "بهش بگو", "بهشون گفتم", "بهت گفتم", "بهتون گفتم", "بهم گفت", "بهمون گفت", "بهاش گفتم",
         // 1.6.0: no absurd «full» forms: «می‌گند، میش‌اند، می‌رند، می‌خواند، اصل‌اند، هار را، ارز را، بدنی‌ها»
-        z("می‹گن، می‹شن، می‹رن، می‹خوان، می‹دن، میان"), "میشن", "واقعن اصلن مثلن حتمن", "کتابارو بردم", "هارو", "ارزو", "بدنیا"
+        z("می‹گن، می‹شن، می‹رن، می‹خوان، می‹دن، میان"), "میشن", "واقعن اصلن مثلن حتمن", "کتابارو بردم", "هارو", "ارزو", "بدنیا",
+        // 1.6.1: «رو» and «اون، اونو» are not marked (two readings each, a third of all the blue cards)، «انصافا» is
+        // «انصافاً»، «منو» one card
+        "اون گفت", "کتاب رو بده", "اونو بردم", "انصافا خوب بود"
     ],
     invalid: [
         // the letters change: a suggestion
@@ -54,7 +57,6 @@ new TextLintTester().run("over-broken", rule, {
         ask(z("نمی‹دونم")),
         ask("همان‌جا موند"),
         ask("کتاب را خوندم"),
-        { text: "اون گفت", errors: [{}] },          // «آن» or «او»: report only
         // only the half-space: the spelling of the spoken form, a fix
         inv("رفتم پیش خالهم.", z("رفتم پیش خاله‹م.")), // p. 21
         inv("تهش چیزی نماند.", z("ته‹ش چیزی نماند.")) // p. 42

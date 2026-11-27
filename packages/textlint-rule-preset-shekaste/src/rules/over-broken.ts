@@ -173,7 +173,7 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const word = m[0];
                 const stem = m[1];
-                if (KNOWN.has(word) || !KNOWN.has(stem) || prepAndWord(word)) return null; // «ازتو» = «از تو»
+                if (KNOWN.has(word) || !KNOWN.has(stem) || prepAndWord(word) || MAP.has(word)) return null; // «ازتو» = «از تو»; «منو»: the list's
                 // «هارو»، «کتابارو»: «ها/ا» + «رو» run together, not «هار» + «را»; «ارزو» is «آرزو» (1.6.0)
                 if (/(ها|ا)رو$/.test(word) || maddLeftOut(word) || beRunIn(word)) return null;
                 if ("اوی".includes(stem[stem.length - 1])) return null; // «دریا رو»: here «را» keeps its «ر» anyway
@@ -193,6 +193,9 @@ export default createPatternRule(() => ({
                 const stem = m[1];
                 // «بیا» is a verb, not «بی» + «ا»: short stems are too ambiguous
                 if (KNOWN.has(m[0]) || !KNOWN.has(stem) || stem.endsWith("ه") || stem.length < 3 || twoWords(m[0]) || TANVIN_BARE.has(m[0])) return null;
+                // «انصافا»: a tanvin left out («انصافاً»), not «انصاف» + «ها», nor a name («روزا»): a word the
+                // corpus has as it is (1.6.1)
+                if (KNOWN.has(m[0] + "ً") || (corpusBucket(m[0]) ?? -1) >= 7) return null;
                 if (maddLeftOut(m[0]) || beRunIn(m[0])) return null; // «ادما» = «آدما»، «بدنیا» = «به دنیا» (1.6.0)
                 const fixed = "اآدذرزژو".includes(stem[stem.length - 1]) ? stem + "ها" : stem + ZWNJ + "ها";
                 return {
@@ -229,10 +232,14 @@ export default createPatternRule(() => ({
                 const fixed = neg + SPOKEN_PAST[stem] + (ending === "ن" ? "ند" : ending);
                 // «دونستن» is also the infinitive «دانستن»: both, to choose
                 if (ending === "ن") {
+                    // after a preposition («با خوندن مطالب»، «برای خوندن») the infinitive first (1.6.1)
+                    const prev = m.input.slice(0, m.index).match(/([\p{L}‌]+)\s+$/u)?.[1] ?? "";
+                    const infinitive = neg + SPOKEN_PAST[stem] + "ن";
+                    const infFirst = /^(با|از|به|برای|واسه|بعد|قبل|موقع|حین|مشغول)$/.test(prev);
                     return {
-                        message: `ماضی یا مصدر این فعل در گفتار هجا از دست نمی‌دهد؛ کامل بنویسید: «${fixed}» یا «${neg + SPOKEN_PAST[stem]}ن»`,
-                        replacement: fixed,
-                        alternatives: [neg + SPOKEN_PAST[stem] + "ن"],
+                        message: `ماضی یا مصدر این فعل در گفتار هجا از دست نمی‌دهد؛ کامل بنویسید: «${fixed}» یا «${infinitive}»`,
+                        replacement: infFirst ? infinitive : fixed,
+                        alternatives: [infFirst ? fixed : infinitive],
                         fix: false,
                         source: `${BOOK}، ص ۱۹ و ۳۰`
                     };
@@ -285,8 +292,11 @@ export default createPatternRule(() => ({
             }
         },
         {
-            // ambiguous: report only
-            pattern: new RegExp(`${START}(اونو|اون|رو|صب)${END}`, "g"),
+            // ambiguous: report only. Since 1.6.1 only «صب» (not a word): «رو» (را، روی، رو) and «اون، اونو» (آن، او)
+            // are what every spoken sentence is made of, and a card on each, with two readings to pick from, was
+            // a third of all the blue cards in the blog study (5,000 per 8,000 paragraphs); the other spoken
+            // words keep their one clear written form («یه» ← «یک»، «خونه» ← «خانه»)
+            pattern: new RegExp(`${START}(صب)${END}`, "g"),
             check: (m) => {
                 const hints: Record<string, string> = {
                     "اونو": "«آن را» یا «او را»",

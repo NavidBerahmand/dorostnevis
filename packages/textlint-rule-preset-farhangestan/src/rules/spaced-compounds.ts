@@ -20,12 +20,16 @@ import hazmAdjectives from "../dict/hazm-adjectives.json";
 
 /** Words of their own: «دست سازمان» is «دست» + «سازمان», not «دست‌ساز» + «مان». */
 const STANDALONE = new Set<string>([...commonNouns.words, ...hazmAdjectives.adjectives]);
+/** Last words that make two words of a spaced pair: the spoken «را», pronouns. */
+const TWO_WORDS_LAST = new Set(["رو", "را", "من", "تو", "او", "ما", "شما", "اون", "اونا", "منم", "توام", "اینو", "اونو"]);
 /** A light verb as the last word: «پاک کنی» is a compound verb (compound-verbs: spaced), not «پاک‌کنی». */
 const LIGHT_VERB_WORD = new RegExp(
     "^(?:" +
         // compound-verbs' forms: past stems with a person ending or «ن», bare present stems with a person ending
         "(?:کرد|شد|نمود|گردید|داد|گرفت|داشت|زد|گفت|یافت)(?:|م|ی|یم|ید|ند|ن)" +
-        "|(?:ن?می\u200c?|ب)?(?:کن|شو|نما|گرد|ده|گیر|دار|زن|گوی|یاب)(?:م|ی|د|یم|ید|ند)" +
+        "|(?:ن?می\u200c?|ب|ن)?(?:کن|شو|نما|گرد|ده|گیر|دار|زن|گوی|یاب)(?:م|ی|د|یم|ید|ند)" +
+        // a negated past: «حال ندارم» is «ندارم», not «حال‌ندار» + «م» (1.6.1)
+        "|ن(?:کرد|شد|داد|گرفت|داشت|زد|گفت|یافت)(?:|م|ی|یم|ید|ند|ن)" +
     ")$"
 );
 
@@ -154,6 +158,11 @@ export default createPatternRule(() => ({
                     : `فرهنگ املایی، ص ${toPersianDigits(e.page)}`;
                 if (amb) {
                     if (LIGHT_VERB.test(m.input.slice(m.index + end))) return null;
+                    // the two-word reading, surely (1.6.1): the last word is the spoken «را» or a pronoun («دو رو»
+                    // = «دو را»، «بدن ما»), or a number counts on («یک بار دو بار»)
+                    const lastWord = m.input.slice(m.index, m.index + end).split(/\s+/).pop() ?? "";
+                    if (TWO_WORDS_LAST.has(lastWord)) return null;
+                    if (/^(یک|یه|دو|سه) /.test(e.spaced) && /^\s*(یک|دو|سه|چهار|پنج|[0-9۰-۹])/.test(m.input.slice(m.index + end))) return null;
                     return {
                         message: `اگر «${m.input.slice(m.index, m.index + end).replace(/\s+/g, " ")}» یک واژه است، ${how} نوشته می‌شود: «${to}»`,
                         replacement: to,

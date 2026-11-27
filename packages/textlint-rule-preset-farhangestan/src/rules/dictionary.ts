@@ -20,6 +20,36 @@ import { createPatternRule } from "../util/pattern-rule";
 import { START, END, WORD, ZWNJ, NON_JOINING, toPersianDigits } from "../util/persian";
 import { FARHANG, FARHANG_OVERRIDES, BOOK_JOINED } from "../util/words";
 import { PRODUCTIVE_STEMS } from "./joined-words";
+import { isKnown } from "../util/words";
+import { corpusBucket } from "../util/speller";
+
+/**
+ * A common word with a pronoun or the spoken «را» run on («پسرو» = «پسر» + «و»، «چشمشو» = «چشم» + «ش» +
+ * «و»، «گلوش» = «گلو» + «ش»), when the farhang's compound with the same letters («پس‌رو»، «چشم‌شو»، «گل‌وش»)
+ * is the other reading: the ending, or null. 1.6.1: these were red.
+ */
+/** «کردن» next («کنید، کرد، می‌کنه، بکنین»). */
+const LIGHT_VERB_NEXT = /^ +(?:ن?می‌?|ب|ن)?(?:کن|کرد)[\p{L}‌]*/u;
+const SPOKEN_RA = ["شونو", "تونو", "مونو", "شو", "مو", "تو", "رو", "و"];
+const PRONOUN = ["شان", "تان", "مان", "شون", "تون", "مون", "ش", "م", "ت"];
+function cliticReading(word: string, target: string): { base: string; ending: string; spoken: boolean } | null {
+    if (word.includes(ZWNJ)) return null;
+    const first = target.split(/[‌ ]/)[0];
+    for (const [endings, spoken] of [[SPOKEN_RA, true], [PRONOUN, false]] as Array<[string[], boolean]>) {
+        for (const ending of endings) {
+            if (!word.endsWith(ending)) continue;
+            const base = word.slice(0, -ending.length);
+            if (base.length < 2 || !isKnown(base) || (corpusBucket(base) ?? 0) < 8) continue;
+            // the spoken «را» is «رو» after a vowel («اونارو»)، «و» after a consonant («پسرو»)
+            if (ending === "رو" && !/[اویه]$/.test(base)) continue;
+            if (ending === "و" && /[اوی]$/.test(base)) continue;
+            // «چشمشو» = «چشم» + «ش» + «و» even though «چشم‌شو» starts with «چشم»; a bare pronoun needs another first part
+            if (base === first && !(spoken && ending.length > 1 && ending !== "رو")) continue;
+            return { base, ending, spoken };
+        }
+    }
+    return null;
+}
 
 const SOURCE = "فرهنگ املایی خطّ فارسی";
 
@@ -72,6 +102,10 @@ export default createPatternRule(() => ({
                         source: suffixoid ? "دستور خط، ترکیب‌ها، الف-۱، تبصرۀ ۵، ص ۶۰" : "دستور خط، ترکیب‌ها، ب-۲، ص ۶۲"
                     };
                 }
+                // «پسرو»، «چشمشو»: a word with the spoken «را» (or a pronoun) is far likelier than a rare compound;
+                // and where the farhang itself prints these letters («گلوش») only the 2nd edition's rule differs
+                const clitic = target ? cliticReading(word, target) : null;
+                if (clitic && (clitic.spoken || (override && visibleForm(preferred ?? "") === seen))) return null;
                 const source = override
                     ? `دستور خط (ویراست جدید)؛ فرهنگ املایی، ص ${toPersianDigits(page)}، «${preferred}» دارد`
                     : `${SOURCE}، ص ${toPersianDigits(page)}`;
@@ -89,6 +123,8 @@ export default createPatternRule(() => ({
                 }
                 // «کمکم»: also «کمک» + «م», a different word: never red
                 const other = otherReading(word, target);
+                // «کمکم کنید»، «کمکم کرد»: the noun with its pronoun before a light verb, not «کم‌کم» (1.6.1)
+                if (other && LIGHT_VERB_NEXT.test(m.input.slice(m.index + word.length))) return null;
                 if (other) return { message: homographMessage(word, target, other), replacement: target, alternatives: [word], fix: false, source };
                 return { message: `املای مرجّح «${target}» است`, replacement: target, source };
             }

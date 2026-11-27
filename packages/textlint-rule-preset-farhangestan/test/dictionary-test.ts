@@ -4,6 +4,10 @@ import { inv, z } from "./helpers";
 
 new TextLintTester().run("dictionary", rule, {
     valid: [
+        // 1.6.1: a word with a pronoun or the spoken «را» is no rare compound of the farhang: «پسرو» (پسر + و،
+        // not «پس‌رو»)، «چشمشو»، «گلوش» (the farhang prints «گلوش»; only the 2nd edition's «-وش» differs);
+        // «کمکم» before «کردن» is «کمک» + «م»
+        "پسرو دیدم", "چشمشو بست", "گلوش درد می‌کنه", "حالا کمکم کن", "لطفاً کمکم کنید",
         "روانپزشکی و سیاستمدار",
         z("نبضگاه، نبض‹گاه"),                 // «/» in the dictionary: both valid (p. 600)
         z("آب‹پاش، آبپاش"),                   // «ـ»: rule form and common form (p. 24)
@@ -18,8 +22,8 @@ new TextLintTester().run("dictionary", rule, {
     invalid: [
         // a homograph is never red: «کمکم» is also «کمک» + «م» (1.4.0); no automatic fix
         {
-            text: "حالا کمکم کن",
-            output: "حالا کمکم کن",
+            text: "کمکم دیر شد",
+            output: "کمکم دیر شد",
             errors: [{ message: "اگر منظور «کم‌کم» است، «کم‌کم» نوشته می‌شود؛ «کمکم» («کمک» + «م») هم درست است (فرهنگ املایی خطّ فارسی، ص ۵۱۱)" }]
         },
         { text: "دندانهای او", output: "دندانهای او", errors: [{}] },

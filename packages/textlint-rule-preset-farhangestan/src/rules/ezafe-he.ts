@@ -64,6 +64,12 @@ import { accepted, spellingReady } from "../util/speller";
  */
 const MODEL_FIX = 0.9;
 const MODEL_SUGGEST = 0.6;
+/** In a spoken sentence the model (trained on Wikipedia) is surer of less: suggested from 0.8 (1.6.1). */
+const MODEL_SUGGEST_SPOKEN = 0.8;
+/** A pronoun ending or a copula written as a word: «تونو»، «ش»، «اشون»، «هاتونو»، «ست»، «اس». */
+const CLITIC_WORD = /^(?:(?:ها|های)?(?:م|ت|ش|مان|تان|شان|مون|تون|شون|ام|ات|اش|امون|اتون|اشون)(?:و|رو|ه|ست|اس)?|ها(?:و|رو)?|ست|اس)$/;
+/** A light verb that is also a noun («داد» cry): still an ezafe's second part. */
+const NOUN_TOO = new Set(["داد"]);
 
 /** The model's candidates for the last text seen (a rule sees one node's text at a time). */
 let cachedText = "";
@@ -196,7 +202,7 @@ function ezafeWrittenAsHe(word: string): string | null {
 const EZAFE_PRONOUNS = ["من", "تو", "او", "ما", "شما", "ایشان", "آنها", "آن‌ها", "وی"];
 /** Conjunctions and adverbs in «ه»: «بلکه ما»، «همیشه او» are not ezafes. */
 const NOT_EZAFE = new Set([
-    "بلکه", "که", "چه", "آنچه", "هرچه", "چنانچه", "اگرچه", "گرچه", "همیشه", "البته", "تازه", "دوباره", "همواره",
+    "بلکه", "که", "چه", "آنچه", "بالاخره", "خلاصه", "آخه", "دیگه", "اگه", "هرچه", "چنانچه", "اگرچه", "گرچه", "همیشه", "البته", "تازه", "دوباره", "همواره",
     "هماره", "یکباره", "وگرنه", "نه", "آهسته", "ناگه", "شبانه", "روزانه", "همانا", "زیراکه", "چنانکه", "آنکه", "اینکه"
 ]);
 
@@ -276,12 +282,25 @@ export default createPatternRule<Options>((options) => {
                         // a verb next: a compound verb or the end of a clause («استفاده کنه»، «کشته بشه»)
                         if (LIGHT_VERBS.has(m[2]) || verbLike(m[2], true) && !isParticiple(m[2])) return null;
                     }
+                    // 1.6.1 (blogs: 54 of 124 model suggestions wrong), in every sentence:
+                    // - only a known word: no ezafe advice on a typo, a name or a spoken form («طایقه»، «فنه»، «ماله»);
+                    //   in a written sentence a word of the corpus will do («فلاسفۀ یونانی»)
+                    if (!isKnown(m[1]) && (spoken || !spellingReady() || !accepted(m[1]))) return null;
+                    // - a pronoun ending written apart («علاقه تونو»، «بچه اشون»، «عاشقانه ست»)، or the spoken «را»
+                    if (m[2] === "رو" || CLITIC_WORD.test(m[2])) return null;
+                    // - a light verb next («اجازه بدن»، «ادامه دهم»، «مطالعه کنین»): a compound verb
+                    if (LIGHT_VERBS.has(m[2]) && !NOUN_TOO.has(m[2])) return null;
+                    // - the word said twice («مرحله مرحله»، «لحظه لحظه»), «اون همه» (that much)
+                    if (prev === m[1] || m[2] === m[1] || (m[1] === "همه" && /^(اون|آن|این|این‌|اینهمه)$/.test(prev))) return null;
+                    // - the next word unknown (a typo or a run-together word: «شله زرمون»): no reading to go by
+                    //   (in a spoken sentence; in a written one it is mostly a name: «جزیرۀ هومونهون»)
+                    if (spoken && spellingReady() && !isKnown(m[2]) && !accepted(m[2]) && !spokenForm(m[2])) return null;
                     const c = candidateAt(m.input, m.index);
-                    if (!c || c.p < MODEL_SUGGEST) return null;
-                    // a typo («طایقه») is the spelling rule's: no ezafe advice on it
-                    if (!isKnown(m[1]) && spellingReady() && !accepted(m[1])) return null;
+                    if (!c || c.p < (spoken ? MODEL_SUGGEST_SPOKEN : MODEL_SUGGEST)) return null;
                     // a compound written with a space: suggest the compound, not an ezafe
                     const compound = spacedCompound(m[1], m[2]);
+                    // a compound of the farhang: the spaced-compounds rule reports it (one card, 1.6.1)
+                    if (compound && isDictionaryWord(compound.replace(/\s.*$/, ""))) return null;
                     if (compound) {
                         return {
                             message: `اگر «${m[1]} ${m[2]}» یک ترکیب است، با نیم‌فاصله نوشته می‌شود: «${compound}»`,

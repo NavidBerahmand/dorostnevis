@@ -146,6 +146,10 @@ function joinedWord(word: string, prev = "", next = ""): PatternResult | null {
             const fixed = d + ZWNJ + rest;
             return { message: `در حروف ربط مرکّب، «${d}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: S_DEMONSTRATIVE };
         }
+        // «اینتر»، «اینقد»، «اینجام»: «این» + a two-letter word only from the sure list; a known word with a
+        // pronoun («اینجا» + «م») is no «این» + noun (1.6.1)
+        if (rest.length === 2 && !AFTER_DEMONSTRATIVE.has(rest)) continue;
+        if (/^(.{3,}?)(م|ت|ش|مون|تون|شون)$/.test(word) && isKnown(word.replace(/(م|ت|ش|مون|تون|شون)$/, ""))) continue;
         if (rest.length >= 2 && commonNoun(rest)) {
             const fixed = d + " " + rest;
             // a joined name is possible («آندریا»): fix only the most common nouns
@@ -285,6 +289,8 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const fixed = "هم" + ZWNJ + m[1];
                 if (!isDictionaryWord(fixed) || verbForm(m[1])) return null;
+                // in a spoken sentence «هم» is nearly always «also» («دو تا پله هم بالا بره»، «کلی هم خرج کردم»; 1.6.1)
+                if (spokenAt(registerSegments(m.input), m.index)) return null;
                 return {
                     message: `اگر «هم» پیشوند است، با نیم‌فاصله نوشته می‌شود: «${fixed}»`,
                     replacement: fixed,

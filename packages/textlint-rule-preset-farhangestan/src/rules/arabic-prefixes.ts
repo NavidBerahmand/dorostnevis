@@ -21,6 +21,19 @@ const NOT_A_PREFIX_BEFORE = new Set([
     "وی", "خود", "خودش", "همه", "هر", "یک", "و", "که", "را", "با", "در", "به"
 ]);
 const NOT_A_PREFIX_AFTER = new Set(["بر", "به", "در", "از"]);
+/**
+ * Words that start a phrase of their own: «ضد زیر دریایی» is «ضدزیردریایی» or nothing, never «ضدزیر» +
+ * «دریایی»; «ضد زیر گریه» is «زد زیر گریه» typed wrong (1.6.1).
+ */
+const NOT_A_PREFIX_BEFORE_PHRASE = new Set(["زیر", "روی", "رو", "بالا", "بالای", "پشت", "جلو", "جلوی", "کنار", "توی", "تو", "بین", "میان", "پیش", "پس", "سر", "دم", "مثل", "برای"]);
+/** «غیر احمد»: «غیر» (except) before a name is a preposition (1.6.1). */
+const gheirPrefixFits = (next: string) => !GIVEN_NAMES.has(next);
+/** The commonest given names (some are also words in the lists: «علی»، «احمد»، «امید»). */
+const GIVEN_NAMES = new Set(
+    ("علی احمد محمد محمود حسن حسین رضا مهدی امیر امید جواد مجید سعید حمید وحید مسعود ناصر کریم رحیم عباس اکبر اصغر جعفر " +
+        "یوسف یعقوب ابراهیم اسماعیل موسی عیسی داوود سلیمان مصطفی مرتضی مجتبی هادی صادق کاظم باقر تقی نقی سجاد " +
+        "مریم زهرا فاطمه سارا زینب لیلا مینا نرگس شیرین پریسا نازنین الهام سمیرا سمانه مهسا نسرین ندا نیلوفر").split(" ")
+);
 
 /** «سوء» is also a noun («سوء» in a list); join only these common compounds. */
 const SU_COMPOUNDS = new Set([
@@ -39,7 +52,8 @@ export default createPatternRule(() => ({
                 const next = m[3];
                 if (prefix === "سوء" && !SU_COMPOUNDS.has(next)) return null;
                 if (prefix !== "سوء") {
-                    if (NOT_A_PREFIX_BEFORE.has(next)) return null;
+                    if (NOT_A_PREFIX_BEFORE.has(next) || NOT_A_PREFIX_BEFORE_PHRASE.has(next)) return null;
+                    if (prefix === "غیر" && !gheirPrefixFits(next)) return null;
                     if (NOT_A_PREFIX_AFTER.has(before)) return null;
                 }
                 const start = (m[1] ?? "").length;

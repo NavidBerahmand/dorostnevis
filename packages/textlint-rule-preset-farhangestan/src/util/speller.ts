@@ -232,8 +232,8 @@ function homophoneOrMissing(w: string, cand: string): boolean {
 }
 
 /** Spoken endings: «بازیکنا»، «گوشیمو»، «سایتشون»، «رکوردشو»، «کتابارو» (1.6.0). */
-const SPOKEN_ENDINGS = ["هامونو", "هاتونو", "هاشونو", "مونو", "تونو", "شونو", "هامون", "هاتون", "هاشون", "هارو", "ارو", "مون", "تون", "شون", "مو", "تو", "شو", "رو", "و", "ا", "ای", "ام", "ات", "اش", "م", "ت", "ش", "ه", "ن", "ین", "یم", "ی"];
-const OUTER = new Set(["و", "رو", "ا", "ه", "تون", "شون", "مون", "م", "ت", "ش", "ای"]);
+const SPOKEN_ENDINGS = ["هامونو", "هاتونو", "هاشونو", "مونو", "تونو", "شونو", "هامون", "هاتون", "هاشون", "هارو", "ارو", "مون", "تون", "شون", "مو", "تو", "شو", "رو", "اس", "و", "ا", "ای", "ام", "ات", "اش", "م", "ت", "ش", "ه", "ن", "ین", "یم", "ی", "س"];
+const OUTER = new Set(["و", "رو", "ا", "ه", "تون", "شون", "مون", "م", "ت", "ش", "ای", "مو", "تو", "شو", "مونو", "تونو", "شونو", "اس", "س"]);
 const INNER = new Set(["م", "ت", "ش", "ا", "مون", "تون", "شون"]);
 /** «نندازی»، «بفهمن»، «نمیذاشت»: a verb prefix, a stem as said, an ending. */
 const VERB_ENDINGS = ["", "م", "ی", "ه", "یم", "ین", "ید", "ن", "ند", "مش", "تش", "ش", "شون", "ت"];
@@ -247,18 +247,26 @@ export function spokenInflection(w: string, loose = false, depth = 2): boolean {
     const ok = (x: string) => (x.length >= 3 && (isKnown(x) || (L.get(x) ?? -1) >= 7 || INFORMAL.has(x))) || (x.length === 2 && (L.get(x) ?? -1) >= 9);
     if (INFORMAL.has(w)) return true;
     for (const e of SPOKEN_ENDINGS) {
-        if (!w.endsWith(e) || w.length - e.length < 3) continue;
+        if (!w.endsWith(e) || w.length - e.length < 2) continue;
         const stem = w.slice(0, -e.length);
-        // «علاقشو»، «اجارش»: the silent «ه» drops before a spoken ending
-        if (ok(stem) || (/^[شمتو]|^(مون|تون|شون)/.test(e) && stem.length >= 3 && ok(stem + "ه"))) return true;
+        // «علاقشو»، «اجارش»، «شدتون»: the silent «ه» drops before a spoken ending
+        if (/^[شمتو]|^(مون|تون|شون)/.test(e) && ok(stem + "ه")) return true;
+        if (stem.length < 3) continue;
+        if (ok(stem)) return true;
         // two endings: a pronoun or the plural, then «و/رو/ا/ه» («گوشیمو»، «چشاتون»، «بازیکناشون»)
         if (depth > 1 && OUTER.has(e) && SPOKEN_ENDINGS.some((e2) => INNER.has(e2) && stem.endsWith(e2) && stem.length - e2.length >= 2 && ok(stem.slice(0, -e2.length)))) return true;
     }
-    const v = w.match(/^(نمی|می|ن|ب)(.{2,})$/);
-    if (v) {
-        const stemOk = (st: string) => PRESENT_STEMS.has(st) || PAST_STEMS.has(st) || PRESENT_STEMS.has("ا" + st) || PRESENT_STEMS.has("گ" + st) || PAST_STEMS.has("گ" + st) || SPOKEN_STEMS_SAID.has(st);
-        for (const e of VERB_ENDINGS) if (v[2].endsWith(e) && v[2].length - e.length >= 2 && stemOk(v[2].slice(0, v[2].length - e.length))) return true;
-    }
+    // a verb, also with the spoken «را» or the «ها» of emphasis after it («گفتینو»، «میسازنا»; 1.6.1)
+    const verbAt = (x: string) => {
+        const v = x.match(/^(نمی|می|ن|ب)(.{2,})$/);
+        if (!v) return false;
+        const stemOk = (st: string) => PRESENT_STEMS.has(st) || PAST_STEMS.has(st) || PRESENT_STEMS.has("ا" + st) || PAST_STEMS.has("ا" + st) || PRESENT_STEMS.has("گ" + st) || PAST_STEMS.has("گ" + st) || SPOKEN_STEMS_SAID.has(st);
+        return VERB_ENDINGS.some((e) => v[2].endsWith(e) && v[2].length - e.length >= 2 && stemOk(v[2].slice(0, v[2].length - e.length)));
+    };
+    if (verbAt(w) || (/[اوه]$/.test(w) && verbAt(w.slice(0, -1)))) return true;
+    // a past verb said with its object «را»: «گفتینو»، «دیدمشو»
+    const past = w.match(/^(.{3,}?)(م|ی|یم|ین|ید|ن|ند|ه)?(ش|ت)?و$/);
+    if (past && PAST_STEMS.has(past[1].replace(/^ن/, ""))) return true;
     if (loose && /و[نم]/.test(w)) {
         const f = w.replace(/و([نم])(?!.*و[نم])/, "ا$1");
         if (f !== w && ok(f)) return true;
@@ -266,7 +274,7 @@ export function spokenInflection(w: string, loose = false, depth = 2): boolean {
     return false;
 }
 /** Present stems as they are said («ذار»، «نداز»، «تون»، «گ»). */
-const SPOKEN_STEMS_SAID = new Set(["ذار", "زار", "ذاشت", "نداز", "تون", "تونست", "دون", "دونست", "خون", "خوند", "مون", "موند", "رسون", "شین", "گیر", "اومد", "یومد", "خوا", "ری", "ذا"]);
+const SPOKEN_STEMS_SAID = new Set(["ذار", "زار", "ذاشت", "نداز", "تون", "تونست", "دون", "دونست", "خون", "خوند", "مون", "موند", "رسون", "شین", "گیر", "اومد", "یومد", "ومد", "خوا", "ری", "ذا", "یار", "یاورد"]);
 
 export type SpellResult = { suggestions: string[] } | { note: true } | null;
 const memo2 = new Map<string, SpellResult>();
@@ -294,8 +302,25 @@ export function spellingCheck(raw: string, spokenSentence = false): SpellResult 
     return result;
 }
 
+/**
+ * «و» run into the next word («وبدنش»، «وعمدی»، «وزنبور») or «که» onto the last one («حالتیکه»): the
+ * two words, when the rest is a word (1.6.1; before, a word two letters away was guessed).
+ */
+function runTogether(w: string, L: Map<string, number>): string | null {
+    if (w.startsWith("و") && w.length >= 5) {
+        const rest = w.slice(1);
+        if (!rest.startsWith("و") && (L.get(rest) ?? -1) >= 4 && accepted(rest)) return "و " + rest;
+        if (rest.length >= 4 && (spokenInflection(rest) || (accepted(rest) && rest.length >= 5))) return "و " + rest;
+    }
+    if (w.endsWith("که") && w.length >= 6) {
+        const head = w.slice(0, -2);
+        if ((L.get(head) ?? -1) >= 6 || isKnown(head)) return head + " که";
+    }
+    return null;
+}
+
 /** Short words a spoken sentence runs into the next one: «بااون»، «روعالی»، «مثلاچی». */
-const SPOKEN_FUNCTION = ["با", "رو", "تو", "از", "به", "که", "این", "اون", "یه", "هم", "چه", "چی", "مثلا", "واسه", "برای", "دیگه"];
+const SPOKEN_FUNCTION = ["با", "رو", "تو", "از", "به", "که", "این", "اون", "یه", "هم", "چه", "چی", "مثلا", "واسه", "برای", "دیگه", "هر"];
 
 /**
  * In a spoken sentence (1.5.0): two words run together first (any frequent first word, or a
@@ -305,6 +330,8 @@ function checkWord(word: string, L: Map<string, number>, spokenSentence = false)
     if (spokenSentence) {
         const w = skeleton(word);
         if (accepted(word) || spokenInflection(w, true)) return null;
+        const run = runTogether(w, L);
+        if (run) return { suggestions: [run] };
         for (let i = 2; i <= w.length - 2; i++) {
             const a = w.slice(0, i);
             const b = w.slice(i);
@@ -328,6 +355,8 @@ function checkWord(word: string, L: Map<string, number>, spokenSentence = false)
         }
     }
     if (accepted(word) || spokenInflection(sk)) return null;
+    const run = runTogether(sk, L);
+    if (run) return { suggestions: [run] };
     // Arabic names and terms with the article: «المعلی»، «الدروس»
     if (word.startsWith("ال") && word.length >= 5) return null;
     const w = skeleton(word);
@@ -343,16 +372,15 @@ function checkWord(word: string, L: Map<string, number>, spokenSentence = false)
         const cost = passes(w, c);
         if (cost !== null) pass.set(c, b + (homophoneOrMissing(w, c) ? SOUND_ALIKE_BONUS : 0));
     }
-    if (pass.size === 0 && w.length >= 5) {
-        const oldTwo = loose.size === 0 && w.length >= 6;
-        for (const c1 of edits1(w)) {
+    // two edits away: never offered (1.6.1: «وعمدی» → «واحدی»، «وبودر» → «ورودی» were the guesses people
+    // judged wrong); only a reason for the note «در واژه‌نامه نیست»
+    if (pass.size === 0 && loose.size === 0 && w.length >= 6) {
+        search: for (const c1 of edits1(w)) {
             for (const c2 of edits1(c1)) {
-                if (pass.has(c2)) continue;
                 const b = L.get(c2);
                 if (b === undefined || b < SUGGEST_BUCKET) continue;
-                if (oldTwo) loose.set(c2, b);
-                const cost = passes(w, c2);
-                if (cost !== null) pass.set(c2, b + (cost <= 1 ? 0 : -3));
+                loose.set(c2, b);
+                break search;
             }
         }
     }

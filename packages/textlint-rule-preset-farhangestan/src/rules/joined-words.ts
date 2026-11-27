@@ -133,6 +133,32 @@ function presentStemCompound(word: string): PatternResult | null {
     return null;
 }
 
+/** Pronoun endings, written and said: never the second part of a compound. */
+const PRONOUN_ENDINGS = new Set(["م", "ت", "ش", "مان", "تان", "شان", "مون", "تون", "شون"]);
+
+/**
+ * «لبهام»، «دستهات»، «چشمهاش»: «لبه» + «ام», or, as said, «لب» + «ها» + «م» («لب‌هام»: my lips). When the
+ * word before «ها» is one people say so (a closed list: in the blog study «چشم‌هام، دست‌هام، حرف‌هاش» are
+ * as common as «حرفه‌اش، دسته‌اش، گوشه‌اش», «خان‌هام» never) both readings stand: a judgement (yellow) with both, the
+ * plural first (1.6.1; red before).
+ */
+const SPOKEN_PLURAL_NOUNS = new Set(["لب", "دست", "چشم", "گوش", "حرف", "کار", "رگ", "پوست"]);
+function spokenPlural(word: string): PatternResult | null {
+    const m = word.match(/^(.{2,}?)ها(م|ت|ش)$/);
+    if (!m || !SPOKEN_PLURAL_NOUNS.has(m[1])) return null;
+    const plural = join(m[1], "ها" + m[2]);
+    const stem = word.slice(0, -2);
+    const fixed = stem + ZWNJ + "ا" + m[2];
+    // the plural first: of these words it is what people write (the blog study: «لبهام خشک شده»)
+    return {
+        message: `اگر «${m[1]}» + «ها» + «${m[2]}» است: «${plural}»؛ اگر «${stem}» + «ا${m[2]}» است: «${fixed}»`,
+        replacement: plural,
+        alternatives: [fixed],
+        fix: false,
+        source: S_COPULA
+    };
+}
+
 function check(word: string): PatternResult | null {
     if (NOT_COMPOUNDS.has(word) || SURNAMES.has(word) || word.startsWith("تکن")) return null;
     // «سپاسگذار» is «سپاسگزار», not «سپاس‌گذار»: the gozar rule's
@@ -185,6 +211,9 @@ function check(word: string): PatternResult | null {
         if (suffix === "ات" && !COMMON_NOUNS.has(stem)) continue;
         if (endsWithSilentHe(stem) || (stem.endsWith("ی") && AFTER_YEH.includes(suffix))) {
             const fixed = stem + ZWNJ + suffix;
+            // «لبهام» is «لبه‌ام» or, said, «لب‌هام» (my lips): a common noun before «ها» + «م/ت/ش» (1.6.1)
+            const plural = spokenPlural(word);
+            if (plural) return plural;
             return { message: `«${suffix}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: S_COPULA };
         }
     }
@@ -202,6 +231,8 @@ function check(word: string): PatternResult | null {
     for (const suffix of ["جات", "آسا", "آگین", "باره", "فام", "وش", "وار", "سان", "خانه", "نامه"]) {
         if (!word.endsWith(suffix)) continue;
         const stem = word.slice(0, -suffix.length);
+        // «جلوش»، «گلوش»: «جلو» + «ش», not «جل» + «-وش» (1.6.1)
+        if (suffix === "وش" && isKnown(word.slice(0, -1))) continue;
         if (stem.length >= 2 && isKnown(stem) && !isNonJoining(stem[stem.length - 1])) {
             const fixed = stem + ZWNJ + suffix;
             // «مرگوش» (a place) is not «مرگ» + «وش»: the rarer suffixes are only suggested
@@ -214,6 +245,10 @@ function check(word: string): PatternResult | null {
     for (const prefix of PREFIXES) {
         if (!word.startsWith(prefix)) continue;
         const rest = word.slice(prefix.length);
+        // «همتون»، «همشون» are «همه‌تون»، «همه‌شون» (said): a pronoun ending is no compound's second part (1.6.1)
+        if (PRONOUN_ENDINGS.has(rest)) continue;
+        // «همسره» = «همسر» + «ه» (است)، «همرام» = «همراه» + «م» said (1.6.1)
+        if (/[همتش]$/.test(word) && (isKnown(word.slice(0, -1)) || isKnown(word.slice(0, -1) + "ه"))) continue;
         // «تکمیلی» is «تکمیل» + «ی», not «تک» + «میلی»; «بومیس» is a name
         if (word.endsWith("ی") && isKnown(word.slice(0, -1))) continue;
         if (rest.length >= 3 && isKnown(rest) && (solidPart(rest) || isKnown(join(prefix, rest)))) {
@@ -304,6 +339,8 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const c = raAt(m.input, m.index);
                 if (!c || c.p < RA_SUGGEST) return null;
+                // «دخترا»، «فکرا»: a spoken plural («دختر» + «ا»), not «دخت» + «را» (1.6.1)
+                if (COMMON_NOUNS.has(m[0].slice(0, -1)) || ADJECTIVES.has(m[0].slice(0, -1))) return null;
                 const fixed = m[1] + " را";
                 return {
                     message: `«را» با فاصلۀ کامل نوشته می‌شود: «${fixed}» (احتمال ${toPersianDigits(Math.round(c.p * 100))}٪)`,

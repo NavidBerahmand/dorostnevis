@@ -10,6 +10,9 @@ new TextLintTester().run("punctuation", rule, {
         "سال ۱۳۰۰ ه.ق و ۵۰۰ ق.م",
         "ج.ا.ا",
         "در ۴۷سالگی و جشن ۵۰ساله",
+        // 1.6.1: an adjective made with a number stays joined like the book's «۵ساله» («یک ۵کیلویی»، «4کاناله»);
+        // a version, an address, a time or a range in Latin digits is left whole
+        "یک ۵کیلویی", "نسخه 4.7 آمد.", "نسخهٔ 4.2.0 منتشر شد.", "آدرس 192.168.1.1 را باز کنید.", "ساعت 12:30 رسیدم.", "از 10..20 درصد",
         // the «numbers» rule joins these (دستور خط ص ۶۵): never ask for the space back
         "اما آدمِ ۷۵درصدی همان روزکار را جمع می‌کند، کاهش ۳۴درصدی، ۵ساله‌ای، ۱۲گانه، ۳نفره، ۲۰ساله‌اش",
         "سال ١٤٠٤ و ۴٠٤",                     // Arabic-Indic digits are not a word after a number
@@ -34,7 +37,6 @@ new TextLintTester().run("punctuation", rule, {
     invalid: [
         inv("خوب است.این کتاب", "خوب است. این کتاب"),
         inv("او ۵سال ماند.", "او ۵\u00A0سال ماند."), // a unit: the no-break space (1.4.0)
-        { text: "یک ۵کیلویی", errors: [{}] },
         inv("او گفت ((بیا)) و رفت.", "او گفت «بیا» و رفت."),
         inv("او گفت <<بیا>> و رفت.", "او گفت «بیا» و رفت."),
         {
@@ -100,7 +102,6 @@ new TextLintTester().run("punctuation", rule, {
         inv("سلام   جهان", "سلام جهان"),
         inv("سال 1402 بود.", "سال ۱۴۰۲ بود."),
         inv("رشد 12% بود.", "رشد ۱۲٪ بود."),
-        inv("نسخه 4.7 آمد.", "نسخه ۴٫۷ آمد."),
         inv("قیمت 12,543 تومان", "قیمت ۱۲٬۵۴۳\u00A0تومان", 2),
         inv("رشد ۹۶% بود.", "رشد ۹۶٪ بود."),
         inv("خط کوتاه -- و خط بلند --- داریم.", "خط کوتاه —\u00A0و خط بلند\u00A0— داریم.", 2),

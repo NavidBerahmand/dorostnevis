@@ -67,6 +67,8 @@ function known(word: string): boolean {
 
 function afterHeOrYeh(word: string, ending: string, next?: string): PatternResult | null {
     if (ending === "ای" && next === "کاش") return null; // «ای کاش»
+    // «آخه ای خدا»: the vocative after the interjection «آخه» (1.6.1; «دیگه ای» is «دیگه‌ای», another)
+    if (ending === "ای" && /^(آخه|اخه)$/.test(word)) return null;
     if (word.endsWith("ه")) {
         if (isPronouncedHe(word)) return null;
     } else if (ending === "ای" && verbForm(word) && !isKnown(word)) {

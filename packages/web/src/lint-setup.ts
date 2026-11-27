@@ -207,7 +207,24 @@ export async function lintText(kernel: Kernel, text: string, s: Settings, forFix
     if (anyFormal) out.push(...(await run("formal")).filter((m) => !isSpoken(m)));
     if (anySpoken) out.push(...(await run("spoken")).filter(isSpoken));
     const kurdish = kurdishLines(text);
-    return out.filter((m) => !kurdish.some(([a, b]) => m.range[0] >= a && m.range[0] < b)).sort((a, b) => a.range[0] - b.range[0] || a.range[1] - b.range[1]);
+    return dedupe(out.filter((m) => !kurdish.some(([a, b]) => m.range[0] >= a && m.range[0] < b))).sort((a, b) => a.range[0] - b.range[0] || a.range[1] - b.range[1]);
+}
+
+/**
+ * The same replacement on the same letters once (1.6.1: «منو» had two buttons «من را»، «بی‌رحم» a red and a
+ * yellow card with one answer): of two reports that make the same change, the higher one stays (red before
+ * yellow before blue, then precedence).
+ */
+function dedupe(msgs: Msg[]): Msg[] {
+    const best = new Map<string, Msg>();
+    const key = (m: Msg) => `${m.range[0]}:${m.range[1]}|${m.fix!.range[0]}:${m.fix!.range[1]}|${m.fix!.text}`;
+    for (const m of msgs) {
+        if (!m.fix) continue;
+        const k = key(m);
+        const b = best.get(k);
+        if (!b || severity(m) - severity(b) < 0 || (severity(m) === severity(b) && rank(m) < rank(b))) best.set(k, m);
+    }
+    return msgs.filter((m) => !m.fix || best.get(key(m)) === m);
 }
 
 /**

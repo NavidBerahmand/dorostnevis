@@ -16,6 +16,7 @@
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER } from "../util/persian";
 import { isKnown } from "../util/words";
+import { corpusBucket } from "../util/speller";
 import { verbForm, isPresentStem } from "./mi-prefix";
 
 const SOURCE = "دستور خط، «به»، تبصرۀ ۲ و ۳، ص ۳۸–۳۹";
@@ -30,6 +31,10 @@ export default createPatternRule(() => ({
                 if (isKnown(word)) return null;
                 // «بازاری» = «بازار» + «ی», «نادانی» = «نادان» + «ی»: not verbs
                 if (word.endsWith("ی") && isKnown(word.slice(0, -1))) return null;
+                // «باورم» = «باور» + «م» (my belief), «باورش»، «بادامو»: a known word with a pronoun or the
+                // spoken «را», not «ب» + «آورم» (1.6.1)
+                const clitic = word.match(/^(.{3,}?)(م|ت|ش|مان|تان|شان|مون|تون|شون|ها|و|رو)$/);
+                if (clitic && isKnown(clitic[1]) && ((corpusBucket(clitic[1]) ?? 0) >= 8 || clitic[1].length >= 4)) return null;
                 if (verbForm(word) || isPresentStem(word)) return null; // «ماند» is a verb, not م + «اند»
                 if (rest.startsWith("یست")) return null; // ایستادن keeps its alef: بایست
                 // «نیافت» = ن + «یافت», «بیابد» = ب + «یابد»: already correct

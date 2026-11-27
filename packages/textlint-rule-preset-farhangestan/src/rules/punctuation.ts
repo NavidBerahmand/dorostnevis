@@ -30,6 +30,10 @@ import { createPatternRule, PatternResult } from "../util/pattern-rule";
 import { toPersianDigits } from "../util/persian";
 import { joinsNumber } from "../util/number-compounds";
 import { nbspPlaces, isUnit, CITATIONS, LETTERS } from "../util/nbsp";
+import { isKnown } from "../util/words";
+import commonNouns from "../dict/hazm-common-nouns.json";
+
+const COMMON_NOUNS_P = new Set<string>(commonNouns.words);
 
 export interface Options {
     marks?: boolean;
@@ -52,6 +56,8 @@ function insideGuillemets(text: string, index: number): boolean {
     return (before.match(/«/g) ?? []).length > (before.match(/»/g) ?? []).length;
 }
 
+/** Letters of drawings and decorations around a bracket: «*(¸.•*¨»، «♥)». */
+const ORNAMENT = /[¸•*¨´`~^°♥❤☆★✿❀♡]/;
 /** Unmatched «» () [] in a text, by position (memoized per text). */
 let pairText = "";
 let unmatched = new Set<number>();
@@ -67,6 +73,8 @@ function unmatchedAt(text: string, index: number): boolean {
         for (let i = 0; i < text.length; i++) {
             const c = text[i];
             if (smiley.has(i)) continue;
+            // «1) … 2) …» anywhere in a line (a list run on: «پدر و مادر2) داشتن»)
+            if (c === ")" && /(?:^|[^0-9۰-۹])[0-9۰-۹]{1,2}$/.test(text.slice(Math.max(0, i - 3), i)) && !/\([^()]*$/.test(text.slice(text.lastIndexOf("\n", i - 1) + 1, i))) continue;
             if (OPEN[c]) stack.push(i);
             else if (CLOSE[c]) {
                 // «۱)»، «الف)»: a list marker; «:)»: a smiley
@@ -78,6 +86,12 @@ function unmatchedAt(text: string, index: number): boolean {
             }
         }
         for (const i of stack) unmatched.add(i);
+        // a run of one bracket left without pairs («((((((»، «پاپه))!!!») is emphasis or a smiley, and a
+        // bracket in ornaments («*(¸.•*¨») is drawing: not reported (1.6.1)
+        for (const i of [...unmatched]) {
+            const c = text[i];
+            if (text[i - 1] === c || text[i + 1] === c || ORNAMENT.test(text[i - 1] ?? "") || ORNAMENT.test(text[i + 1] ?? "")) unmatched.delete(i);
+        }
     }
     return unmatched.has(index);
 }
@@ -265,6 +279,8 @@ export default createPatternRule<Options>((options) => {
                 if (c === "«" || c === "»") {
                     const line = quoteLine(m.input, m.index);
                     if (line.kind === "mirrored") return null;
+                    // «» :»»تسلیم…»»: two or more guillemets without a pair on a line; no telling which go (1.6.1)
+                    if (line.quotes.filter((q) => unmatchedAt(m.input, q)).length >= 2) return null;
                     const t = m.input;
                     const i = m.index;
                     const inner = c === "«" ? t[i + 1] === " " : t[i - 1] === " ";
@@ -318,6 +334,17 @@ export default createPatternRule<Options>((options) => {
 
     if (on("ellipsis")) {
         checks.push({
+            // «. . .»: three dots with spaces between them are the ellipsis too (1.6.1: «کنیم؟ . . .» went
+            // round in circles between «space before a mark» and «two marks in a row»)
+            pattern: / *\.(?: \.){2,}(?! *\.)/g,
+            check: (m) => {
+                if (!persianContext(m.input, m.index) || inForeignToken(m.input, m.index + m[0].length - 1)) return null;
+                const message = "سه‌نقطه یک نویسه است («…») و بی‌فاصله به کلمۀ پیش از خود می‌چسبد";
+                const glued = new RegExp(`^${FA_LETTER}`).test(m.input.slice(m.index + m[0].length));
+                return { message, replacement: glued ? "… " : "…", source: SOURCE };
+            }
+        });
+        checks.push({
             pattern: / *\.{3,}|(?<=\S) +…/g,
             check: (m) => {
                 if (!persianContext(m.input, m.index) || inForeignToken(m.input, m.index + m[0].length - 1)) return null;
@@ -346,6 +373,11 @@ export default createPatternRule<Options>((options) => {
                 // «..!»، «..؟»: the mark after it ends the sentence; the dots go, or become «…»
                 if (/^ *[!؟?]/.test(after)) {
                     return { message: "دو نقطه پشت سر هم نشانه نیست: «!/؟» کافی است، یا سه‌نقطه «…»", replacement: "", alternatives: ["…"], source: SOURCE };
+                }
+                // «یک..دو..سه»: between two words with no space, a pause («…») as likely as a full stop: the
+                // writer's choice, the ellipsis first (1.6.1; red before)
+                if (sp && m[0][0] === "." && /\S/.test(m.input[m.index - 1] ?? " ")) {
+                    return { message: "دو نقطه پشت سر هم نشانه نیست: سه‌نقطه «…» یا نقطه «.»", replacement: "…" + sp, alternatives: ["." + sp], fix: false, source: SOURCE };
                 }
                 return {
                     message: "دو نقطه پشت سر هم نشانه نیست: نقطه «.» یا سه‌نقطه «…»",
@@ -426,7 +458,7 @@ export default createPatternRule<Options>((options) => {
                 // space before a mark: «سلام ،» → «سلام،»
                 // (closing brackets are the next check's; «...» is the ellipsis check's)
                 // (not before a dot that starts a Latin token: «دامنۀ .gt»، «فایل .pdf»)
-                pattern: new RegExp(`(?<=[${FA}»)\\]…!؟]) +(?=(?:[،؛:!؟…]|\\.(?![.A-Za-z]))(?![0-9۰-۹]))`, "g"),
+                pattern: new RegExp(`(?<=[${FA}»)\\]…!؟]) +(?=(?:[،؛:!؟…]|\\.(?![.A-Za-z]| \\.))(?![0-9۰-۹]))`, "g"),
                 check: (m) => {
                     if (inForeignToken(m.input, m.index - 1)) return null;
                     // «:)»، «;(»: a smiley, not a colon
@@ -582,12 +614,17 @@ export default createPatternRule<Options>((options) => {
                 // The compounds are the «numbers» rule's own list: the book wins, never a ping-pong.
                 if (word.length <= 1 || /^(ام|امین|امی|مین|ین|ها|های|تا|تایی|ای|یی|ی)$/.test(word)) return null;
                 if (joinsNumber(word)) return null;
+                // an adjective made with the number, a known word + «ی/ه» («۵کیلویی»، «۴کاناله»): the book joins these
+                // («۵ساله»، «۷۵درصدی»، ص ۶۵), so no space is asked for (1.6.1; a blue suggestion before). A noun
+                // («۳۹دقیقه»، «۲۶۶مدرسه») still gets its suggestion
+                const adjective = /(ی|ه|گی)$/.test(word);
+                if (adjective && !COMMON_NOUNS_P.has(word) && isKnown(word.replace(/(یی|ی|ه|گی)$/, ""))) return null;
                 return {
                     message: "میان عدد و کلمۀ پس از آن یک فاصله می‌آید",
                     replacement: m[1] + (isUnit(word) ? "\u00A0" : " ") + word,
-                    // an adjective made with the number («۵کیلویی») may be meant: only a suggestion
-                    fix: /(ی|ه|گی)$/.test(word) ? false : undefined,
-                    kind: /(ی|ه|گی)$/.test(word) ? "suggestion" : undefined,
+                    // a word in «ی/ه» may still be an adjective made with the number: only a suggestion
+                    fix: adjective ? false : undefined,
+                    kind: adjective ? "suggestion" : undefined,
                     source: SOURCE
                 };
             }
@@ -659,6 +696,14 @@ export default createPatternRule<Options>((options) => {
                 const before = m.input.slice(Math.max(0, m.index - 20), m.index);
                 const after = m.input.slice(m.index + m[0].length, m.index + m[0].length + 20);
                 if (/[A-Za-z][A-Za-z\-]*\s*$/.test(before) || /^\s*[A-Za-z]/.test(after)) return null;
+                // part of a longer code (1.6.1): a version or an address («4.2.0»، «192.168.1.1»), a time
+                // («12:30»), a number after «+» or before «..» («10..20»): left as it is, whole
+                if ((m[0].match(/\./g) ?? []).length >= 2 || /^[.:/][0-9]/.test(after) || /^\.\./.test(after) || /[+]$/.test(before)) return null;
+                // a time after «ساعت» («ساعت 5.30»)، two numbers with a comma that is no thousands mark («22,23»)
+                if (/\./.test(m[0]) && /ساعت\s*$/.test(before)) return null;
+                if (/,(?![0-9]{3}(?![0-9]))/.test(m[0])) return null;
+                // a version after its name: «نسخۀ 2.5»، «ورژن 4.2»
+                if (/\./.test(m[0]) && /(?:نسخه|نسخۀ|نسخهٔ|ورژن|ورژنِ|ویرایش|بیلد|آپدیت)\s*$/.test(before)) return null;
                 let s = m[0];
                 // «4.7» → «۴٫۷», «12,543» → «۱۲٬۵۴۳», «%» → «٪»
                 s = s.replace(/(\d),(?=\d{3}\b)/g, "$1٬").replace(/(\d)\.(?=\d)/g, "$1٫").replace(/%$/, "٪");
