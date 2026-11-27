@@ -11,6 +11,7 @@ import { START, END, LETTER } from "../../../textlint-rule-preset-farhangestan/s
 import { isKnown } from "../../../textlint-rule-preset-farhangestan/src/util/words";
 import { spoken, knownish } from "../../../textlint-rule-preset-farhangestan/src/util/colloquial";
 import { corpusBucket } from "../../../textlint-rule-preset-farhangestan/src/util/speller";
+import { verbForm } from "../../../textlint-rule-preset-farhangestan/src/rules/mi-prefix";
 
 const Z = "‌";
 
@@ -21,7 +22,8 @@ export default createPatternRule(() => ({
             pattern: new RegExp(`${START}(ن?می)(${LETTER}{2,})${END}`, "g"),
             check: (m) => {
                 const s = spoken(m[0]);
-                if (!s || !/^ن?می‌/.test(s.formal)) return null;
+                // «میتونید»: the pattern for «-ون» gives «میتوانید» without the half-space; still «می» + a verb (1.6.2)
+                if (!s || !(/^ن?می‌/.test(s.formal) || (/^ن?می/.test(s.formal) && verbForm(s.formal.replace(/^ن?می/, ""))))) return null;
                 // «میدونم» → «می‌دونم» too (1.6.0): the over-broken rule's «می‌دانم» is a recommendation (blue) after it
                 // «میاد، میارم» → «می‌آد، می‌آرم»: the «آ» of «آمدن، آوردن» comes back after the half-space (1.6.0)
                 const fixed = m[1] + Z + (m[2].startsWith("ا") ? "آ" + m[2].slice(1) : m[2]);

@@ -141,9 +141,10 @@ describe("1.6.1: the false reds 1.6.0 left", function () {
         }
         // «دیگه ای» is still «دیگه‌ای» (another)
         assert.ok(reds((await page("الان به مشکل دیگه ای برخوردم.")).on("دیگه ای")).some((m) => m.fix?.text === "دیگه‌ای"));
-        // «با خوندن مطالب»: the infinitive first
+        // «با خوندن مطالب»: 1.6.1 offered the infinitive «خواندن» first; since 1.6.2 a spoken word in a spoken
+        // sentence has no card (the owner's decision)
         const p = await page("همه دوستان که با خوندن مطالب خوشحال میشن و میرن.");
-        assert.strictEqual(p.on("خوندن")[0]?.fix?.text, "خواندن");
+        assert.deepStrictEqual(p.on("خوندن"), []);
     });
 
     it("«حال ندارم» is a verb, not the compound «حال‌ندار»", async () => {
@@ -202,12 +203,13 @@ describe("1.6.1: fewer wrong yellow cards", function () {
 describe("1.6.1: blue and one card per change", function () {
     this.timeout(60000);
 
-    it("«رو»، «اون»، «اونو» get no card; «یه»، «دیگه» keep theirs; «بهش، بهشون» none", async () => {
+    it("«رو»، «اون»، «اونو»: blue with the written forms (1.6.2; none in 1.6.1); «یه»، «دیگه» none when spoken; «بهش، بهشون» none", async () => {
         const t = "اون کتاب رو یه بار دیگه بده بهش، اونو هم بده بهشون.";
         const p = await page(t);
-        for (const w of ["رو", "اون", "اونو", "بهش", "بهشون"]) assert.deepStrictEqual(p.on(w), [], w);
-        assert.deepStrictEqual(p.on("یه").map((m) => [m.fix?.text, colour(m)]), [["یک", "B"]]);
-        assert.deepStrictEqual(p.on("دیگه").map((m) => [m.fix?.text, colour(m)]), [["دیگر", "B"]]);
+        for (const w of ["بهش", "بهشون", "یه", "دیگه"]) assert.deepStrictEqual(p.on(w), [], w);
+        assert.deepStrictEqual(p.on("رو").map((m) => [m.fix?.text, colour(m)]), [["را", "B"], ["روی", "B"]]);
+        assert.deepStrictEqual(p.on("اون").map((m) => [m.fix?.text, colour(m)]), [["آن", "B"], ["او", "B"]]);
+        assert.deepStrictEqual(p.on("اونو").map((m) => [m.fix?.text, colour(m)]), [["آن را", "B"], ["او را", "B"]]);
     });
 
     it("no space asked between a number and an adjective made with it («4کاناله»، «۵کیلویی»): the book joins «۵ساله»", async () => {

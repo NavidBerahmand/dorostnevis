@@ -22,7 +22,7 @@ export const RULE_LABELS: Record<string, string> = {
     "word-spacing": "فاصله‌گذاری",
     spelling: "غلط تایپی",
     punctuation: "نشانه‌گذاری",
-    "over-broken": "شکستن بی‌جا",
+    "over-broken": "شکل کلمه",
     "may-break": "شکستن روا",
     "redundant-verbs": "فعل زائد",
     "arabic-plurals": "جمع عربی",
@@ -42,6 +42,7 @@ export const RULE_LABELS: Record<string, string> = {
     gozar: "گذار/گزار",
     "spoken-spelling": "املای شکسته",
     "spoken-word": "واژۀ محاوره‌ای",
+    "spoken-ra": "«رو»، «اون»",
     "typing-shortcuts": "نوشتار شتاب‌زده"
 };
 

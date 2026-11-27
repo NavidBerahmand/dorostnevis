@@ -5,7 +5,8 @@
  */
 import textPlugin from "@textlint/textlint-plugin-text";
 import preset from "../../textlint-rule-preset-farhangestan/src/index";
-import shekaste, { formalRules as spokenInFormal } from "../../textlint-rule-preset-shekaste/src/index";
+import shekaste, { formalRules as spokenInFormal, commonRules as spokenEverywhere } from "../../textlint-rule-preset-shekaste/src/index";
+import { inBank } from "../../textlint-rule-preset-farhangestan/src/util/colloquial-bank";
 import { registerSegments, spokenAt } from "../../textlint-rule-preset-farhangestan/src/util/colloquial";
 import virayesh, { CERTAIN_RULES } from "../../textlint-rule-preset-virayesh/src/index";
 
@@ -27,6 +28,12 @@ export type Settings = {
     haApart?: boolean;
     /** Which language-editing rules are on (all, if not given). */
     styleOn?: (ruleId: string) => boolean;
+    /**
+     * «کل متن محاوره‌ای است» (since 1.6.2, the writer's answer on a colloquial card): spoken words are
+     * correct in every sentence. No register card («دیگه» ← «دیگر»، «رو» ← «را/روی»), and the bank's
+     * words get no spelling or ezafe card anywhere. Which rules run per sentence does not change.
+     */
+    colloquialText?: boolean;
 };
 export const DEFAULT_SETTINGS: Settings = { register: "auto", pluralMode: "recommended" };
 /** The ezafe after a silent «ه» is always «ۀ» (U+06C0) on the site, never «هٔ» (ه + U+0654; since 1.5.0, the other way round in 1.4.0). */
@@ -45,7 +52,11 @@ export const baseRule = (ruleId: string) => (ruleId.endsWith(CERTAIN_SUFFIX) ? r
 export const isStyle = (m: Msg) => STYLE_RULES.has(m.ruleId);
 /** Any report of ویرایش زبانی, a suggestion or a certain error. */
 export const isEditing = (m: Msg) => STYLE_RULES.has(baseRule(m.ruleId));
-const SHEKASTE_RULES = new Set([...Object.keys(shekaste.rules), ...Object.keys(spokenInFormal)]);
+const SHEKASTE_RULES = new Set([...Object.keys(shekaste.rules), ...Object.keys(spokenInFormal), ...Object.keys(spokenEverywhere)]);
+/** The register cards: a spoken word in a written sentence, «رو»، «اون»، «اونو» (none with «کل متن محاوره‌ای است»). */
+export const REGISTER_RULES = new Set(["spoken-word", "spoken-ra"]);
+/** What a word of the colloquial bank never gets (1.6.2): a spelling guess, an ezafe guess. */
+const BANK_QUIET = new Set(["spelling", "ezafe-he"]);
 
 /*
  * اصلاح خودکار ایرادهای تایپی (since 1.3.0). With the setting on (the default), these fixes
@@ -155,6 +166,7 @@ export function lintOptions(s: Settings, forFix = false, autoOnly = false, part:
     const all: Array<[string, unknown, object]> = [];
     if (part === "common") {
         for (const [id, r] of Object.entries(preset.rules)) if (!BY_REGISTER.has(id)) all.push([id, r, {}]);
+        if (!autoOnly) for (const [id, r] of Object.entries(spokenEverywhere)) all.push([id, r, {}]);
     } else {
         for (const id of BY_REGISTER) all.push([id, (preset.rules as Record<string, unknown>)[id], {}]);
     }
@@ -207,7 +219,19 @@ export async function lintText(kernel: Kernel, text: string, s: Settings, forFix
     if (anyFormal) out.push(...(await run("formal")).filter((m) => !isSpoken(m)));
     if (anySpoken) out.push(...(await run("spoken")).filter(isSpoken));
     const kurdish = kurdishLines(text);
-    return dedupe(out.filter((m) => !kurdish.some(([a, b]) => m.range[0] >= a && m.range[0] < b))).sort((a, b) => a.range[0] - b.range[0] || a.range[1] - b.range[1]);
+    const kept = out.filter((m) => !kurdish.some(([a, b]) => m.range[0] >= a && m.range[0] < b) && !bankQuiet(text, m) && !(s.colloquialText && REGISTER_RULES.has(m.ruleId)));
+    return dedupe(kept).sort((a, b) => a.range[0] - b.range[0] || a.range[1] - b.range[1]);
+}
+
+/**
+ * A word of the colloquial bank is spelled as people write it (1.6.2): no spelling or ezafe guess on it,
+ * in any sentence (in a written one it gets its written form as a recommendation instead, spoken-word).
+ * A certain error (red) stays: the bank has none.
+ */
+function bankQuiet(text: string, m: Msg): boolean {
+    if (!BANK_QUIET.has(m.ruleId) || isCertainMsg(m)) return false;
+    const [s, e] = wordAround(text, m.range[0], m.range[1]);
+    return inBank(text.slice(s, e));
 }
 
 /**
@@ -402,6 +426,37 @@ export function touches(e2: Edit, s: number, e: number): boolean {
     const a1 = e2.pos + e2.removed.length;
     if (a1 > a0) return e > s ? a0 < e && a1 > s : a0 <= s && a1 >= s;
     return a0 >= s && a0 <= e;
+}
+
+/** A fix the writer just made: the text before and after, the letters it put in (in `after`), its rule's precedence. */
+export type JustApplied = { before: string; after: string; spans: Array<[number, number]>; rank: number };
+
+/**
+ * Does `m` (a report on `just.after`) take back or flip the fix the writer just made? Only then is it
+ * left out (1.6.2: before, any lower report whose range merely overlapped the corrected letters was
+ * hidden, so «ايرانيها» → «ایرانیها» lost the plural-«ها» suggestion «ایرانی‌ها» on the corrected word).
+ * - its fix gives back the text before the fix (ping-pong);
+ * - a lower rule's fix removes or replaces letters the fix put in (a flip: «‌» → « »);
+ * - a lower rule without a fix objects to exactly those letters.
+ * A different rule's mark on the corrected word that leaves those letters alone (an insertion beside
+ * them, a change elsewhere in the word) is shown, as a fresh lint of the text would show it.
+ */
+export function undoesJustApplied(m: Msg, just: JustApplied): boolean {
+    const text = just.after;
+    if (m.fix && applyFix(text, m.fix) === just.before) return true;
+    if (rank(m) <= just.rank) return false;
+    // a span [s, e) the fix put in; s = e: where it took letters out
+    const overlaps = (a: number, b: number) => just.spans.some(([s, e]) => (e > s ? a < e && b > s : a <= s && b >= s));
+    if (m.fix) {
+        return editsOf(text, m.fix.range, m.fix.text).some((e) => {
+            const a = e.pos;
+            const b = e.pos + e.removed.length;
+            // letters the fix put in removed or replaced; or something put back where the fix took letters out
+            if (b > a) return just.spans.some(([s, en]) => (en > s ? a < en && b > s : a < s && b > s));
+            return just.spans.some(([s, en]) => en === s && a === s);
+        });
+    }
+    return objects(m) && overlaps(m.range[0], m.range[1]);
 }
 
 /** A message without the words it quotes: «پرانتز درون پرانتز: «[به گفتۀ خودش]»» says the same after the fix. */

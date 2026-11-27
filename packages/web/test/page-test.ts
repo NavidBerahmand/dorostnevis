@@ -115,21 +115,18 @@ describe("the page's items", function () {
         assert.ok(!msgs.some((m) => m.ruleId === "spoken-word"));
     });
 
-    it("1.5.1: in dialogue, a spoken word written in another form is yellow; its half-space is red", async () => {
+    it("1.6.2: in dialogue, the spoken words stay as they are said (no card); their half-space is red", async () => {
+        // 1.5.1–1.6.1 offered the book's fuller forms («خانما» ← «خانم‌ها»، «اومدم» ← «آمدم»، «یه» ← «یک»، «کتابو» ←
+        // «کتاب را»); since 1.6.2 (the owner's decision) the book's syllable rule is not followed
         const text = "ـ خانما، دیروز اومدم دنبالت و یه کتابو آوردم. میگه نمیدونم. رفتم پیش خالهم.";
         const msgs = await lint(text);
-        const at = (w: string) => msgs.filter((m) => m.ruleId === "over-broken" && text.slice(m.range[0], m.range[1]) === w);
-        for (const [w, want] of [["خانما", "خانم\u200cها"], ["اومدم", "آمدم"], ["یه", "یک"], ["کتابو", "کتاب را"]]) {
-            const ms = at(w);
-            assert.ok(ms.length && ms.every((m) => !isCertainMsg(m) && !isAuto(m, text) && isTentative(m)), w);
-            assert.ok(ms.some((m) => m.fix?.text === want), `${w} → ${want}`);
-        }
-        // «درست‌کن» leaves the spoken words as they are
+        const on = (w: string) => msgs.filter((m) => text.slice(m.range[0], m.range[1]) === w && !isAuto(m, text));
+        for (const w of ["خانما", "اومدم", "یه", "کتابو"]) assert.deepStrictEqual(on(w).map((m) => m.ruleId), [], w);
         const fixed = applyCertain(text, msgs);
         for (const w of ["خانما", "اومدم", "یه", "کتابو"]) assert.ok(fixed.includes(w), fixed);
         // the spelling of the spoken form stays red: «میگه» → «می‌گه»، «خالهم» → «خاله‌م»
         assert.ok(msgs.some((m) => isCertainMsg(m) && m.fix?.text === "می\u200cگه"));
-        assert.ok(at("خالهم").some((m) => isCertainMsg(m) && m.fix?.text === "خاله\u200cم"));
+        assert.ok(on("خالهم").some((m) => isCertainMsg(m) && m.fix?.text === "خاله\u200cم"));
     });
 
     it("recommendations are blue and never red", async () => {

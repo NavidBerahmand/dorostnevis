@@ -29,34 +29,12 @@ new TextLintTester().run("over-broken", rule, {
         z("می‹گن، می‹شن، می‹رن، می‹خوان، می‹دن، میان"), "میشن", "واقعن اصلن مثلن حتمن", "کتابارو بردم", "هارو", "ارزو", "بدنیا",
         // 1.6.1: «رو» and «اون، اونو» are not marked (two readings each, a third of all the blue cards)، «انصافا» is
         // «انصافاً»، «منو» one card
-        "اون گفت", "کتاب رو بده", "اونو بردم", "انصافا خوب بود"
+        "اون گفت", "کتاب رو بده", "اونو بردم", "انصافا خوب بود",
+        // 1.6.2 (the owner's decision): the book's syllable rule is not followed; these are how the spoken
+        // words are written, correct in a spoken sentence (the colloquial bank)
+        "دو تا نون بخر", "رفته خونه", "اگه دیگه نیاد", "شکوفه اینجا نیس", "یه خرده صبر کن", "میزو تمیز کن", "هنوزم دیر نیست", "بفرمایین تو", z("می‹کنین؟"), "بچه‌ها خارجن.", "اونا نیستن", z("می‹خورن"), z("نمی‹تونن"), z("بچه‹ها رفته‹ان"), z("رفته بودم خونه‹ی خاله‹م"), "خونۀ ما", "دیروز اومدم", "درختا خشک شد", "کتابا را آورد", "خانما خسته نباشید", "فردا بخونمش", z("نمی‹دونم"), "همان‌جا موند", "کتاب را خوندم",
     ],
     invalid: [
-        // the letters change: a suggestion
-        ask("دو تا نون بخر"),
-        ask("رفته خونه"),
-        ask("اگه دیگه نیاد", 2),
-        ask("شکوفه اینجا نیس"),
-        ask("یه خرده صبر کن"),
-        ask("میزو تمیز کن"),
-        ask("هنوزم دیر نیست"), // p. 26
-        ask("بفرمایین تو"), // p. 19
-        ask(z("می‹کنین؟")),
-        ask("بچه‌ها خارجن."), // p. 40
-        ask("اونا نیستن"), // «نیستند» (1.6.0), not «نیست‌اند»
-        ask(z("می‹خورن")),
-        ask(z("نمی‹تونن")),
-        ask(z("بچه‹ها رفته‹ان")),
-        ask(z("رفته بودم خونه‹ی خاله‹م")),
-        ask("خونۀ ما"),
-        ask("دیروز اومدم"),
-        ask("درختا خشک شد"),
-        ask("کتابا را آورد"),
-        ask("خانما خسته نباشید"),
-        ask("فردا بخونمش"),
-        ask(z("نمی‹دونم")),
-        ask("همان‌جا موند"),
-        ask("کتاب را خوندم"),
         // only the half-space: the spelling of the spoken form, a fix
         inv("رفتم پیش خالهم.", z("رفتم پیش خاله‹م.")), // p. 21
         inv("تهش چیزی نماند.", z("ته‹ش چیزی نماند.")) // p. 42
@@ -76,13 +54,13 @@ describe("over-broken on the page (option `suggestions`)", function () {
             })
         ).messages;
     };
-    it("«اومدم» → «آمدم»، «خانما» → «خانم‌ها»: a recommendation (blue since 1.6.0) with its replacement", async () => {
-        for (const [t, want] of [["دیروز اومدم", "آمدم"], ["خانما خسته نباشید", z("خانم‹ها")], ["یه خرده", "یک"]]) {
-            const ms = await lint(t);
-            assert.strictEqual(ms.length, 1, t);
-            assert.ok(ms[0].message.startsWith("\u2064\u2063"), t);
-            assert.strictEqual(ms[0].fix?.text, want, t);
-        }
+    it("1.6.2: «اومدم»، «خانما»، «یه»: no card (the book's syllable rule is not followed)", async () => {
+        for (const t of ["دیروز اومدم", "خانما خسته نباشید", "یه خرده"]) assert.strictEqual((await lint(t)).length, 0, t);
+    });
+    it("«تش» → «ته‌ش»: a recommendation", async () => {
+        const ms = await lint("تا تش رفتم");
+        assert.strictEqual(ms.length, 1);
+        assert.strictEqual(ms[0].fix?.text, z("ته‹ش"));
     });
     it("«خالهم» → «خاله‌م»: a fix, not a suggestion", async () => {
         const ms = await lint("رفتم پیش خالهم.");

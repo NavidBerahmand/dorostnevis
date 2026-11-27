@@ -158,7 +158,8 @@
 
   /* the editor: the text itself is editable, and the marks are painted on its own words
      (::highlight), so they cannot drift off them */
-  .editor-head { display: flex; justify-content: flex-start; align-items: center; margin: -8px 0 -10px; }
+  .editor-head { display: flex; justify-content: flex-start; align-items: center; gap: 4px 18px; flex-wrap: wrap; margin: -8px 0 -10px; }
+  .auto-toggle[hidden] { display: none; }
   .auto-toggle { display: inline-flex; gap: 6px; align-items: center; min-height: 32px; font-size: 0.85rem; color: var(--muted); cursor: pointer; user-select: none; }
   .auto-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--lapis); flex: none; }
   .editor { position: relative; }
@@ -331,8 +332,13 @@
   .cite-link { color: var(--muted); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
   .cite-link:hover, .cite-link:focus-visible { color: var(--lapis); text-decoration-color: currentColor; }
   .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 2px; }
-  .btn-edit { display: inline-flex; gap: 4px; align-items: center; }
-  .btn-edit .icon { width: 16px; height: 16px; }
+  .btn-edit, .btn-all { display: inline-flex; gap: 4px; align-items: center; }
+  .btn-edit .icon, .btn-all .icon { width: 16px; height: 16px; }
+  .btn-all[aria-pressed="true"] { background: var(--lapis-soft); color: var(--lapis); box-shadow: inset 0 0 0 1px var(--lapis); }
+  /* «کل متن محاوره‌ای است؟» on a colloquial card (1.6.2) */
+  .ask { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.85rem; color: var(--ink); background: var(--advice-soft); border-radius: 12px; padding: 6px 10px; }
+  .ask-q { display: inline-flex; gap: 4px; align-items: center; margin-inline-end: auto; }
+  .ask-q .icon { width: 16px; height: 16px; color: var(--advice); }
   .or { color: var(--muted); font-weight: 350; font-size: 0.9rem; }
 
   footer { color: var(--muted); font-size: 0.95rem; }
@@ -394,6 +400,7 @@
     </div>
     <div class="editor-head">
       <label class="auto-toggle" title="اصلاح خودکار ایرادهای تایپی: فاصله و نیم‌فاصلۀ اشتباه، «ی» و «ک» عربی، نویسه‌های نادیدنی، گیومه و ویرگول لاتین، تنوین جاافتاده، بی‌پرسش درست می‌شوند؛ هر بار با «بازگشت» برمی‌گردد."><input type="checkbox" id="auto-fix" checked aria-label="اصلاح خودکار ایرادهای تایپی (فاصله، نیم‌فاصله، «ی» و «ک» عربی، نشانه‌های لاتین)؛ با «بازگشت» برمی‌گردد"><span>اصلاح خودکار</span></label>
+      <label class="auto-toggle" id="colloq-toggle" hidden title="کل متن محاوره‌ای است: واژه‌های محاوره‌ای («دیگه»، «می‌خوام»، «رو»، «اون») در همۀ متن درست شمرده می‌شوند و علامت نمی‌خورند. با پاک کردن متن فراموش می‌شود."><input type="checkbox" id="colloq" aria-label="کل متن محاوره‌ای است؛ واژه‌های محاوره‌ای علامت نمی‌خورند"><span>محاوره‌ای</span></label>
     </div>
     <div class="editor" id="editor">
       <div id="text" class="text" role="textbox" aria-multiline="true" contenteditable="true" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="متن برای بررسی" data-placeholder="متن فارسی را اینجا بنویسید یا بچسبانید…"></div>

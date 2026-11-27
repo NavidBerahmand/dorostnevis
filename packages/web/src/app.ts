@@ -8,7 +8,7 @@ import { openReport, sentenceAround, setupOwnerPanel, Report } from "./report";
 import {
     Msg, Settings, lintText, isAuto, isStyle, isEditing, baseRule, wordAround, splitMessage, NOT_IN_BOOK, rank,
     conflictsOf, outranked, editsOf, applyFix as applyEdit, isTentative, isCertainMsg, applyCertain, isBlue,
-    oneAnswerPerSpan, severity, Grouped
+    oneAnswerPerSpan, severity, Grouped, undoesJustApplied, JustApplied, REGISTER_RULES
 } from "./lint-setup";
 import { RULE_LABELS, explainChange } from "./labels";
 
@@ -23,7 +23,11 @@ const svg = (d: string) =>
 const ICON = {
     pencil: svg('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>'),
     sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
-    moon: svg('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>')
+    moon: svg('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>'),
+    // «همه»: the same change at every place (stacked copies)
+    all: svg('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/><path d="M11 14l2 2 4-4"/>'),
+    // the question on a colloquial card: a speech bubble
+    talk: svg('<path d="M4 5h16v10H9l-5 4z"/>')
 };
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -275,9 +279,39 @@ function settings(): Settings {
         register: "auto",
         pluralMode: pluralMode.value,
         haApart: haApart.checked,
-        styleOn: (id) => styleBoxes.find((b) => b.dataset.rule === id)?.checked !== false
+        styleOn: (id) => styleBoxes.find((b) => b.dataset.rule === id)?.checked !== false,
+        colloquialText: colloquial === true
     };
 }
+
+/*
+ * «کل متن محاوره‌ای است؟» (since 1.6.2). The register is found per sentence, and a short spoken line with one
+ * spoken word («اون ناپدید شد؟»، «هنوز تموم نشده») is often read as written (a quarter of the spoken lines of
+ * film subtitles): its spoken words then get blue cards. So a colloquial card asks once whether the whole text
+ * is colloquial. «بله»: spoken words are correct everywhere (no register card, no «رو»/«اون» card; the rules
+ * that run per sentence do not change, so the narration of a story is still checked as written prose).
+ * «نه»: nothing changes and the question is not asked again. The answer belongs to this text: it is kept
+ * with the draft, shown (and changed) by the «محاوره‌ای» toggle above the editor, and forgotten when the
+ * editor is emptied.
+ */
+let colloquial: boolean | null = null;
+const colloqToggle = $<HTMLLabelElement>("colloq-toggle");
+const colloqBox = $<HTMLInputElement>("colloq");
+function setColloquial(v: boolean | null) {
+    colloquial = v;
+    colloqToggle.hidden = v === null;
+    colloqBox.checked = v === true;
+    try {
+        if (v === null) localStorage.removeItem("vajban:colloquial");
+        else localStorage.setItem("vajban:colloquial", v ? "yes" : "no");
+    } catch {
+        /* storage may be unavailable */
+    }
+}
+colloqBox.addEventListener("change", () => {
+    setColloquial(colloqBox.checked);
+    void check();
+});
 /** Lint as the page does (the register found per sentence); `autoOnly` keeps the automatic fixes. */
 function lint(text: string, autoOnly = false): Promise<Msg[]> {
     return lintText(kernel, text, settings(), false, autoOnly);
@@ -530,9 +564,32 @@ function clip(s: string, max = 40): string {
     return s.slice(0, h) + "…" + s.slice(-h);
 }
 
+/**
+ * «همه (n)» (since 1.6.2): the cards that make the same change: the same rule on the same word with the same
+ * replacement buttons. A different rule or another replacement is another card and is never touched.
+ */
+let sameCards: number[][] = [];
+function cardSignature(i: number, text: string): string | null {
+    const m = messages[i];
+    if (!m.fix) return null;
+    const [ws, we] = wordAround(text, Math.min(m.range[0], m.fix.range[0]), Math.max(m.range[1], m.fix.range[1]));
+    const fixedBy = (x: Msg) => text.slice(ws, x.fix!.range[0]) + x.fix!.text + text.slice(x.fix!.range[1], we);
+    const alts = (m as Card).alts ?? [m];
+    return [[m, ...extras[i]].map((x) => x.ruleId).join(","), cardSeverity(i), text.slice(ws, we), ...alts.map(fixedBy)].join("\u0000");
+}
+function groupSameCards(text: string) {
+    const groups = new Map<string, number[]>();
+    const sigs = messages.map((_, i) => cardSignature(i, text));
+    sigs.forEach((g, i) => g !== null && groups.set(g, [...(groups.get(g) ?? []), i]));
+    sameCards = sigs.map((g, i) => (g === null ? [i] : groups.get(g)!));
+}
+/** Is the writer asked, on this card, whether the whole text is colloquial? */
+const asksRegister = (i: number) => colloquial === null && [messages[i], ...extras[i]].some((x) => REGISTER_RULES.has(x.ruleId));
+
 function buildCards(text: string) {
     cards = [];
     reports = [];
+    groupSameCards(text);
     messages.forEach((m, i) => {
         const split = splitMessage(m);
         const members = [m, ...extras[i]];
@@ -588,11 +645,13 @@ function buildCards(text: string) {
                 ${alts && alts.length > 1
                     ? alts.map((x, j) => `<button type="button" class="btn btn-small" data-alt="${i}:${j}" title="جایگزین با «${esc(fixedBy(x))}»">${show(clip(fixedBy(x), 18))}</button>`).join("")
                     : m.fix ? `<button type="button" class="btn btn-small" data-apply="${i}">جایگزین</button>` : ""}
+                ${allButton(i, !!(alts && alts.length > 1))}
                 <button type="button" class="btn btn-small btn-quiet" data-ignore="${i}">نادیده</button>
                 ${members.some((x) => x.ruleId === "spelling") ? `<button type="button" class="btn btn-small btn-quiet" data-learn="${i}" title="«${esc(text.slice(m.range[0], m.range[1]))}» دیگر در این مرورگر علامت نمی‌خورد">افزودن به واژه‌نامه</button>` : ""}
                 <button type="button" class="btn btn-small btn-quiet btn-edit" data-edit="${i}" title="ویرایش همین واژه با صفحه‌کلید">${ICON.pencil}ویرایش</button>
                 <button type="button" class="btn btn-small btn-report" data-report="${i}">این پیشنهاد غلط است</button>
-            </div>`;
+            </div>
+            ${asksRegister(i) ? `<div class="ask" role="group" aria-label="کل متن محاوره‌ای است؟"><span class="ask-q" title="«بله»: واژه‌های محاوره‌ای در همۀ متن درست‌اند و علامت نمی‌خورند. «نه»: همین‌طور می‌ماند. با «محاوره‌ای» بالای متن عوض می‌شود.">${ICON.talk}کل متن محاوره‌ای است؟</span><button type="button" class="btn btn-small btn-quiet" data-colloq="yes">بله</button><button type="button" class="btn btn-small btn-quiet" data-colloq="no">نه</button></div>` : ""}`;
         cards.push({ cls, html });
     });
     const red = spans.filter((sp) => sp.red).length;
@@ -608,6 +667,16 @@ function buildCards(text: string) {
               `<span class="key"><span class="swatch swatch-blue"></span>${fa(blue)} پیشنهاد</span>`;
     applyAllBtn.disabled = red === 0;
     reviewBtn.disabled = spans.length === 0;
+}
+
+/** «همه (n)»: one tap makes the change at every place; on a card with several buttons it says «the next button: everywhere». */
+function allButton(i: number, several: boolean): string {
+    const n = sameCards[i]?.length ?? 1;
+    if (n < 2 || !messages[i].fix) return "";
+    const fa = n.toLocaleString("fa-IR");
+    return several
+        ? `<button type="button" class="btn btn-small btn-quiet btn-all" data-all-toggle="${i}" aria-pressed="false" title="جایگزینی که انتخاب می‌کنید در هر ${fa} جای متن انجام شود">${ICON.all}همه (${fa})</button>`
+        : `<button type="button" class="btn btn-small btn-quiet btn-all" data-all="${i}" title="همین جایگزینی در هر ${fa} جای متن">${ICON.all}همه (${fa})</button>`;
 }
 
 let ignored = new Set<string>();
@@ -1046,6 +1115,48 @@ function applyFix(m: Msg, extra: Msg[] = extrasOf(m) ?? []) {
 }
 const extrasOf = (m: Msg) => extras[messages.indexOf(m)];
 
+/**
+ * «همه (n)»: card i's replacement (its button j) at every place the same card is, in one step of «بازگشت».
+ * The places are the cards of sameCards[i] (same rule, same word, same buttons): nothing else is touched.
+ */
+function applyEverywhere(i: number, j: number): number {
+    const text = input.value;
+    const fixes: Array<{ range: [number, number]; text: string }> = [];
+    const ranks: number[] = [];
+    for (const k of sameCards[i] ?? [i]) {
+        const c = messages[k] as Card;
+        const x = c.alts ? c.alts[j] : c;
+        if (!x?.fix || applyEdit(text, x.fix) === text) continue;
+        fixes.push(x.fix);
+        ranks.push(...[x, ...extras[k]].map(rank));
+    }
+    fixes.sort((a, b) => a.range[0] - b.range[0]);
+    const pick: typeof fixes = [];
+    let end = -1;
+    for (const f of fixes) {
+        if (f.range[0] < end) continue;
+        pick.push(f);
+        end = f.range[1];
+    }
+    if (!pick.length) return 0;
+    remember();
+    // the letters put in, in the text after all the changes (for the no-ping-pong guard)
+    let d = 0;
+    const spans: Array<[number, number]> = [];
+    for (const f of pick) {
+        for (const e of editsOf(text, f.range, f.text)) {
+            spans.push([e.pos + d, e.pos + d + e.inserted.length]);
+            d += e.inserted.length - e.removed.length;
+        }
+    }
+    let after = text;
+    for (const f of [...pick].reverse()) after = applyEdit(after, f);
+    justApplied = { before: text, after, spans, rank: Math.min(...ranks) };
+    input.value = after;
+    void check();
+    return pick.length;
+}
+
 /*
  * No ping-pong (since 1.3.1). A suggestion is never shown if making it would be taken back:
  * by its own rule over a further step, by a rule of the same or higher precedence, or if a
@@ -1055,10 +1166,10 @@ const extrasOf = (m: Msg) => extras[messages.indexOf(m)];
  * The same check runs over thousands of sentences in the tests (test/no-ping-pong-test.ts),
  * so this is a safety net: it re-lints only the sentence around each fix, and remembers.
  */
-let justApplied: { before: string; after: string; spans: Array<[number, number]>; rank: number } | null = null;
+let justApplied: JustApplied | null = null;
 const pieceCache = new Map<string, Msg[]>();
 const verdictCache = new Map<string, boolean>();
-const settingsKey = () => JSON.stringify([pluralMode.value, haApart.checked, styleBoxes.map((b) => b.checked)]);
+const settingsKey = () => JSON.stringify([pluralMode.value, haApart.checked, styleBoxes.map((b) => b.checked), colloquial === true]);
 /**
  * The line around [s, e) (at most ~1400 letters): whether a sentence is spoken depends on the
  * sentences beside it in its line (1.5.0), so the piece is re-linted with them.
@@ -1088,10 +1199,8 @@ async function noPingPong(text: string, msgs: Msg[]): Promise<Msg[]> {
     const out: Msg[] = [];
     for (const m of msgs) {
         if (just) {
-            // takes back the writer's last fix, or a lower rule finds fault with it
-            if (m.fix && applyEdit(text, m.fix) === just.before) continue;
-            const [ms, me] = m.fix ? [Math.min(m.range[0], m.fix.range[0]), Math.max(m.range[1], m.fix.range[1])] : m.range;
-            if (rank(m) > just.rank && just.spans.some(([s, e]) => (e > s ? ms < e && me > s : ms <= s && me >= s))) continue;
+            // takes back or flips the writer's last fix (not: another rule's mark on the corrected word; 1.6.2)
+            if (undoesJustApplied(m, just)) continue;
         }
         if (!m.fix) {
             out.push(m);
@@ -1303,9 +1412,36 @@ pop.addEventListener("click", (ev) => {
     const nav = target.closest("[data-nav]") as HTMLElement | null;
     if (nav) return goTo(openK + Number(nav.dataset.nav));
     if (target.closest("[data-close]")) return closePopover();
+    const tog = target.closest("[data-all-toggle]") as HTMLElement | null;
+    if (tog) {
+        // on a card with several replacements: the next one chosen goes everywhere
+        tog.setAttribute("aria-pressed", String(tog.getAttribute("aria-pressed") !== "true"));
+        return;
+    }
+    const every = target.closest("[data-all]") as HTMLElement | null;
+    if (every) {
+        const n = applyEverywhere(Number(every.dataset.all), 0);
+        status.textContent = `${n.toLocaleString("fa-IR")} جا جایگزین شد.`;
+        return;
+    }
+    const cq = target.closest("[data-colloq]") as HTMLElement | null;
+    if (cq) {
+        const yes = cq.dataset.colloq === "yes";
+        setColloquial(yes);
+        void check().then(() => {
+            status.textContent = yes ? "واژه‌های محاوره‌ای در همۀ متن درست شمرده می‌شوند." : "متن همان‌طور بررسی می‌شود.";
+        });
+        return;
+    }
     const alt = target.closest("[data-alt]") as HTMLElement | null;
     if (alt) {
         const [i, j] = alt.dataset.alt!.split(":").map(Number);
+        const card = alt.closest(".issue");
+        if (card?.querySelector('[data-all-toggle][aria-pressed="true"]')) {
+            const n = applyEverywhere(i, j);
+            status.textContent = `${n.toLocaleString("fa-IR")} جا جایگزین شد.`;
+            return;
+        }
         const x = (messages[i] as Card).alts?.[j];
         if (!x) return;
         const text = input.value;
@@ -1473,6 +1609,7 @@ copyBtn.addEventListener("click", async () => {
 $<HTMLButtonElement>("clear").addEventListener("click", () => {
     input.value = "";
     ignored = new Set();
+    setColloquial(null); // a new text: the question is asked again
     check();
     input.focus();
 });
@@ -1502,6 +1639,7 @@ box.addEventListener("input", (ev) => {
     if (composing) return; // the IME is still composing a word: check when it is done
     normalizeBox();
     box.classList.toggle("is-empty", input.value === "");
+    if (input.value === "" && colloquial !== null) setColloquial(null); // the editor emptied: a new text
     closePopover();
     changesEl.hidden = true;
     // the old marks would sit on shifted text: none until the check is done
@@ -1558,6 +1696,12 @@ try {
     /* storage may be unavailable */
 }
 input.value = initial;
+try {
+    const c = initial ? localStorage.getItem("vajban:colloquial") : null;
+    setColloquial(c === "yes" ? true : c === "no" ? false : null);
+} catch {
+    setColloquial(null);
+}
 pendingAuto = initial ? "all" : "none";
 check();
 void setupOwnerPanel();

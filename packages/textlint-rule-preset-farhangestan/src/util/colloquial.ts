@@ -19,6 +19,7 @@ import { KNOWN, isKnown } from "./words";
 import { isPresentStem, verbForm } from "../rules/mi-prefix";
 import { corpusBucket } from "./speller";
 import commonNouns from "../dict/hazm-common-nouns.json";
+import { bankFormal, inBank } from "./colloquial-bank";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 
 const Z = "‌";
@@ -148,11 +149,18 @@ export const BE_PRONOUN = /^به‌?(ش|ت|م|اش|ات|ام|شون|تون|مو�
  */
 export function writtenForm(word: string): string | null {
     if (BE_PRONOUN.test(word)) return null;
+    // a word of the colloquial bank: its reliable written form, or nothing (1.6.2)
+    const b = bankFormal(word);
+    if (b) return b[0] ?? null;
     const s = spoken(word);
+    // a pattern's guess that is no word («باهاشون» ← «بایهایشان»; 1.6.2)
+    if (s && /بایها/.test(s.formal)) return null;
     if (!s) return null;
-    if (s.sure) return s.formal;
+    // «میتونید» ← «می‌توانید», with the half-space of «می» (1.6.2)
+    const f = /^ن?می[^‌]/.test(s.formal) && verbForm(s.formal.replace(/^ن?می/, "")) ? s.formal.replace(/^(ن?می)/, "$1‌") : s.formal;
+    if (s.sure) return f;
     if (!s.hint || s.hint === "copula" || s.hint === "ra") return null;
-    return (corpusBucket(word) ?? 0) < 0 ? s.formal : null;
+    return (corpusBucket(word) ?? 0) < 0 ? f : null;
 }
 const memo = new Map<string, Spoken | null>();
 
@@ -317,6 +325,13 @@ export function scoreOf(s: string): Score {
             if (s1.sure) sure++;
             if (s1.hint) hints++;
             why.push((s1.sure ? "++" : "+") + w);
+        } else if (inBank(w) && !written(w) && !verbForm(w) && !knownish(w)) {
+            // a word of the colloquial bank (1.6.2) that is no written word (not «شنیدم»، «سمتش»، «پسرم»): sure
+            // if it has a written form («تموم»، «جالبه»), else one point («نزدیکه»، «کتابا»)
+            const strong = (bankFormal(w) ?? []).length > 0;
+            sp += strong ? 2 : 1;
+            if (strong) sure++;
+            why.push((strong ? "++" : "+") + w);
         }
     }
     return { spoken: sp, sure, hints, written: wr, why };
