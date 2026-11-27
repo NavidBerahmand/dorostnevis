@@ -100,12 +100,14 @@ function ownedElsewhere(word: string): boolean {
     );
 }
 
+/** Surnames written joined (1.6.0): «نیکخواه». */
+const SURNAMES = new Set(["نیکخواه"]);
 /** Words these heuristics misread: «همچین» (colloquial «such»), «تکنیک» (technique). */
 const NOT_COMPOUNDS = new Set(["همچین", "همچی", "همچو", "همینطوری"]);
 
 /** Second part a present stem (ب-۲). Runs before the known-word guard. */
 function presentStemCompound(word: string): PatternResult | null {
-    if (isDictionaryWord(word) || BOOK_JOINED.has(word)) return null;
+    if (isDictionaryWord(word) || BOOK_JOINED.has(word) || SURNAMES.has(word)) return null;
     // plurals and nisba forms of known words: «شاهدان» (شاهد + ان)، «خاندانی» (خاندان + ی)
     if (word.endsWith("ان")) {
         const root = word.slice(0, -2);
@@ -132,7 +134,7 @@ function presentStemCompound(word: string): PatternResult | null {
 }
 
 function check(word: string): PatternResult | null {
-    if (NOT_COMPOUNDS.has(word) || word.startsWith("تکن")) return null;
+    if (NOT_COMPOUNDS.has(word) || SURNAMES.has(word) || word.startsWith("تکن")) return null;
     // «سپاسگذار» is «سپاسگزار», not «سپاس‌گذار»: the gozar rule's
     if (gozarCorrection(word)) return null;
     const stemCompound = presentStemCompound(word);

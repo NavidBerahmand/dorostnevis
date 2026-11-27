@@ -22,8 +22,9 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const s = spoken(m[0]);
                 if (!s || !/^ن?می‌/.test(s.formal)) return null;
-                if (/^(?!تون).*ون(م|ی|ه|یم|ین|ن)?$/.test(m[2])) return null; // «میدونم»: the over-broken rule's
-                const fixed = m[1] + Z + m[2];
+                // «میدونم» → «می‌دونم» too (1.6.0): the over-broken rule's «می‌دانم» is a recommendation (blue) after it
+                // «میاد، میارم» → «می‌آد، می‌آرم»: the «آ» of «آمدن، آوردن» comes back after the half-space (1.6.0)
+                const fixed = m[1] + Z + (m[2].startsWith("ا") ? "آ" + m[2].slice(1) : m[2]);
                 return { message: `در شکل شکسته هم «${m[1]}» با نیم‌فاصله به فعل می‌چسبد: «${fixed}»`, replacement: fixed };
             }
         },

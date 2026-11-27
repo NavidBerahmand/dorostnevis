@@ -19,8 +19,12 @@ import multiSpelling from "../dict/multi-spelling.json";
 import hamza from "../dict/hamza.json";
 import arabic from "../dict/arabic.json";
 import names from "../dict/names.json";
+import informal from "../dict/informal-words.json";
 
 const PAST_STEMS = new Set<string>(hazmVerbs.past);
+const PRESENT_STEMS = new Set<string>(hazmVerbs.present);
+/** Informal words common across many blogs and forums (1.6.0): accepted, never offered. */
+const INFORMAL = new Set<string>((informal as { words: string }).words.split(" "));
 /** Forms the word lists already correct («اطاق»، «رییس»): the lexicon rule reports them. */
 const LISTED = new Set<string>([multiSpelling, hamza, arabic].flatMap((d) => (d.entries as Array<{ from: string[] }>).flatMap((e) => e.from)));
 
@@ -200,12 +204,69 @@ export function editCost(a: string, b: string, cap = 2): number {
 function passes(w: string, cand: string): number | null {
     const c = editCost(w, cand);
     if (c > 1.5) return null;
-    // the first letter: the same, or swapped for a near one (same length)
-    if (w[0] !== cand[0] && !(w.length === cand.length && nearLetters(w[0], cand[0]))) return null;
+    // the first letter stays (1.6.0: before, a near letter could replace it, «حروم» → «حروف» but also
+    // «ارابش» → «ترابش»); «ا» and «آ» count as one
+    if (w[0] !== cand[0] && !(ALEFS.includes(w[0]) && ALEFS.includes(cand[0]))) return null;
+    // a verb keeps its shape: the same «می/نمی» and the same last letter («نمیذاشت» is not «نمی‌باشد»)
+    const pre = w.match(/^ن?می/)?.[0];
+    if (pre && (!cand.startsWith(pre) || cand[cand.length - 1] !== w[w.length - 1])) return null;
     // a short word: one letter more or less at most
     if (w.length <= 5 && Math.abs(w.length - cand.length) > 1) return null;
     return c;
 }
+const ALEFS = "اآأإ";
+/** A homophone letter swapped («ضمینه» ← «زمینه») or one letter left out («مطمن» ← «مطمئن»): ranked first (1.6.0). */
+function homophoneOrMissing(w: string, cand: string): boolean {
+    if (cand.length === w.length + 1) {
+        for (let i = 0; i < cand.length; i++) if (cand.slice(0, i) + cand.slice(i + 1) === w) return true;
+        return false;
+    }
+    if (cand.length !== w.length) return false;
+    let diff = -1;
+    for (let i = 0; i < w.length; i++) {
+        if (w[i] === cand[i]) continue;
+        if (diff >= 0) return false;
+        diff = i;
+    }
+    return diff >= 0 && SOUND_ALIKE.some((g) => g.includes(w[diff]) && g.includes(cand[diff]));
+}
+
+/** Spoken endings: «بازیکنا»، «گوشیمو»، «سایتشون»، «رکوردشو»، «کتابارو» (1.6.0). */
+const SPOKEN_ENDINGS = ["هامونو", "هاتونو", "هاشونو", "مونو", "تونو", "شونو", "هامون", "هاتون", "هاشون", "هارو", "ارو", "مون", "تون", "شون", "مو", "تو", "شو", "رو", "و", "ا", "ای", "ام", "ات", "اش", "م", "ت", "ش", "ه", "ن", "ین", "یم", "ی"];
+const OUTER = new Set(["و", "رو", "ا", "ه", "تون", "شون", "مون", "م", "ت", "ش", "ای"]);
+const INNER = new Set(["م", "ت", "ش", "ا", "مون", "تون", "شون"]);
+/** «نندازی»، «بفهمن»، «نمیذاشت»: a verb prefix, a stem as said, an ending. */
+const VERB_ENDINGS = ["", "م", "ی", "ه", "یم", "ین", "ید", "ن", "ند", "مش", "تش", "ش", "شون", "ت"];
+/**
+ * A known word with spoken endings, or a verb as it is said: never «not in the dictionary» (1.6.0;
+ * the blog study found 71% of the checker's reports in informal text false). `loose` (a spoken
+ * sentence): also «ون/وم» for «ان/ام» («حروم» ← «حرام»).
+ */
+export function spokenInflection(w: string, loose = false, depth = 2): boolean {
+    const L = lex() ?? NO_LEX;
+    const ok = (x: string) => (x.length >= 3 && (isKnown(x) || (L.get(x) ?? -1) >= 7 || INFORMAL.has(x))) || (x.length === 2 && (L.get(x) ?? -1) >= 9);
+    if (INFORMAL.has(w)) return true;
+    for (const e of SPOKEN_ENDINGS) {
+        if (!w.endsWith(e) || w.length - e.length < 3) continue;
+        const stem = w.slice(0, -e.length);
+        // «علاقشو»، «اجارش»: the silent «ه» drops before a spoken ending
+        if (ok(stem) || (/^[شمتو]|^(مون|تون|شون)/.test(e) && stem.length >= 3 && ok(stem + "ه"))) return true;
+        // two endings: a pronoun or the plural, then «و/رو/ا/ه» («گوشیمو»، «چشاتون»، «بازیکناشون»)
+        if (depth > 1 && OUTER.has(e) && SPOKEN_ENDINGS.some((e2) => INNER.has(e2) && stem.endsWith(e2) && stem.length - e2.length >= 2 && ok(stem.slice(0, -e2.length)))) return true;
+    }
+    const v = w.match(/^(نمی|می|ن|ب)(.{2,})$/);
+    if (v) {
+        const stemOk = (st: string) => PRESENT_STEMS.has(st) || PAST_STEMS.has(st) || PRESENT_STEMS.has("ا" + st) || PRESENT_STEMS.has("گ" + st) || PAST_STEMS.has("گ" + st) || SPOKEN_STEMS_SAID.has(st);
+        for (const e of VERB_ENDINGS) if (v[2].endsWith(e) && v[2].length - e.length >= 2 && stemOk(v[2].slice(0, v[2].length - e.length))) return true;
+    }
+    if (loose && /و[نم]/.test(w)) {
+        const f = w.replace(/و([نم])(?!.*و[نم])/, "ا$1");
+        if (f !== w && ok(f)) return true;
+    }
+    return false;
+}
+/** Present stems as they are said («ذار»، «نداز»، «تون»، «گ»). */
+const SPOKEN_STEMS_SAID = new Set(["ذار", "زار", "ذاشت", "نداز", "تون", "تونست", "دون", "دونست", "خون", "خوند", "مون", "موند", "رسون", "شین", "گیر", "اومد", "یومد", "خوا", "ری", "ذا"]);
 
 export type SpellResult = { suggestions: string[] } | { note: true } | null;
 const memo2 = new Map<string, SpellResult>();
@@ -243,7 +304,7 @@ const SPOKEN_FUNCTION = ["با", "رو", "تو", "از", "به", "که", "این
 function checkWord(word: string, L: Map<string, number>, spokenSentence = false): SpellResult {
     if (spokenSentence) {
         const w = skeleton(word);
-        if (accepted(word)) return null;
+        if (accepted(word) || spokenInflection(w, true)) return null;
         for (let i = 2; i <= w.length - 2; i++) {
             const a = w.slice(0, i);
             const b = w.slice(i);
@@ -266,7 +327,7 @@ function checkWord(word: string, L: Map<string, number>, spokenSentence = false)
             if (rest.length >= 3 && (L.get(rest) ?? -1) >= SPLIT_BUCKET && !verbForm(rest)) return { suggestions: [f + " " + rest] };
         }
     }
-    if (accepted(word)) return null;
+    if (accepted(word) || spokenInflection(sk)) return null;
     // Arabic names and terms with the article: «المعلی»، «الدروس»
     if (word.startsWith("ال") && word.length >= 5) return null;
     const w = skeleton(word);
@@ -280,7 +341,7 @@ function checkWord(word: string, L: Map<string, number>, spokenSentence = false)
     const pass = new Map<string, number>();
     for (const [c, b] of loose) {
         const cost = passes(w, c);
-        if (cost !== null) pass.set(c, b + (cost <= 0.5 ? SOUND_ALIKE_BONUS : 0));
+        if (cost !== null) pass.set(c, b + (homophoneOrMissing(w, c) ? SOUND_ALIKE_BONUS : 0));
     }
     if (pass.size === 0 && w.length >= 5) {
         const oldTwo = loose.size === 0 && w.length >= 6;

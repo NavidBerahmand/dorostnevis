@@ -6,8 +6,8 @@ import { inv, z } from "./helpers";
 
 /**
  * Since 1.5.1, a replacement that changes the writer's letters (the formal or fuller form of a
- * spoken word) is a suggestion: without the option `suggestions` (the command line, here) it has
- * no fix. Only the half-space, the letters kept, is a fix (red on the page).
+ * spoken word) is a suggestion (blue since 1.6.0): without the option `suggestions` (the command
+ * line, here) it has no fix. Only the half-space, the letters kept, is a fix (red on the page).
  */
 const ask = (text: string, count = 1) => ({ text, output: text, errors: Array.from({ length: count }, () => ({})) });
 
@@ -24,7 +24,9 @@ new TextLintTester().run("over-broken", rule, {
         "اصلا حتما مطمئنا دقیقا",                    // tanvin left out (lexicon's), not «اصل» + plural «ا»
         "باید حفظ کنن",                              // «کنند», a verb: not «کن‌اند»
         // 1.5.2: «به» + a pronoun is never marked (the user's decision)
-        "بهش بگو", "بهشون گفتم", "بهت گفتم", "بهتون گفتم", "بهم گفت", "بهمون گفت", "بهاش گفتم"
+        "بهش بگو", "بهشون گفتم", "بهت گفتم", "بهتون گفتم", "بهم گفت", "بهمون گفت", "بهاش گفتم",
+        // 1.6.0: no absurd «full» forms: «می‌گند، میش‌اند، می‌رند، می‌خواند، اصل‌اند، هار را، ارز را، بدنی‌ها»
+        z("می‹گن، می‹شن، می‹رن، می‹خوان، می‹دن، میان"), "میشن", "واقعن اصلن مثلن حتمن", "کتابارو بردم", "هارو", "ارزو", "بدنیا"
     ],
     invalid: [
         // the letters change: a suggestion
@@ -38,6 +40,7 @@ new TextLintTester().run("over-broken", rule, {
         ask("بفرمایین تو"), // p. 19
         ask(z("می‹کنین؟")),
         ask("بچه‌ها خارجن."), // p. 40
+        ask("اونا نیستن"), // «نیستند» (1.6.0), not «نیست‌اند»
         ask(z("می‹خورن")),
         ask(z("نمی‹تونن")),
         ask(z("بچه‹ها رفته‹ان")),
@@ -71,11 +74,11 @@ describe("over-broken on the page (option `suggestions`)", function () {
             })
         ).messages;
     };
-    it("«اومدم» → «آمدم»، «خانما» → «خانم‌ها»: a suggestion with its replacement", async () => {
+    it("«اومدم» → «آمدم»، «خانما» → «خانم‌ها»: a recommendation (blue since 1.6.0) with its replacement", async () => {
         for (const [t, want] of [["دیروز اومدم", "آمدم"], ["خانما خسته نباشید", z("خانم‹ها")], ["یه خرده", "یک"]]) {
             const ms = await lint(t);
             assert.strictEqual(ms.length, 1, t);
-            assert.ok(ms[0].message.startsWith("⁣"), t);
+            assert.ok(ms[0].message.startsWith("\u2064\u2063"), t);
             assert.strictEqual(ms[0].fix?.text, want, t);
         }
     });

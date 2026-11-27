@@ -14,6 +14,7 @@
  * با گزینۀ { "mode": "required-only" } فقط موارد الزامی (کلمۀ مختوم به «ه»)
  * گزارش می‌شوند و نویسنده می‌تواند «ها» را در بقیۀ موارد پیوسته بنویسد.
  */
+import { missingMadd } from "../util/madd";
 import commonNouns from "../dict/hazm-common-nouns.json";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 import { createPatternRule } from "../util/pattern-rule";
@@ -67,7 +68,7 @@ export default createPatternRule<Options>((options) => ({
             check: (m) => {
                 const stem = m[1];
                 const suffix = m[2] ?? "";
-                if (NOT_PLURAL.has(stem + "ها")) return null;
+                if (NOT_PLURAL.has(stem + "ها") || missingMadd(m[0])) return null; // «انها» is «آنها» (1.6.0)
                 // a dictionary word that merely contains «ها» (درنهایت، شیربها، بااشتها):
                 // what comes before «ها» is not a word. («آنها» is a plural: «آن» is.)
                 if (isDictionaryWord(m[0]) && !isKnown(stem)) return null;

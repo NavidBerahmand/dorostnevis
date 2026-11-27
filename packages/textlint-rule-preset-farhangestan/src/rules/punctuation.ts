@@ -62,12 +62,16 @@ function unmatchedAt(text: string, index: number): boolean {
         pairText = text;
         unmatched = new Set();
         const stack: number[] = [];
+        const smiley = new Set<number>();
+        for (const [a, b] of smileySpans(text)) for (let k = a; k < b; k++) smiley.add(k);
         for (let i = 0; i < text.length; i++) {
             const c = text[i];
+            if (smiley.has(i)) continue;
             if (OPEN[c]) stack.push(i);
             else if (CLOSE[c]) {
                 // «۱)»، «الف)»: a list marker; «:)»: a smiley
-                if (c === ")" && (/(^|\n)\s*\S{1,3}$/.test(text.slice(0, i)) || /[:;]$/.test(text.slice(0, i)))) continue;
+                // (1.6.0: also after a sentence's end, with a space: «بخواب! 8 ) خیلی سال بعد»)
+                if (c === ")" && (/(^|\n)\s*\S{1,3}$/.test(text.slice(0, i)) || /[.!؟?]\s+[0-9۰-۹]{1,2} ?$/.test(text.slice(0, i)) || /[:;]$/.test(text.slice(0, i)))) continue;
                 const top = stack[stack.length - 1];
                 if (top !== undefined && text[top] === CLOSE[c]) stack.pop();
                 else unmatched.add(i);
@@ -161,6 +165,27 @@ function persianContext(text: string, index: number): boolean {
 /** «بی ـ، می ـ»: a hyphen after these marks an affix, not a dash. */
 const AFFIXES = new Set(["ب", "ﺑ", "بی", "می", "نمی", "همی", "هم", "نا", "ن", "م", "به"]);
 
+/**
+ * Smileys (1.6.0): «:)»، «:))))»، «:(»، «;)»، «=)»، «:-)»، «:D»، «(:» are neither brackets nor marks:
+ * no pair is missing, no space moves, «;» stays. «:(» before a word may open a bracket
+ * («پاسخ:(الف)»): only a run that stops at a space, a mark or the end.
+ */
+const SMILEY = /[:;=][-']?(?:[()]+|[DPp](?![A-Za-z]))|(?<=^|\s)[()]+[:;](?=\s|$)/g;
+let smileyText = "";
+let smileyList: Array<[number, number]> = [];
+function smileySpans(text: string): Array<[number, number]> {
+    if (text !== smileyText) {
+        smileyText = text;
+        smileyList = [];
+        for (const m of text.matchAll(SMILEY)) {
+            const end = m.index! + m[0].length;
+            if (/^[:;=][-']?\(/.test(m[0]) && /[^\s.!؟?،)]/.test(text[end] ?? " ")) continue;
+            smileyList.push([m.index!, end]);
+        }
+    }
+    return smileyList;
+}
+
 /** URLs, e-mail addresses, file names, HTML tags and entities: never touched. */
 const PROTECTED = /(?:https?:\/\/|www\.)\S+|[\w.+-]+@[\w-]+\.[\w.-]+|<[^>\n]*>|&[a-z]+;|&#\d+;/gi;
 let protText = "";
@@ -170,7 +195,7 @@ function isProtected(text: string, start: number, end: number): boolean {
         protText = text;
         protSpans = [...text.matchAll(PROTECTED)].map((m) => [m.index!, m.index! + m[0].length] as [number, number]);
     }
-    return protSpans.some(([a, b]) => start < b && end > a);
+    return protSpans.some(([a, b]) => start < b && end > a) || smileySpans(text).some(([a, b]) => start < b && end >= a);
 }
 
 export default createPatternRule<Options>((options) => {
@@ -346,6 +371,8 @@ export default createPatternRule<Options>((options) => {
                 const e = m[0].includes("!");
                 const fixed = q && e ? "؟!" : q ? "؟" : "!";
                 if (fixed === m[0]) return null;
+                // «!؟»، «؟!!»، «?!»: a question with surprise is «؟!» (1.6.0: made with the typing fixes)
+                if (fixed === "؟!") return { message: "پرسش همراه با تعجب: «؟!»", replacement: fixed, source: SOURCE };
                 return { message: `نشانه‌های تکراری: «${fixed}» کافی است`, replacement: fixed, source: SOURCE };
             }
         });

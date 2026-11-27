@@ -26,6 +26,7 @@ import hamza from "../dict/hamza.json";
 import arabic from "../dict/arabic.json";
 import { isKnown } from "../util/words";
 import { corpusBucket } from "../util/speller";
+import { registerSegments, spokenAt } from "../util/colloquial";
 
 /**
  * «تقویت» is not «تقوی» + «ت», nor «تقویم» «تقوی» + «م» (1.4.1). A match that takes a listed
@@ -162,6 +163,8 @@ export default createPatternRule<Options>((options) => {
                 check: (m) => {
                     const entry = map.get(key(m[1]));
                     if (!entry) return null;
+                    // «راس میگی» in a spoken sentence is «راست»، not «رأس» (1.6.0)
+                    if (m[1] === "راس" && (!m[2] || m[2] === "ی") && spokenAt(registerSegments(m.input), m.index)) return null;
                     // a suffix only after a hamza word («تاثیرات»); other lists match the word alone
                     const suffix = m[2] ?? "";
                     if (suffix && !HAMZA_ENTRIES.has(entry)) return null;

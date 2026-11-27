@@ -51,7 +51,11 @@ export interface PatternRuleSpec {
     /** Short Persian explanation of the rule, plus its source in دستور خط. */
     source: string;
     checks: PatternCheck[];
+    /** false: replacements keep Arabic «ي/ك» (normalize-characters, which decides about them). */
+    persianLetters?: boolean;
 }
+/** «ي، ك» → «ی، ک». */
+const toPersianLetters = (s: string) => s.replace(/ي/g, "ی").replace(/ك/g, "ک");
 
 /**
  * Build a fixable textlint rule from a list of pattern checks.
@@ -104,7 +108,13 @@ export function createPatternRule<T extends object = object>(
                         const kindMark = options?.suggestions && result.kind === "suggestion" ? KIND_SUGGESTION : "";
                         const message = `${result.message} (${result.source ?? spec.source})`;
                         const canFix = result.fix !== false && result.replacement !== undefined;
-                        const choices = [result.replacement, ...(result.alternatives ?? [])].filter((x, i, a): x is string => x !== undefined && a.indexOf(x) === i);
+                        // a replacement is written in Persian letters (1.6.0): «میتونيم» → «می‌تونیم», not «می‌تونيم» (the
+                // Arabic «ي» would bring normalize-characters back on the same word)
+                if (spec.persianLetters !== false) {
+                    if (result.replacement !== undefined) result.replacement = toPersianLetters(result.replacement);
+                    if (result.alternatives) result.alternatives = result.alternatives.map(toPersianLetters);
+                }
+                const choices = [result.replacement, ...(result.alternatives ?? [])].filter((x, i, a): x is string => x !== undefined && a.indexOf(x) === i);
                         if (options?.suggestions && choices.length && (!canFix || choices.length > 1)) {
                             // a certain fix keeps its own report (red, «درست‌کن» makes it); the other
                             // replacements come as suggestions beside it, one mark more each

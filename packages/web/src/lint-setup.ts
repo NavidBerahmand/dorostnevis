@@ -66,14 +66,17 @@ const SHEKASTE_RULES = new Set([...Object.keys(shekaste.rules), ...Object.keys(s
  * - zwnj-cleanup: double ZWNJ, ZWNJ next to a space or at a word's edge, ZWNJ after a
  *   non-joining letter.
  * - mi-prefix: «می/نمی» + verb with a space or joined → نیم‌فاصله. Not the separated
- *   preverbs («در/بر/باز … می‌»), which are compound choices.
+ *   preverbs («در/بر/باز … می‌»), which are compound choices. Since 1.6.0 also the spoken forms
+ *   with a space («می کنه»، «نمی شه»).
+ * - spoken-spelling (since 1.6.0): the same half-space in a spoken form written joined («میگه» →
+ *   «می‌گه»، «میاد» → «می‌آد»): 157 of 157 right in the study of blog and forum text.
  * - plural-ha: «کتاب ها» → «کتاب‌ها», «خانهها» → «خانه‌ها». Not the «ا+ی» reading guess
  *   («خستهایم») or the joined-«ها» recommendation (no fix).
  * - plural-ha with «همیشه «ها» را جدا بنویس» on (since 1.4.0): «شباهتهای» → «شباهت‌های».
  * - tar-tarin: «بزرگ تر/بزرگتر/بزرگ ترین» → «بزرگ‌تر/بزرگ‌ترین», «بیش تر» → «بیشتر».
  * - ezafe-he: «هٔ» → «ۀ», the one form of the ezafe the site uses (since 1.5.0; the reverse in 1.4.0).
  * - hamza-tanvin and lexicon: a tanvin left out of the closed lists, «ایضا» → «ایضاً»،
- *   «فورا» → «فوراً» (since 1.4.0).
+ *   «فورا» → «فوراً» (since 1.4.0), and since 1.6.0 written with «ن»: «واقعن» → «واقعاً» (a closed list).
  * - punctuation: Latin «, ; ?» → «، ؛ ؟» after Persian (not in URLs, e-mails, numbers or
  *   before Latin), straight double quotes → «» (only when the line's quotes pair up),
  *   space before «، ؛ : ! ؟ .», a missing space after them (and after «:» and «…» between
@@ -84,6 +87,7 @@ const SHEKASTE_RULES = new Set([...Object.keys(shekaste.rules), ...Object.keys(s
  *   and never the space between a number and a word (the book joins «۷۵درصدی»: ص ۶۵).
  *   Since 1.5.2 also «...» → «…» (one character; its spacing as before, the dialogue dash's
  *   space kept) and guillemets typed the wrong way round when the line pairs them up («»سلام«»).
+ *   Since 1.6.0 also «!؟»، «؟!!»، «?!» → «؟!».
  * Left out entirely: dictionary and compound choices (lexicon, dictionary, joined-words,
  * spaced-compounds, word-spacing, compound-verbs, misspellings, final-he, gozar,
  * hamza-tanvin, arabic-prefixes, verb-prefix-alef, bi-prefix and copula-attachment, whose
@@ -95,6 +99,8 @@ export const AUTO_FIX: Record<string, { only?: RegExp; skip?: RegExp }> = {
     invisible: {},
     "zwnj-cleanup": {},
     "mi-prefix": { only: /^«ن?می» با نیم‌فاصله به فعل می‌چسبد/ },
+    // the same half-space in the spoken form («میگه» → «می‌گه»; 1.6.0: 157 of 157 right in the blog study)
+    "spoken-spelling": { only: /^در شکل شکسته هم «ن?می» با نیم‌فاصله/ },
     "plural-ha": { only: /^«ها»ی جمع با فاصلۀ کامل|^پس از «ه» نشانۀ جمع|^«ها» جدا نوشته می‌شود \(تنظیم/ },
     "ezafe-he": { only: /^شکل یکدستِ نشانۀ اضافه/ },
     "tar-tarin": {},
@@ -102,7 +108,7 @@ export const AUTO_FIX: Record<string, { only?: RegExp; skip?: RegExp }> = {
     "hamza-tanvin": { only: /^تنوین نصب «اً» نوشته می‌شود/ },
     lexicon: { only: /^تنوین نصب «اً» نوشته می‌شود/ },
     punctuation: {
-        only: /^در متن فارسی «[،؛؟]»|^گیومه‌ها وارونه تایپ شده‌اند|^سه‌نقطه یک نویسه است|^در متن فارسی گیومۀ فارسی|^پیش از نشانه فاصله|^پس از نشانه یک فاصله|^پس از نقطه یک فاصله|^پس از سه‌نقطه یک فاصله|^داخل پرانتز و گیومه|^فاصلۀ اضافه در پایان سطر|^بین دو کلمه یک فاصله|^ویرگول پیش یا پس از نشانۀ دیگر|^خط تیره \(—\) میان دو واژه|^خط تیرۀ آغاز گفت‌وگو|^میان (?:عدد و واحدش|نشانۀ ارجاع و شماره‌اش|روز و ماه) فاصلۀ نشکن/
+        only: /^در متن فارسی «[،؛؟]»|^پرسش همراه با تعجب: «؟!»|^گیومه‌ها وارونه تایپ شده‌اند|^سه‌نقطه یک نویسه است|^در متن فارسی گیومۀ فارسی|^پیش از نشانه فاصله|^پس از نشانه یک فاصله|^پس از نقطه یک فاصله|^پس از سه‌نقطه یک فاصله|^داخل پرانتز و گیومه|^فاصلۀ اضافه در پایان سطر|^بین دو کلمه یک فاصله|^ویرگول پیش یا پس از نشانۀ دیگر|^خط تیره \(—\) میان دو واژه|^خط تیرۀ آغاز گفت‌وگو|^میان (?:عدد و واحدش|نشانۀ ارجاع و شماره‌اش|روز و ماه) فاصلۀ نشکن/
     }
 };
 
@@ -200,7 +206,23 @@ export async function lintText(kernel: Kernel, text: string, s: Settings, forFix
     const out = await run("common");
     if (anyFormal) out.push(...(await run("formal")).filter((m) => !isSpoken(m)));
     if (anySpoken) out.push(...(await run("spoken")).filter(isSpoken));
-    return out.sort((a, b) => a.range[0] - b.range[0] || a.range[1] - b.range[1]);
+    const kurdish = kurdishLines(text);
+    return out.filter((m) => !kurdish.some(([a, b]) => m.range[0] >= a && m.range[0] < b)).sort((a, b) => a.range[0] - b.range[0] || a.range[1] - b.range[1]);
+}
+
+/**
+ * Kurdish (Sorani) lines are not Persian (1.6.0): letters Persian never writes («ێ ۆ ڵ ڕ»), twice or
+ * more on a line, and the line is left alone entirely (no «ە» → «ه», no spelling guesses).
+ */
+export function kurdishLines(text: string): Array<[number, number]> {
+    if (!/[ێۆڵڕ]/.test(text)) return [];
+    const out: Array<[number, number]> = [];
+    let a = 0;
+    for (const line of text.split("\n")) {
+        if ((line.match(/[ێۆڵڕ]/g) ?? []).length >= 2) out.push([a, a + line.length + 1]);
+        a += line.length + 1;
+    }
+    return out;
 }
 const STYLE_IDS = Object.keys(virayesh.rules);
 

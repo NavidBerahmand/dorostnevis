@@ -25,6 +25,9 @@ import { createPatternRule, PatternResult } from "../util/pattern-rule";
 import { START, END, LETTER, ZWNJ, isNonJoining } from "../util/persian";
 import { isKnown, isDictionaryWord, BOOK_JOINED } from "../util/words";
 import { verbForm } from "./mi-prefix";
+import { missingMadd } from "../util/madd";
+import { corpusBucket } from "../util/speller";
+import { registerSegments, spokenAt } from "../util/colloquial";
 import commonNouns from "../dict/hazm-common-nouns.json";
 
 const COMMON_NOUNS = new Set<string>(commonNouns.words);
@@ -130,7 +133,7 @@ function thisMuch(d: string, prev: string, next: string): PatternResult {
 }
 
 function joinedWord(word: string, prev = "", next = ""): PatternResult | null {
-    if (isKnown(word) || BOOK_JOINED.has(word)) return null;
+    if (isKnown(word) || BOOK_JOINED.has(word) || missingMadd(word)) return null; // «اینده» is «آینده» (1.6.0)
     for (const d of ["این", "آن"]) {
         if (!word.startsWith(d)) continue;
         const rest = word.slice(d.length);
@@ -167,9 +170,97 @@ function joinedWord(word: string, prev = "", next = ""): PatternResult | null {
     return null;
 }
 
+const S_TYPING = "قراردادهای رایج حروف‌نگاری فارسی (در دستور خط نیامده)";
+/**
+ * «و» run into the next word (1.6.0, beyond the function words above): «ومن»، «وبعد»، «وحتی»، «وفقط».
+ * Only when the whole token is no word (Hazm, the farhang, or seen in Wikipedia) and what follows
+ * «و» is a common one; never these words and parts of compounds: «وبا» (cholera)، «وهم»، «واسم»
+ * (spoken «برای من»)، «واست»، «ورا»، «واو»، «حمل‌ونقل»، «آب‌وهوا».
+ */
+const WAW_NOT = new Set(["وبا", "وهم", "واسم", "واست", "واسه", "واسش", "واسمون", "واستون", "واسشون", "ورا", "واو", "وبم", "وجو", "ونیم", "وتی", "ودم", "وزد", "ونقل", "وکار", "وهوا", "وهوای", "وراه", "وتن", "وپرورش", "وغیره", "وپیشینه", "وآل", "وسیما", "ومی", "ونه", "وشو", "وقتی", "وزیر", "ولی", "والا", "ورزش", "وسط", "وقت", "وام", "ویژه", "وار", "واری", "وارد", "واقع", "والد", "وصل", "وجه", "وکیل", "وطن", "وزن", "ورق", "وفا", "وفات", "وعده", "وحشی", "واحد", "وادار", "وانمود", "ورود"]);
+/** Pronouns, adverbs and conjunctions «هم» (also) is run into: «ماهم»، «شماهم»، «اگرهم» (1.6.0). */
+const HAM_HEADS = new Set(["ما", "شما", "او", "اون", "اونا", "آنها", "آن‌ها", "اینها", "این‌ها", "ایشان", "اگر", "اگه", "هنوز", "بعد", "شاید", "حالا", "امروز", "الان", "باز", "دیگر", "دیگه", "آنجا", "اینجا", "اونجا", "قبلا", "بعدا", "خودم", "خودش", "خودت", "خودمان", "خودشون", "تازه", "یکبار", "بار", "حتما", "اکنون", "امسال", "دیروز", "فردا", "آخر"]);
+/** A simple preposition run into a pronoun, a demonstrative, a number or a common noun (1.6.0): «دریک»، «ازمن»، «باتوجه». */
+const PREP_JOINED: Record<string, string> = Object.fromEntries(
+    ["در", "از", "با", "بر"].flatMap((p) =>
+        ["این", "آن", "همین", "همان", "هر", "یک", "همه", "من", "تو", "او", "ما", "شما", "آنها", "اینها", "خود", "خودم", "خودت", "خودش", "سال", "خانه", "ایران", "جهان", "سایت", "حال"].map((w) => [p + w, p + " " + w])
+    ).concat([["باتوجه", "با توجه"], ["بعدهم", "بعد هم"]])
+);
+/**
+ * The book joins a simple preposition and a noun stem into a compound preposition («ازطریقِ،
+ * ازنظرِ، براساسِ، درضمنِ، بعداز»، ص ۶۹): those stay. «با توجه به» has three parts: spaced
+ * (تبصرۀ ۲). Not before a half-space («ازاین‌رو»، «دراین‌باره»: the compound lists).
+ */
+const PREP_KEEP = new Set(["درحال", "ازخود", "باخود", "برخود", "درهم", "ازهم", "باهم", "برهم", "درهمه", "درتو"]);
+/** A number run into what it counts (1.6.0): «یکماه»، «دوسال»، «چندروز». Not «یکسان»، «یکدیگر»، «۵ساله»، «دوستون». */
+const COUNTED = ["سال", "ماه", "روز", "هفته", "ساعت", "دقیقه", "ثانیه", "نفر", "شب", "عدد", "نوع", "قسمت", "مرحله", "دسته", "گروه", "کشور", "تیم", "مورد", "دفعه", "سالی", "ماهی", "روزی", "ساعتی", "هفته‌ای", "نفری", "شبی"];
+const NUM_JOINED = new RegExp(`${START}(یک|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|چند)(${COUNTED.join("|")})${END}`, "g");
+
 export default createPatternRule(() => ({
     source: S_PREFIX,
     checks: [
+        {
+            // «ومن»، «وبعد»، «وحتی» → «و من»… (1.6.0)
+            pattern: new RegExp(`${START}و(${LETTER}{2,})${END}`, "g"),
+            check: (m) => {
+                const w = m[0];
+                const rest = m[1];
+                if (/^(در|از|به|یا|این|آن|که|تا|برای|اگر|اما|سپس|همچنین|دیگر|هر|همه)$/.test(rest)) return null; // the check below
+                if (WAW_NOT.has(w) || isKnown(w) || isDictionaryWord(w) || BOOK_JOINED.has(w)) return null;
+                const bw = corpusBucket(w);
+                const br = corpusBucket(rest);
+                if (bw === null || br === null || bw >= 5 || br < 11) return null; // the token is seen in Wikipedia, or the rest is not common
+                // «ودی»، «ونو»: names more often than «و دی»; two letters only for pronouns («ومن»)
+                if (!isKnown(rest) || (rest.length < 3 && !/^(من|ما|تو|او|یه|چه|چی)$/.test(rest))) return null;
+                return { message: `«و» کلمۀ جداست: «و ${rest}»`, replacement: `و ${rest}`, source: S_TYPING };
+            }
+        },
+        {
+            // «بودکه»، «استکه»، «منکه» → «بود که»… (1.6.0): «که» after a verb or a pronoun; the compound
+            // conjunctions («زمانیکه»، «درحالیکه») are the lexicon's; «بلکه، آنکه، اینکه» are words
+            pattern: new RegExp(`${START}(${LETTER}{2,})که${END}`, "g"),
+            check: (m) => {
+                const head = m[1];
+                if (isKnown(m[0]) || isDictionaryWord(m[0]) || BOOK_JOINED.has(m[0])) return null;
+                if (!(/^(من|تو|ما|شما|او|اون|را|است|نیست|هست|بود|نبود|شد|نشد)$/.test(head) || (verbForm(head) && /[دت]$/.test(head) && head.length >= 3))) return null;
+                if ((corpusBucket(m[0]) ?? 0) >= 5) return null;
+                return { message: `«که» کلمۀ جداست: «${head} که»`, replacement: `${head} که`, source: S_TYPING };
+            }
+        },
+        {
+            // «ماهم»، «شماهم»، «اگرهم» → «ما هم»… (1.6.0)
+            pattern: new RegExp(`${START}(${[...HAM_HEADS].sort((a, b) => b.length - a.length).join("|")})هم${END}`, "g"),
+            check: (m) => {
+                const head = m[1];
+                if (!HAM_HEADS.has(head) || isKnown(m[0]) || isDictionaryWord(m[0]) || BOOK_JOINED.has(m[0])) return null;
+                // «اوهم» is also «Ohm» (Georg Ohm): only in a spoken sentence
+                if (m[0] === "اوهم" && !spokenAt(registerSegments(m.input), m.index)) return null;
+                return { message: `«هم» (به معنای «نیز») جدا نوشته می‌شود: «${head} هم»`, replacement: `${head} هم`, source: S_TYPING };
+            }
+        },
+        {
+            // «دریک»، «ازمن»، «باتوجه» → «در یک»… (1.6.0): yellow, the joined form may be a name or a compound
+            pattern: new RegExp(`${START}(${Object.keys(PREP_JOINED).join("|")})${END}(?!${ZWNJ})`, "g"),
+            check: (m) => {
+                const w = m[0];
+                if (PREP_KEEP.has(w) || isDictionaryWord(w) || BOOK_JOINED.has(w)) return null;
+                const fixed = PREP_JOINED[w];
+                const next = m.input.slice(m.index + w.length).match(/^ +([\p{L}‌]+)/u)?.[1] ?? "";
+                // «براین اساس»، «ازاین رو»، «بااین حال»: the book's compounds (spaced-compounds' «براین‌اساس»)
+                if (/^(اساس|رو|حال|پس|باره|جهت|حیث|قرار|وجود|همه|گذشته|سان|میان|طریق|نظر)$/.test(next)) return null;
+                if (w === "باتوجه" && next && next !== "به") return null;
+                return { message: `حرف اضافۀ ساده با فاصله از کلمۀ بعد نوشته می‌شود: «${fixed}»`, replacement: fixed, fix: false, source: "دستور خط، «حروف اضافۀ ساده و مرکّب»، ص ۶۹" };
+            }
+        },
+        {
+            // «یکماه»، «دوسال»، «چندروز» → «یک ماه»… (1.6.0): yellow
+            pattern: NUM_JOINED,
+            check: (m) => {
+                if (isKnown(m[0]) || isDictionaryWord(m[0]) || BOOK_JOINED.has(m[0]) || m[0] === "یکدفعه") return null; // «یکدفعه» (suddenly)
+                const fixed = m[1] + " " + m[2];
+                return { message: `عدد و معدود جدا نوشته می‌شوند: «${fixed}»`, replacement: fixed, fix: false, source: "دستور خط، «قواعد عددنویسی»، ص ۶۵" };
+            }
+        },
         {
             // «و» glued to the next function word: «ودر» → «و در»، «واز» → «و از»
             // (left out because the joined form is a word: «وبا» (cholera)، «وهم»، «ونیز» (Venice)، «وبر»)

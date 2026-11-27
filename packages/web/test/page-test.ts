@@ -89,7 +89,9 @@ describe("the page's items", function () {
         const allowed = new Set(["میرم", "میدم", "میگه", "میگم", "رو", "گرون", "خانما", "اومدم", "توصورتم"]);
         const odd = shown.filter((m) => !allowed.has(text.slice(m.range[0], m.range[1])));
         assert.deepStrictEqual(odd.map((m) => `${m.ruleId}: ${splitMessage(m).text}`), [], marks.join(" | "));
-        for (const w of ["میرم", "میدم", "میگه", "میگم"]) assert.ok(shown.some((m) => text.slice(m.range[0], m.range[1]) === w && m.fix?.text === w.replace(/^می/, "می\u200c")), w);
+        // 1.6.0: the half-space of the spoken form is one of the silent typing fixes
+        const all = await lint(text);
+        for (const w of ["میرم", "میدم", "میگه", "میگم"]) assert.ok(all.some((m) => text.slice(m.range[0], m.range[1]) === w && m.fix?.text === w.replace(/^می/, "می\u200c") && isAuto(m, text)), w);
         assert.ok(shown.some((m) => m.fix?.text === "تو صورتم"));
         // «گرون تر» → «گرون‌تر»: a silent typing fix, in its spoken form
         assert.ok((await lint(text)).some((m) => isAuto(m, text) && m.fix?.text === "گرون\u200cتر"));

@@ -14,6 +14,9 @@
 import { createPatternRule } from "../../../textlint-rule-preset-farhangestan/src/util/pattern-rule";
 import { START, END, LETTER, ZWNJ } from "../../../textlint-rule-preset-farhangestan/src/util/persian";
 import { KNOWN } from "../../../textlint-rule-preset-farhangestan/src/util/words";
+import commonNouns from "../../../textlint-rule-preset-farhangestan/src/dict/hazm-common-nouns.json";
+
+const COMMON_NOUNS = new Set<string>(commonNouns.words);
 
 const BOOK = "اصول شکسته‌نویسی";
 const Z = ZWNJ;
@@ -40,7 +43,8 @@ for (const [f, s] of [["توانستم", "تونستم"], ["توانستی", "ت
 PAIRS.push(["بیایم", "بیام", "۱۷"], ["بینداز", "بنداز", "۱۷"], ["چگونه", "چطوری", "۲۷"], ["زیرا", "چون", "۲۷"],
     ["می" + Z + "باید", "باید", "۲۸"], ["چیست", "چیه", "۲۹"], ["اوست", "اونه", "۲۸"], ["مرا", "من را", "۲۷"],
     ["از من", "ازم", "۲۶"], ["از تو", "ازت", "۲۶"], ["از او", "ازش", "۲۶"],
-    ["به من", "به" + Z + "ام", "۲۱"], ["به تو", "به" + Z + "ات", "۲۱"], ["به او", "به" + Z + "اش", "۲۱"], ["به ایشان", "به" + Z + "شون", "۲۲"],
+    // «بهم، بهت، بهش، بهشون» (1.6.0, the user's decision as in 1.5.2): the book's «به‌ام، به‌ات» are not how they are written
+    ["به من", "بهم", "۲۱"], ["به تو", "بهت", "۲۱"], ["به او", "بهش", "۲۱"], ["به ایشان", "بهشون", "۲۲"],
     ["کی است", "کیه", "۲۹"], ["چی است", "چیه", "۲۹"]);
 const MAP = new Map(PAIRS.map(([f, s, p]) => [f, { spoken: s, page: p }]));
 
@@ -63,7 +67,8 @@ export default createPatternRule(() => ({
             // «صدایم، پتویم» → «صدام، پتوم»
             pattern: new RegExp(`${START}(${LETTER}+[اوآ])یم${END}`, "g"),
             check: (m) => {
-                if (!KNOWN.has(m[1])) return null;
+                // a noun with «-یم» (my): «صدایم»، «پتویم»; not «تایم»، «علایم» (1.6.0)
+                if (!KNOWN.has(m[1]) || !COMMON_NOUNS.has(m[1])) return null;
                 return {
                     message: `در گفت‌وگو: «${m[1]}م»`,
                     replacement: `${m[1]}م`,

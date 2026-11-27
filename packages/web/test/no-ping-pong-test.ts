@@ -122,6 +122,22 @@ const SPOKEN = [
     "اگر روزی قربانی قضاوت، فریب، تمسخر، دل شکستن، سواستفاده یا بی مهری کسی شدی فکر نکن دنیا همونجا تموم شده..! چون اگ درگیرش بشی خسته میشی. همونقدرک لبخند میزنی بسپار ب خدا."
 ];
 
+/** 1.6.0: informal Persian from blogs and forums (the study of 2.9 million sentences), one per new check. */
+const BLOGS = [
+    "ان روز رفتم و اب خوردم. اره من میخام برم ولی بزار ببینم!؟ خیلیییی خوب بود :))",
+    "واقعن خسته‌ام و اصلن نمیدونم چیکار کنم. ایشالا درست میشه. مسولین مطمن نیستن.",
+    "همه شون اومده بودن و ماهم رفتیم وبعد گفتیم یبار دیگه میایم. هر کاری می کنه آخرش همینه و نمی شه کاری کرد.",
+    "زمانیکه رسیدم دریک ساعت کار تموم شد. یکماه طول کشید تا حاظر بشه، نصبت به قبل متفاوط بود.",
+    "اینده و انها مهم اند. میگن که میشن و میرن ولی نیستن. کتابارو بردم و ارزو کردم.",
+    "خونه شون رو دیدم. کتاب رو میز بود. نشست رو صندلی و گفت اره. گزاشتم و رفتم.",
+    "بعدشم من مطالبم بیات بشه بنا ب دلیل بند پ مطلبم چاپ میشه. دوستانی هم ک مطلبشون مورد دره:))",
+    "چرا بايد يك كاروان بزرگ رو دنبال خودمون بكشيم وقتي ميتونيم مثل سازنده اين تريلر كوچك يك نوع رو درست كنيم؟",
+    "عزيزان من دو تا ايده ي ديگه هم از اين ايده هاي هيزمي به ذهنم رسيده..... فكر كردم مي شه هيزم هاي غذايي هم آماده كرد",
+    "جواد : خوب الان باید چیکار کنیم ؟! خانم : هیچی دیگه ،خسته ایم باید بخوابیم. 8 ) خیلی سال بعد ، دیشب مادر خدا بیامرزم به خوابم اومد",
+    "سلام دوستان پائین صفحه رو ببینید، چ خوب شده. نمیخاد نگران باشی، خاهش میکنم.",
+    "درس خونده بودم و راس میگی. آقای نیکخواه گفت ئەم کوردستانە زۆر جوانە"
+];
+
 /**
  * Subtitles (1.5.1: the 68 conflicts of 1.5.0 on 3,000 subtitle passages), one per cause:
  * «...» right after the dialogue dash (the dash keeps its space, the dots become «…»), «؟ .»
@@ -141,7 +157,7 @@ const SUBTITLES = [
 
 describe("no ping-pong: no rule takes back another's fix", function () {
     // the register as the page finds it, and every text read as spoken (any sentence may be)
-    for (const [register, texts] of [["auto", [...CASES, ...DIALOGUE, ...SPOKEN, ...SUBTITLES]], ["spoken", [...CASES.slice(0, 26), ...DIALOGUE, ...SPOKEN, ...SUBTITLES]]] as const) {
+    for (const [register, texts] of [["auto", [...CASES, ...DIALOGUE, ...SPOKEN, ...SUBTITLES, ...BLOGS]], ["spoken", [...CASES.slice(0, 26), ...DIALOGUE, ...SPOKEN, ...SUBTITLES, ...BLOGS]]] as const) {
         it(`${register}: ${texts.length} texts`, async () => {
             const problems: string[] = [];
             for (const t of texts) problems.push(...(await pingPong(t, { ...DEFAULT_SETTINGS, register })));

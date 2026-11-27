@@ -50,6 +50,7 @@ function spacedCompound(w0: string, w1: string): string | null {
     return null;
 }
 import { verbForm, isParticiple, isPresentStem } from "./mi-prefix";
+import { missingMadd } from "../util/madd";
 import { isSpokenStem, spoken as spokenForm } from "../util/colloquial";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 import commonNouns from "../dict/hazm-common-nouns.json";
@@ -262,6 +263,8 @@ export default createPatternRule<Options>((options) => {
                 pattern: new RegExp(`${START}(${LETTER}{2,}ه)(?= +(${LETTER}+))`, "g"),
                 check: (m) => {
                     if (options.model === false || EZAFE_PRONOUNS.includes(m[2]) || hasPronouncedHe(m[1])) return null;
+                    // «اره» (آره)، «اینده» (آینده): the «آ» left out, typing-shortcuts' (1.6.0)
+                    if (m[1] === "اره" || missingMadd(m[1])) return null;
                     // a verb, or a word that never comes before an ezafe's second part (1.5.2)
                     const spoken = options.formal === false;
                     const prev = m.input.slice(0, m.index).match(/([\p{L}\u200c]+)[ \u200c]*$/u)?.[1] ?? "";

@@ -21,6 +21,7 @@ import { isKnown } from "../util/words";
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, LETTER_RANGE, WORD_CHAR, ZWNJ } from "../util/persian";
 import hazmVerbs from "../dict/hazm-verbs.json";
+import { spoken } from "../util/colloquial";
 
 const SOURCE = "دستور خط، «می و همی»، ص ۳۹";
 
@@ -151,6 +152,15 @@ export default createPatternRule(() => ({
                 if (!form) return null;
                 const fixed = (m[1] ?? "") + m[2] + ZWNJ + form;
                 return { message: `«${m[2]}» با نیم‌فاصله به فعل می‌چسبد: «${fixed}»`, replacement: fixed };
+            }
+        },
+        {
+            // spoken forms with a space (1.6.0): «می کنه»، «نمی شه»، «می تونن» → «می‌کنه»، «نمی‌شه»، «می‌تونن»
+            pattern: new RegExp(`${START}(ن?می) +(?=(${LETTER}{1,}(?:ه|ن|ین))(?!${WORD_CHAR}))`, "g"),
+            check: (m) => {
+                const s = spoken(m[1] + ZWNJ + m[2]);
+                if (!s || !/^ن?می‌/.test(s.formal)) return null;
+                return { message: `«${m[1]}» با نیم‌فاصله به فعل می‌چسبد`, replacement: m[1] + ZWNJ };
             }
         },
         {

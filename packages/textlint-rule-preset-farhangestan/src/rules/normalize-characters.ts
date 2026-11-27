@@ -65,6 +65,9 @@ const FOREIGN: Record<string, string> = {
 /** Persian words that start with «ال»: not a sign of Arabic. */
 const PERSIAN_AL = new Set(["البته", "الان", "الآن", "الگو", "الگوی", "الماس", "الهام", "الف", "الزام", "الزامی", "الکترونیک", "الکترونیکی", "الوار", "الک", "الاغ", "الو", "الیاف", "الهی"]);
 
+/** Persian words Arabic does not have: two in a phrase make it Persian whatever its letters. */
+const PERSIAN_WORDS = new Set(["است", "را", "این", "برای", "یک", "که", "هم", "شد", "شده", "کرد", "کند", "کنند", "خود", "ها", "های", "بود", "نیست", "هست", "باشد", "شود", "اند", "می", "نمی", "آن", "شما", "ایشان", "اینکه", "چه", "کرده", "دارد", "نیز", "اگر", "ولی", "همه", "پس", "میشود", "میکند"]);
+
 /**
  * Is the phrase around index Arabic? The phrase is the quotation it sits in,
  * else its sentence. Arabic: three words with the article «ال‌», or two plus a
@@ -87,7 +90,11 @@ function arabicPhrase(text: string, index: number): boolean {
     const words = phrase.split(/[\s،؛,()«»]+/).filter(Boolean);
     const al = words.filter((w) => w.startsWith("ال") && w.length >= 4 && !PERSIAN_AL.has(w)).length;
     const marks = /[ةىإ\u064B-\u064D]/.test(phrase);
-    return al >= 3 || (al >= 2 && marks);
+    if (!(al >= 3 || (al >= 2 && marks))) return false;
+    // Persian typed on an Arabic keyboard (1.6.0): «پ چ ژ گ», or Persian words, in the phrase itself
+    if (/[پچژگ]/.test(phrase)) return false;
+    const persian = words.map((w) => w.replace(/ي/g, "ی").replace(/ك/g, "ک")).filter((w) => PERSIAN_WORDS.has(w)).length;
+    return persian < 2;
 }
 
 export default createPatternRule<Options>((options) => {

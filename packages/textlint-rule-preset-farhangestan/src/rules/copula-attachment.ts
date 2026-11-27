@@ -28,6 +28,8 @@
  * - «شان» پس از صامت فقط پیشنهاد می‌شود، چون «شأن» هم گاهی «شان» نوشته می‌شود.
  * - «ه»ی ملفوظ (کوه، راه) و کلمه‌های ناشناخته.
  */
+import { spoken, registerSegments, spokenAt } from "../util/colloquial";
+import { hasPronouncedHe } from "../util/words";
 import { createPatternRule, PatternResult } from "../util/pattern-rule";
 import { START, END, LETTER, LETTER_RANGE, ZWNJ, isNonJoining } from "../util/persian";
 import { isKnown, endsWithSilentHe } from "../util/words";
@@ -127,6 +129,26 @@ export default createPatternRule(() => ({
                 // «و» (دانشجو، رهرو، رادیو) and hamza endings vary: left alone
                 if ("آوءأؤئ".includes(last) || ending === "ای") return null;
                 return afterConsonant(word, ending, m[3]);
+            }
+        },
+        {
+            // spoken pronouns written apart (1.6.0): «همه شون»، «کتاب تون»، «دست مون» → «همه‌شون»، «کتابتون»،
+            // «دستمون». Yellow: «تون» and «مون» are also words of their own
+            pattern: new RegExp(`${START}([${LETTER_RANGE}${ZWNJ}]*${LETTER}) +(شون|تون|مون)${END}`, "g"),
+            check: (m) => {
+                const [word, ending] = [m[1], m[2]];
+                if (!(known(word) || spoken(word)) || verbForm(word) || FUNCTION_WORDS.has(word) || word.length < 2) return null;
+                // in a spoken sentence only: «نزدیک تون (G)»، «بان کی مون» in a written one
+                if (!spokenAt(registerSegments(m.input), m.index)) return null;
+                const last = word[word.length - 1];
+                if ("آوءأؤئ".includes(last)) return null;
+                const fixed = last === "ه" ? (hasPronouncedHe(word) ? word + ending : word + ZWNJ + ending) : last === "ی" ? word + ZWNJ + ending : word + ending;
+                return {
+                    message: `ضمیر پیوسته به کلمۀ پیش از خود می‌چسبد: «${fixed}»`,
+                    replacement: fixed,
+                    fix: false,
+                    source: sourceOf(ending.replace("ون", "ان"))
+                };
             }
         },
         {

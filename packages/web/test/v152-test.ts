@@ -43,12 +43,14 @@ describe("1.5.2", function () {
         assert.strictEqual(RULE_LABELS["spoken-word"], "واژۀ محاوره‌ای");
     });
 
-    it("the user's text: «میکنه» gets its red «می‌کنه» and no ezafe; no ezafe on «بره، بشه، باشه، گرفته»", async () => {
+    it("the user's text: «میکنه» gets «می‌کنه» (silently since 1.6.0) and no ezafe; no ezafe on «بره، بشه، باشه، گرفته»", async () => {
         const msgs = await shown(USER_SPOKEN);
         const ez = msgs.filter((m) => m.ruleId === "ezafe-he").map((m) => at(USER_SPOKEN, m));
         for (const w of ["میکنه", "بره", "بشه", "باشه", "گرفته", "نامه"]) assert.ok(!ez.includes(w), `${w} in ${ez}`);
-        const mk = msgs.filter((m) => at(USER_SPOKEN, m) === "میکنه");
-        assert.deepStrictEqual(mk.map((m) => [m.ruleId, m.fix?.text, severity(m)]), [["spoken-spelling", "می‌کنه", 0]]);
+        assert.deepStrictEqual(msgs.filter((m) => at(USER_SPOKEN, m) === "میکنه").map((m) => m.ruleId), []);
+        const all = await makeLint(kernel, DEFAULT_SETTINGS)(USER_SPOKEN);
+        const mk = all.filter((m) => at(USER_SPOKEN, m) === "میکنه");
+        assert.deepStrictEqual(mk.map((m) => [m.ruleId, m.fix?.text, severity(m), isAuto(m, USER_SPOKEN)]), [["spoken-spelling", "می‌کنه", 0, true]]);
     });
 
     it("cards in a mark: the red one first (severity, then precedence); the mark's colour is the first card's", async () => {

@@ -15,7 +15,8 @@ import { START, END, LETTER, ZWNJ } from "../util/persian";
 import { spellingCheck } from "../util/speller";
 import { spoken, knownish, registerSegments, spokenAt } from "../util/colloquial";
 import { gozarCorrection } from "./gozar";
-import { MISSPELLED } from "./misspellings";
+import { MISSPELLED, misspelledHomophone } from "./misspellings";
+import { handledByShortcuts } from "./typing-shortcuts";
 import { FARHANG, FARHANG_OVERRIDES } from "../util/words";
 import { verbForm } from "./mi-prefix";
 import compounds from "../dict/compounds.json";
@@ -54,7 +55,7 @@ export default createPatternRule(() => ({
                 // the same unknown word twice in a paragraph is a name or a term, not a typo
                 if (m.input.split(m[0]).length > 2) return null;
                 // the gozar and misspellings rules correct these with the book's page
-                if (gozarCorrection(m[0]) || MISSPELLED.has(m[0])) return null;
+                if (gozarCorrection(m[0]) || MISSPELLED.has(m[0]) || misspelledHomophone(m[0]) || handledByShortcuts(m[0])) return null;
                 // a spoken form («چمدون‌های»، «میگه»، «خانما»، «کلاهتو»): fine in a spoken sentence; in a
                 // written one the spoken-word rule offers the written form (blue) where it is sure of it,
                 // and a typo guess would be absurd anyway (a known word with a spoken ending)

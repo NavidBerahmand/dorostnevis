@@ -25,10 +25,11 @@ const SOURCE = "فرهنگ املایی خطّ فارسی";
 
 /**
  * Ordinary words (and names) that share their letters with a dictionary
- * compound: «آشکار» is not «آش‌کار», «بینا» is not «بی‌نا». Found by
+ * compound: «آشکار» is not «آش‌کار», «بینا» is not «بی‌نا», «خونده» (spoken «خوانده») is not
+ * «خون‌ده», «نیکخواه» (a surname) is not «نیک‌خواه» (1.6.0). Found by
  * listing every common word the dictionary would split (see README).
  */
-const HOMOGRAPHS = new Set(["آشکار", "بینا", "بلبل", "سنگسر", "جهانگیر", "جهانبخش", "ایرانمهر", "شیء"]);
+const HOMOGRAPHS = new Set(["آشکار", "بینا", "بلبل", "سنگسر", "جهانگیر", "جهانبخش", "ایرانمهر", "شیء", "خونده", "نیکخواه"]);
 /** Joined «اینهمه/آنهمه»: «این‌همه» or «این همه» is a reading; word-spacing asks (one card, 1.5.2). */
 const ASKED_ELSEWHERE = new Set(["اینهمه", "آنهمه"]);
 

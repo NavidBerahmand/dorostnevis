@@ -26,14 +26,16 @@
  *   دست نمی‌دهند؛ ص ۱۹ و ۳۰). «می‌تونم» درست است، چون یک هجا کم می‌شود.
  *
  * Since 1.5.1, a replacement that changes the writer's letters («اومدم» ← «آمدم»، «خانما» ←
- * «خانم‌ها»، «یه» ← «یک») is a suggestion (yellow, with its button, never in «درست‌کن»): the
- * writer may keep the dialogue as it is said. One that only adds the half-space and keeps the
- * letters («خالهم» ← «خاله‌م»، «تهش» ← «ته‌ش») is the spelling of the spoken form: red.
+ * «خانم‌ها»، «یه» ← «یک») is the writer's choice, never in «درست‌کن»: the writer may keep the
+ * dialogue as it is said. Since 1.6.0 it is a recommendation (blue, «پیشنهاد»; yellow in 1.5.1),
+ * «رو» before a noun also offers «روی», and no verb is «completed» into a word that is not one
+ * («می‌گن» ← «می‌گند»، «میشن» ← «میش‌اند»، «واقعن» ← «واقع‌اند»). One that only adds the half-space
+ * and keeps the letters («خالهم» ← «خاله‌م»، «تهش» ← «ته‌ش») is the spelling of the spoken form: red.
  */
 import { createPatternRule } from "../../../textlint-rule-preset-farhangestan/src/util/pattern-rule";
 import { START, END, LETTER, ZWNJ } from "../../../textlint-rule-preset-farhangestan/src/util/persian";
 import { KNOWN } from "../../../textlint-rule-preset-farhangestan/src/util/words";
-import { isPresentStem, verbForm } from "../../../textlint-rule-preset-farhangestan/src/rules/mi-prefix";
+import { isPresentStem, verbForm, isParticiple } from "../../../textlint-rule-preset-farhangestan/src/rules/mi-prefix";
 import { endsWithSilentHe } from "../../../textlint-rule-preset-farhangestan/src/util/words";
 import hazmAdjectives from "../../../textlint-rule-preset-farhangestan/src/dict/hazm-adjectives.json";
 import commonNouns from "../../../textlint-rule-preset-farhangestan/src/dict/hazm-common-nouns.json";
@@ -89,24 +91,37 @@ const SPOKEN_PAST: Record<string, string> = {
     "رسوندید": "رساندید"
 };
 
-/** Present stems as people say them («می‌گن» from گفتن), besides Hazm's list. */
-const SPOKEN_STEMS = new Set(["گ", "ر", "آ", "ش", "د", "تون", "خوا", "ذار", "زار", "کن", "خور", "خواب"]);
+/**
+ * Present stems as people say them, besides Hazm's list, whose written plural is the spoken stem +
+ * «ند» («می‌تونن» → «می‌تونند»، «می‌ذارن» → «می‌ذارند»). Not «گ، ر، ش، د، آ، خوا» (1.6.0): «می‌گند»،
+ * «می‌رند»، «می‌شند»، «می‌دند»، «می‌آند»، «می‌خواند» are not words (the written forms are «می‌گویند،
+ * می‌روند…», another verb form, not the spoken one kept in full).
+ */
+const SPOKEN_STEMS = new Set(["تون", "ذار", "کن", "خور", "خواب"]);
 
 /** Letters only, without the half-space. */
 const letters = (s: string) => s.replace(/‌/g, "");
 /**
  * A replacement that writes the spoken word in another form (the formal one, or the book's
- * fuller one) is the writer's choice: yellow. Only the half-space added: red (1.5.1).
+ * fuller one) is the writer's choice: in dialogue it is not an error, a recommendation (blue,
+ * since 1.6.0; yellow in 1.5.1). Only the half-space added: red (1.5.1).
  */
 const choiceUnlessSpelling = ({ pattern, check }: PatternCheck): PatternCheck => ({
     pattern,
     check: (m) => {
         const r = check(m);
-        if (!r || r.fix === false || r.replacement === undefined) return r;
+        if (!r || r.replacement === undefined) return r;
         const from = m[0].slice(r.start ?? 0, r.end ?? m[0].length);
-        return letters(from) === letters(r.replacement) ? r : { ...r, fix: false };
+        if (r.fix !== false && letters(from) === letters(r.replacement)) return r;
+        return { ...r, fix: false, kind: "suggestion" };
     }
 });
+/** «ارزو»، «ادما»: a word whose «آ» was left out, not a spoken form (typing-shortcuts' «آ»). */
+const maddLeftOut = (w: string) => w.startsWith("ا") && KNOWN.has("آ" + w.slice(1)) && !KNOWN.has(w);
+/** «بدنیا» = «به دنیا»، «بخونه» = «به خونه»: «به» run into a common word. */
+const beRunIn = (w: string) => w.startsWith("ب") && !w.startsWith("به") && (corpusBucket(w.slice(1)) ?? -1) >= 9 && !KNOWN.has(w);
+/** Tanvin written with «ن» («واقعن»، «اصلن»): the lexicon's «واقعاً»، never «واقع‌اند» (1.6.0). */
+const TANVIN_N = new Set<string>(arabic.entries.filter((e) => e.to.endsWith("اً")).flatMap((e) => e.from).filter((f) => f.endsWith("ن")));
 
 export default createPatternRule(() => ({
     source: BOOK,
@@ -128,6 +143,10 @@ export default createPatternRule(() => ({
             pattern: new RegExp(`${START}((?:ن?می${ZWNJ}?)?)(${LETTER}+?)ن${END}`, "g"),
             check: (m) => {
                 const [, mi, stem] = m;
+                // «نیستن، هستن» → «نیستند، هستند» (1.6.0: not «نیست‌اند»)
+                if (!mi && (stem === "نیست" || stem === "هست")) {
+                    return { message: `«ند» را کامل بنویسید: «${stem}ند»`, replacement: stem + "ند", source: `${BOOK}، ص ۴۰–۴۱` };
+                }
                 const isVerb = (mi && (isPresentStem(stem) || SPOKEN_STEMS.has(stem))) || stem === "باش";
                 if (!isVerb) return null;
                 const fixed = (mi ? mi.replace(/^(ن?می)(?!‌)/, "$1‌") : "") + stem + "ند";
@@ -155,6 +174,8 @@ export default createPatternRule(() => ({
                 const word = m[0];
                 const stem = m[1];
                 if (KNOWN.has(word) || !KNOWN.has(stem) || prepAndWord(word)) return null; // «ازتو» = «از تو»
+                // «هارو»، «کتابارو»: «ها/ا» + «رو» run together, not «هار» + «را»; «ارزو» is «آرزو» (1.6.0)
+                if (/(ها|ا)رو$/.test(word) || maddLeftOut(word) || beRunIn(word)) return null;
                 if ("اوی".includes(stem[stem.length - 1])) return null; // «دریا رو»: here «را» keeps its «ر» anyway
                 // «روشو» is «رویش را» as much as «روش را»: a stem that is also a word ending in a vowel + a pronoun
                 if (/[شتم]$/.test(stem) && /[اوی]$/.test(stem.slice(0, -1)) && KNOWN.has(stem.slice(0, -1))) return null;
@@ -172,6 +193,7 @@ export default createPatternRule(() => ({
                 const stem = m[1];
                 // «بیا» is a verb, not «بی» + «ا»: short stems are too ambiguous
                 if (KNOWN.has(m[0]) || !KNOWN.has(stem) || stem.endsWith("ه") || stem.length < 3 || twoWords(m[0]) || TANVIN_BARE.has(m[0])) return null;
+                if (maddLeftOut(m[0]) || beRunIn(m[0])) return null; // «ادما» = «آدما»، «بدنیا» = «به دنیا» (1.6.0)
                 const fixed = "اآدذرزژو".includes(stem[stem.length - 1]) ? stem + "ها" : stem + ZWNJ + "ها";
                 return {
                     message: `نشانۀ جمع را کامل بنویسید؛ «${fixed}» خودبه‌خود «${m[0]}» خوانده می‌شود`,
@@ -243,6 +265,10 @@ export default createPatternRule(() => ({
                 const stem = m[1];
                 // «حفظ کنن» is «کنند», a verb: not «کن» + «اند»
                 if (KNOWN.has(m[0]) || verbForm(m[0]) || isPresentStem(stem) || !(ADJECTIVES.has(stem) || COMMON_NOUNS.has(stem))) return null;
+                // «میشن»، «میخوان»: a spoken verb, not «میش» + «اند»; «واقعن»: the tanvin; «نیستن»: «نیستند» (1.6.0)
+                // «بتونن»، «نرن»: a subjunctive, not «بتون» + «اند»
+                if (/^[بن]/.test(m[0]) && (isPresentStem(stem.slice(1)) || /^(تون|گ|ش|ذار|ر|د|خوا|دون|خون)$/.test(stem.slice(1)))) return null;
+                if (/^ن?می/.test(m[0]) || stem === "نیست" || stem === "هست" || TANVIN_N.has(m[0]) || maddLeftOut(m[0]) || beRunIn(m[0])) return null;
                 if (stem.endsWith("ه") || stem.endsWith("ا") || stem.endsWith("و") || stem.endsWith("ی")) return null;
                 const fixed = "اآدذرزژو".includes(stem[stem.length - 1]) ? stem + "ند" : stem + ZWNJ + "اند";
                 return { message: `«اند» را کامل بنویسید: «${fixed}»`, replacement: fixed, source: `${BOOK}، ص ۴۰–۴۱` };
@@ -266,11 +292,26 @@ export default createPatternRule(() => ({
                     "اونو": "«آن را» یا «او را»",
                     "اون": "«آن» یا «او» (برای «او» صورت شکسته لازم نیست؛ ص ۲۹)",
                     "رو": "اگر «را»ست، «را» بنویسید (ص ۲۵)",
-                    "صب": "اگر «صبر» است، کامل بنویسید (ص ۴۲)"
+                    "صب": "اگر «صبر» است، کامل بنویسید (ص ۴۲)؛ اگر «صبح» است، «صبح»"
                 };
-                const choices: Record<string, string[]> = { "اونو": ["آن را", "او را"], "اون": ["آن", "او"], "رو": ["را"], "صب": ["صبر"] };
+                const choices: Record<string, string[]> = { "اونو": ["آن را", "او را"], "اون": ["آن", "او"], "رو": ["را"], "صب": ["صبر", "صبح"] };
+                // «تا صب»، «ساعت ۸ صب»: «صبح» (1.6.0)
+                if (m[1] === "صب" && /(?:^|\s)(تا|از|هر|امروز|فردا|دیروز|ساعت|[0-9۰-۹]+)\s+$/.test(m.input.slice(Math.max(0, m.index - 12), m.index))) choices.صب = ["صبح", "صبر"];
+                // about one «رو» in ten is «روی» (1.6.0): before a noun («رو میز»), «روی» as a second answer,
+                // first at the start of a sentence or after a preposition or a verb («نشست رو صندلی»)
+                if (m[1] === "رو") {
+                    const next = m.input.slice(m.index + 2).match(/^ +([\p{L}‌]+)/u)?.[1] ?? "";
+                    const prev = m.input.slice(0, m.index).match(/([\p{L}‌]+) +$/u)?.[1] ?? "";
+                    // not after a pronoun («ما رو»، «اون رو»: the object) nor before a participle («رو برآورده»)
+                    const pronounBefore = /^(من|تو|او|ما|شما|اون|این|اونا|اینا|آن|آنها|ایشون|خودم|خودت|خودش|همه|همشون)$/.test(prev);
+                    if (next && COMMON_NOUNS.has(next) && !verbForm(next) && !isParticiple(next) && !pronounBefore) {
+                        const roy = !prev || /^(و|از|به|تو|که|برو|بذار|بذارش|بشین|نشست|افتاد|گذاشت|گذاشتم|بود|هست|نشستم)$/.test(prev) || !!verbForm(prev);
+                        choices.رو = roy ? ["روی", "را"] : ["را", "روی"];
+                    }
+                }
                 const [first, ...rest] = choices[m[1]];
-                return { message: hints[m[1]], replacement: first, alternatives: rest, fix: false, source: BOOK };
+                const hint = rest.includes("روی") || first === "روی" ? "اگر «را»ست، «را» بنویسید (ص ۲۵)؛ اگر «روی» است، «روی»" : hints[m[1]];
+                return { message: hint, replacement: first, alternatives: rest, fix: false, source: BOOK };
             }
         }
     ] as PatternCheck[]).map(choiceUnlessSpelling)
