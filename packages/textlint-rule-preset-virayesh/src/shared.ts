@@ -6,7 +6,7 @@ export { createPatternRule } from "../../textlint-rule-preset-farhangestan/src/u
 export type { PatternResult } from "../../textlint-rule-preset-farhangestan/src/util/pattern-rule";
 export { START, END, LETTER, ZWNJ, WORD } from "../../textlint-rule-preset-farhangestan/src/util/persian";
 
-export const SOURCE = (topic: string) => `ویرایش زبانی، ${topic}؛ توصیهٔ رایج ویراستاران، در دستور خط نیامده`;
+export const SOURCE = (topic: string) => `ویرایش زبانی، ${topic}؛ توصیۀ رایج ویراستاران، در دستور خط نیامده`;
 
 /** «می‌گیرد»، «می گیرد»، «میگیرد» all match; spaces and ZWNJs inside a key are optional. */
 export function flex(s: string): string {

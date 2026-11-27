@@ -78,7 +78,7 @@ export default createPatternRule(() => ({
             pattern: new RegExp(`${START}(${[...TENS, ...HUNDREDS, ...BIG].join("|")})(?:${ZWNJ}?و${ZWNJ}?| و${ZWNJ}|${ZWNJ}و )(${NUMBER_WORDS.join("|")}|${BIG.join("|")})${END}`, "g"),
             check: (m) => {
                 const fixed = `${m[1]} و ${m[2]}`;
-                return { message: `اجزای عدد واودار با فاصلهٔ کامل نوشته می‌شوند: «${fixed}»`, replacement: fixed };
+                return { message: `اجزای عدد واودار با فاصلۀ کامل نوشته می‌شوند: «${fixed}»`, replacement: fixed };
             }
         },
         {
@@ -86,7 +86,7 @@ export default createPatternRule(() => ({
             pattern: new RegExp(`(?<![۰-۹0-9])([۰-۹0-9]+)[ ${ZWNJ}](${NUMBER_COMPOUNDS.join("|")})${END}`, "g"),
             check: (m) => {
                 const fixed = m[1] + m[2];
-                return { message: `واژهٔ مرکّب با عدد پیوسته نوشته می‌شود: «${fixed}»`, replacement: fixed };
+                return { message: `واژۀ مرکّب با عدد پیوسته نوشته می‌شود: «${fixed}»`, replacement: fixed };
             }
         },
         {

@@ -10,7 +10,7 @@
  *   «ه»ی غیرملفوظ:   خسته‌ام، خسته‌اند؛ خانه‌ام، خانه‌شان؛ خانه‌ای
  *   «ی»:              ایرانی‌ام، ایرانی‌اند؛ کشتی‌ام، کشتی‌شان؛ کشتی‌ای
  *
- * چه چیزهایی گرفته می‌شود (همه وقتی جزء دوم با فاصلهٔ کامل جدا افتاده):
+ * چه چیزهایی گرفته می‌شود (همه وقتی جزء دوم با فاصلۀ کامل جدا افتاده):
  * - پس از «ه»ی غیرملفوظ و «ی»: «خسته ام» ← «خسته‌ام»، «خانه شان» ← «خانه‌شان»،
  *   «کشتی ای» ← «کشتی‌ای».
  * - پس از صامت: «کتاب اش» ← «کتابش»، «برادر ام» ← «برادرم»، «پاک اند» ← «پاک‌اند».
@@ -72,7 +72,7 @@ function afterHeOrYeh(word: string, ending: string, next?: string): PatternResul
         return null;
     }
     const fixed = word + ZWNJ + ending;
-    const where = word.endsWith("ه") ? "«ه»ی غیرملفوظ" : "کلمهٔ مختوم به «ی»";
+    const where = word.endsWith("ه") ? "«ه»ی غیرملفوظ" : "کلمۀ مختوم به «ی»";
     return { message: `«${ending}» پس از ${where} با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, source: sourceOf(ending) };
 }
 
@@ -110,7 +110,7 @@ export default createPatternRule(() => ({
             // «شده‌است» → «شده است»
             pattern: new RegExp(`(?<=${LETTER})${ZWNJ}+است${END}`, "g"),
             check: () => ({
-                message: "«است» با فاصلهٔ کامل از کلمهٔ پیش از خود نوشته می‌شود، نه با نیم‌فاصله",
+                message: "«است» با فاصلۀ کامل از کلمۀ پیش از خود نوشته می‌شود، نه با نیم‌فاصله",
                 replacement: " است",
                 source: S_COPULA
             })
@@ -135,7 +135,7 @@ export default createPatternRule(() => ({
             check: (m) => {
                 if (!known(m[1])) return null;
                 const fixed = m[1] + m[2];
-                return { message: `«${m[2]}» به کلمهٔ پیش از خود می‌چسبد: «${fixed}»`, replacement: fixed, source: sourceOf(m[2]) };
+                return { message: `«${m[2]}» به کلمۀ پیش از خود می‌چسبد: «${fixed}»`, replacement: fixed, source: sourceOf(m[2]) };
             }
         },
         {

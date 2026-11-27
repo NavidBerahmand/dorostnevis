@@ -44,7 +44,7 @@ export default createPatternRule(() => ({
                 }
                 const start = (m[1] ?? "").length;
                 return {
-                    message: `«${prefix}» بی‌فاصله به کلمهٔ بعد می‌چسبد: «${prefix}${next}»`,
+                    message: `«${prefix}» بی‌فاصله به کلمۀ بعد می‌چسبد: «${prefix}${next}»`,
                     replacement: prefix + next,
                     start
                 };

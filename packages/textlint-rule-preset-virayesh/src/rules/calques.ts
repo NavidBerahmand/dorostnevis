@@ -1,7 +1,7 @@
 /*
  * ترجمه‌زدگی (پیشنهاد)
  *
- * - «در رابطه با» (in relation to) ← «دربارهٔ»
+ * - «در رابطه با» (in relation to) ← «دربارۀ»
  * - «به چالش کشیدن» (to challenge) ← «زیر سؤال بردن، نقد کردن، به مبارزه طلبیدن»
  * - «در راستای» (in line with) ← «برای، در جهتِ، همسو با»
  * - «آتش گشودن» (to open fire) ← «تیراندازی کردن، شلیک کردن، آتش کردن»
@@ -16,7 +16,7 @@ const OPEN_FIRE: Record<string, string> = {
 };
 
 export default createPatternRule<{ ezafe?: "he-yeh" | "he-hamza" }>((options) => {
-    const darbare = options.ezafe === "he-yeh" ? "دربارۀ" : "دربارهٔ";
+    const darbare = options.ezafe === "he-hamza" ? "دربارهٔ" : "دربارۀ";
     return {
         source: SOURCE("ترجمه‌زدگی"),
         checks: [
@@ -63,7 +63,7 @@ export default createPatternRule<{ ezafe?: "he-yeh" | "he-hamza" }>((options) =>
                 check: (m) => {
                     const verb = OPEN_FIRE[m[1].replace(/[ ‌]/g, "")];
                     return verb ? {
-                        message: `«آتش گشودن» ترجمهٔ لفظ‌به‌لفظ open fire است؛ «تیراندازی ${verb}»، «شلیک ${verb}» یا «آتش ${verb}»`,
+                        message: `«آتش گشودن» ترجمۀ لفظ‌به‌لفظ open fire است؛ «تیراندازی ${verb}»، «شلیک ${verb}» یا «آتش ${verb}»`,
                         replacement: `تیراندازی ${verb}`,
                         source: "غلط ننویسیم، ابوالحسن نجفی، ص ۲–۳",
                         certain: true

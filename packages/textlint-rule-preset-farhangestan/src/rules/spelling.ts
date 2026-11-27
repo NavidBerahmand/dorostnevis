@@ -1,16 +1,19 @@
 /*
  * غلط تایپی (خارج از دستور خط)
  *
- * کلمه‌ای که در واژه‌نامه نیست و یک کلمهٔ پرکاربرد با یک حرف تفاوت به آن
- * نزدیک است: «طایقه» ← «طایفه»، «منثره» ← «منظره»؛ یا دو کلمهٔ چسبیده:
- * «درکانادا» ← «در کانادا». فقط پیشنهاد، بدون اصلاح خودکار: نام‌های خاص و
+ * کلمه‌ای که در واژه‌نامه نیست و یک کلمۀ پرکاربرد با یک حرف تفاوت به آن
+ * نزدیک است: «طایقه» ← «طایفه»، «منثره» ← «منظره»؛ یا دو کلمۀ چسبیده:
+ * «درکانادا» ← «در کانادا» (از ۱.۵.۰ فقط نامزدی که از معیار کیفیت بگذرد: util/speller.ts؛
+ * وگرنه فقط «در واژه‌نامه نیست»، بی جایگزین؛ و شکل گفتاری «چمدون» غلط تایپی نیست:
+ * util/colloquial.ts). فقط پیشنهاد، بدون اصلاح خودکار: نام‌های خاص و
  * کلمه‌های تازه هم در واژه‌نامه نیستند. واژه‌نامه: شکل‌هایی که دست‌کم سه
- * بار در ویکی‌پدیای فارسی آمده‌اند، به‌اضافهٔ Hazm و فرهنگ املایی
+ * بار در ویکی‌پدیای فارسی آمده‌اند، به‌اضافۀ Hazm و فرهنگ املایی
  * (scripts/spelling/).
  */
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, ZWNJ } from "../util/persian";
-import { spellingSuggestions } from "../util/speller";
+import { spellingCheck } from "../util/speller";
+import { spoken, knownish, registerSegments, spokenAt } from "../util/colloquial";
 import { gozarCorrection } from "./gozar";
 import { MISSPELLED } from "./misspellings";
 import { FARHANG, FARHANG_OVERRIDES } from "../util/words";
@@ -33,13 +36,13 @@ function written(s: string): string | null {
     if (listed) return listed;
     const key = s.replace(new RegExp(ZWNJ, "g"), "");
     const f = FARHANG_OVERRIDES[key] ?? FARHANG[key]?.[0];
-    if (f && f.replace(new RegExp(ZWNJ, "g"), "") === key) return f.replace(/ۀ/g, "هٔ");
+    if (f && f.replace(new RegExp(ZWNJ, "g"), "") === key) return f.replace(/هٔ/g, "ۀ");
     const mi = s.match(/^(ن?می)([^\u200c].+)$/);
     if (mi && verbForm(mi[2])) return mi[1] + ZWNJ + mi[2];
     return s;
 }
 
-const SOURCE = "غلط‌یاب (واژه‌نامهٔ ساخته‌شده از ویکی‌پدیای فارسی؛ در دستور خط نیامده)";
+const SOURCE = "غلط‌یاب (واژه‌نامۀ ساخته‌شده از ویکی‌پدیای فارسی؛ در دستور خط نیامده)";
 
 export default createPatternRule(() => ({
     source: SOURCE,
@@ -52,9 +55,25 @@ export default createPatternRule(() => ({
                 if (m.input.split(m[0]).length > 2) return null;
                 // the gozar and misspellings rules correct these with the book's page
                 if (gozarCorrection(m[0]) || MISSPELLED.has(m[0])) return null;
-                const raw = spellingSuggestions(m[0]);
-                const s = raw ? [...new Set(raw.map(written).filter((x): x is string => !!x && x !== m[0]))] : null;
-                if (!s || !s.length) return null;
+                // a spoken form («چمدون‌های»، «میگه»، «خانما»، «کلاهتو»): fine in a spoken sentence; in a
+                // written one the spoken-word rule offers the written form (blue) where it is sure of it,
+                // and a typo guess would be absurd anyway (a known word with a spoken ending)
+                const inSpoken = spokenAt(registerSegments(m.input), m.index);
+                if (spoken(m[0])) return null;
+                // «توصورتم» in a spoken sentence: «تو صورتم» (the spoken-spelling rule)
+                if (/^تو/.test(m[0]) && knownish(m[0].slice(2)) && inSpoken) return null;
+                // a short word run into a spoken one: «بااون» → «با اون» (not «براون»)
+                const run = m[0].match(/^(با|از|به|که|تو|رو|این|اون|یه|در)(.{3,})$/);
+                const rest = run ? spoken(run[2]) : null;
+                if (run && rest && !rest.hint) {
+                    const two = run[1] + " " + run[2];
+                    return { message: `«${m[0]}» در واژه‌نامه نیست؛ شاید «${two}»`, replacement: two, fix: false };
+                }
+                const r = spellingCheck(m[0], inSpoken);
+                if (!r) return null;
+                if ("note" in r) return { message: `«${m[0]}» در واژه‌نامه نیست`, fix: false };
+                const s = [...new Set(r.suggestions.map(written).filter((x): x is string => !!x && x !== m[0]))];
+                if (!s.length) return { message: `«${m[0]}» در واژه‌نامه نیست`, fix: false };
                 const others = s.slice(1).map((x) => `«${x}»`).join("، ");
                 return {
                     message: `«${m[0]}» در واژه‌نامه نیست؛ شاید «${s[0]}»${others ? ` (یا ${others})` : ""}`,

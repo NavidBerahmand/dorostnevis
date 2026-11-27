@@ -106,12 +106,22 @@ const DIALOGUE = [
     "من فاطمه را تربيت می‌كردم وبه او آداب زندگی می آموختم.",
     "پا یم درد می‌کند و مى‌شود رفت."
 ];
+/** Spoken text, found as such by the page (1.5.0): the user's report, stories with dialogue. */
+const SPOKEN = [
+    "میرم سمت صندوق و کارت رو میدم به خانم صندوقدار با لبخند میگه: مبارکت باشه عزیزم رمزت رو وارد کن لطفاً. کارت رو پس می‌گیرم. از سه هفته پیش ۲۰۰ تومان گرون تر شده.\nمیگم: خانما همگی خسته نباشید خدا نگهدار.\nاز در خروجی سالن اومدم بیرون. باد سرد زد توصورتم. برای بار هزارم چمدون‌های تامی و تیلی هر دو روی لحاف و زیر پامون",
+    "برای بار هزارم چمدون‌های تامی و تیلی هر دو روی لحاف و زیر پامون بود.",
+    "او به خانه رفت و در را بست. مادرش گفت: «کجا بودی؟ دیگه نمیدونم باهات چیکار کنم.» پسر جواب نداد.",
+    "ـ اومدی؟ بیا تو، غذات سرد شد.\nـ نه، میرم خونه. فردا میام.\nاو کتاب را برداشت و رفت.",
+    "در جلسهٔ امروز گرون شدن قیمت‌ها بررسی شد و چمدون‌های مسافران را گشتند.",
+    "خانهٔ او و خانۀ ما و فرماندهٔ سپاه و فرماندۀ لشکر و برنامه ی روزانه و خانه‌ٔ پدری."
+];
 
 describe("no ping-pong: no rule takes back another's fix", function () {
-    for (const [mode, texts] of [["formal", CASES], ["dialogue", [...CASES.slice(0, 26), ...DIALOGUE]]] as const) {
-        it(`${mode}: ${texts.length} texts`, async () => {
+    // the register as the page finds it, and every text read as spoken (any sentence may be)
+    for (const [register, texts] of [["auto", [...CASES, ...DIALOGUE, ...SPOKEN]], ["spoken", [...CASES.slice(0, 26), ...DIALOGUE, ...SPOKEN]]] as const) {
+        it(`${register}: ${texts.length} texts`, async () => {
             const problems: string[] = [];
-            for (const t of texts) problems.push(...(await pingPong(t, { ...DEFAULT_SETTINGS, mode })));
+            for (const t of texts) problems.push(...(await pingPong(t, { ...DEFAULT_SETTINGS, register })));
             assert.deepStrictEqual(problems, [], "\n" + problems.join("\n"));
         });
     }

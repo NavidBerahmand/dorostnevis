@@ -2,8 +2,8 @@
  * کلمه‌هایی که به‌اشتباه پیوسته نوشته شده‌اند
  *
  * این قاعده چند بند کتاب را برای حالت «پیوسته‌نویسیِ نادرست» اجرا می‌کند.
- * همه یک شرط مشترک دارند: کلمه فقط وقتی اصلاح می‌شود که خودش واژهٔ
- * شناخته‌شده‌ای نباشد (نه در واژه‌نامهٔ Hazm، نه در فهرست پیوسته‌های کتاب) و
+ * همه یک شرط مشترک دارند: کلمه فقط وقتی اصلاح می‌شود که خودش واژۀ
+ * شناخته‌شده‌ای نباشد (نه در واژه‌نامۀ Hazm، نه در فهرست پیوسته‌های کتاب) و
  * اجزایش شناخته‌شده باشند.
  *
  * ۱. ترکیب‌هایی که Hazm با نیم‌فاصله می‌شناسد: «پیشبینی» ← «پیش‌بینی».
@@ -14,9 +14,9 @@
  * ۳. جزء اوّل مختوم به «ه»ی غیرملفوظ: «بهانهگیر» ← «بهانه‌گیر». (ترکیب‌ها، ب-۱۱)
  * ۴. «هم-» و پیشوندهای پیوندپذیر (برون، بوم، تک، درون، زیست، میان، نیم):
  *    «همکلاسی» ← «هم‌کلاسی»، «زیستفناوری» ← «زیست‌فناوری». (ص ۳۶–۴۰)
- * ۵. «هر» با کلمهٔ بعد: «هرروز» ← «هر روز»، جز فهرست کتاب (هرکس، هرچند…). (ص ۳۵)
+ * ۵. «هر» با کلمۀ بعد: «هرروز» ← «هر روز»، جز فهرست کتاب (هرکس، هرچند…). (ص ۳۵)
  * ۶. «به» در قیدها: «بسادگی» ← «به‌سادگی». (ص ۳۸)
- * ۷. «را» چسبیده به کلمهٔ قبل: «کتابرا» ← «کتاب را». نام‌های خاصی مثل «لورا»،
+ * ۷. «را» چسبیده به کلمۀ قبل: «کتابرا» ← «کتاب را». نام‌های خاصی مثل «لورا»،
  *    «نورا» و «کاپرا» هم به «را» ختم می‌شوند، پس یک مدل آماری کوچک
  *    (src/util/ezafe-model.ts، آموزش‌دیده روی ویکی‌پدیا) از روی کلمه‌های
  *    اطراف تصمیم می‌گیرد: از ۹۰٪ اطمینان اصلاح خودکار، از ۵۰٪ پیشنهاد. (ص ۳۵)
@@ -190,11 +190,11 @@ function check(word: string): PatternResult | null {
     if (word.endsWith("است") && !(word.endsWith("هاست") && isKnown(word.slice(0, -4)))) {
         const stem = word.slice(0, -3);
         if (isKnown(stem) && endsWithSilentHe(stem)) {
-            return { message: "«است» با فاصلهٔ کامل نوشته می‌شود", replacement: stem + " است", source: S_COPULA };
+            return { message: "«است» با فاصلۀ کامل نوشته می‌شود", replacement: stem + " است", source: S_COPULA };
         }
     }
 
-    // suffixes that always take ZWNJ (ترکیب‌ها، الف-۱، تبصرهٔ ۴): «ترشیجات» → «ترشی‌جات»
+    // suffixes that always take ZWNJ (ترکیب‌ها، الف-۱، تبصرۀ ۴): «ترشیجات» → «ترشی‌جات»
     // (and «-وار»، «-سان» (تبصرۀ ۱ و ۲) and «-خانه»، «-نامه» (تبصرۀ ۵), whose lexicalized
     // joined forms («بزرگوار»، «یکسان»، «کتابخانه») are known words and never reach here)
     for (const suffix of ["جات", "آسا", "آگین", "باره", "فام", "وش", "وار", "سان", "خانه", "نامه"]) {
@@ -204,7 +204,7 @@ function check(word: string): PatternResult | null {
             const fixed = stem + ZWNJ + suffix;
             // «مرگوش» (a place) is not «مرگ» + «وش»: the rarer suffixes are only suggested
             const rare = suffix === "وش" || suffix === "فام";
-            return { message: `«-${suffix}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, fix: rare ? false : undefined, source: "دستور خط، ترکیب‌ها، الف-۱، تبصرهٔ ۴، ص ۵۹–۶۰" };
+            return { message: `«-${suffix}» با نیم‌فاصله نوشته می‌شود: «${fixed}»`, replacement: fixed, fix: rare ? false : undefined, source: "دستور خط، ترکیب‌ها، الف-۱، تبصرۀ ۴، ص ۵۹–۶۰" };
         }
     }
 
@@ -226,7 +226,7 @@ function check(word: string): PatternResult | null {
         const rest = word.slice(2);
         if (rest.length >= 3 && isKnown(rest)) {
             return {
-                message: `«هر» معمولاً با فاصلهٔ کامل نوشته می‌شود: «هر ${rest}»`,
+                message: `«هر» معمولاً با فاصلۀ کامل نوشته می‌شود: «هر ${rest}»`,
                 replacement: "هر " + rest,
                 kind: "suggestion",
                 fix: false,
@@ -293,7 +293,7 @@ export default createPatternRule(() => ({
                 // «گندهارا»، «ویهارا» are names: fix only after a frequent word
                 const plain = root.replace(/\u200c/g, "");
                 const sure = COMMON_NOUNS.has(plain) || ADJECTIVES.has(plain);
-                return { message: `«را» با فاصلهٔ کامل نوشته می‌شود: «${fixed}»`, replacement: fixed, fix: sure ? undefined : false, source: S_RA };
+                return { message: `«را» با فاصلۀ کامل نوشته می‌شود: «${fixed}»`, replacement: fixed, fix: sure ? undefined : false, source: S_RA };
             }
         },
         {
@@ -304,7 +304,7 @@ export default createPatternRule(() => ({
                 if (!c || c.p < RA_SUGGEST) return null;
                 const fixed = m[1] + " را";
                 return {
-                    message: `«را» با فاصلهٔ کامل نوشته می‌شود: «${fixed}» (احتمال ${toPersianDigits(Math.round(c.p * 100))}٪)`,
+                    message: `«را» با فاصلۀ کامل نوشته می‌شود: «${fixed}» (احتمال ${toPersianDigits(Math.round(c.p * 100))}٪)`,
                     replacement: fixed,
                     // a rare first part may be a place or a name («نوشرا»): suggest only
                     fix: c.p >= RA_FIX && COMMON_NOUNS.has(m[1]) ? undefined : false,

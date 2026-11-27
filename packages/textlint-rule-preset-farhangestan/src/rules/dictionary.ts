@@ -1,7 +1,7 @@
 /*
  * فرهنگ املایی خطّ فارسی (فرهنگستان، ۱۳۹۴)
  *
- * برای کلمه‌هایی که دستور خط قاعدهٔ مشخصی برایشان ندارد، شکل مرجّح فرهنگ
+ * برای کلمه‌هایی که دستور خط قاعدۀ مشخصی برایشان ندارد، شکل مرجّح فرهنگ
  * املایی ملاک است. کلمه با «حروف یکسان» در فرهنگ پیدا می‌شود (نیم‌فاصله
  * نادیده گرفته می‌شود): «آبپاش»، «آب‌پاش»، «زبانشناسی»، «زبان‌شناسی».
  *
@@ -9,7 +9,7 @@
  *   دست نمی‌خورد: «نبضگاه» و «نبض‌گاه» هر دو درست‌اند.
  * - در غیر این صورت به شکل مرجّح تبدیل می‌شود: «زبانشناسی» ← «زبان‌شناسی».
  * - جایی که فرهنگ با ویراست دوم دستور خط تعارض دارد («همدرد» در فرهنگ،
- *   «هم‌درد» طبق فهرست بستهٔ «هم-» در ویراست دوم)، ویراست دوم ملاک است
+ *   «هم‌درد» طبق فهرست بستۀ «هم-» در ویراست دوم)، ویراست دوم ملاک است
  *   (src/dict/farhang-v2-overrides.json، ساخته‌شده با
  *   scripts/check-farhang-conflicts.cjs).
  * - دو مدخل با حروف یکسان و معنای متفاوت («آبرو»، «آب‌رو») فقط گزارش
@@ -51,13 +51,13 @@ export default createPatternRule(() => ({
                 if (!row) return null;
                 const [preferred, others, page] = row;
                 const override = FARHANG_OVERRIDES[key];
-                // the ezafe mark is always «هٔ» (since 1.4.0), also where the farhang prints «ۀ»
-                const target = (override ?? preferred)?.replace(/ۀ/g, "هٔ") ?? null;
+                // the ezafe mark is always «ۀ» (since 1.4.0), also where the farhang prints «ۀ»
+                const target = (override ?? preferred)?.replace(/هٔ/g, "ۀ") ?? null;
                 const seen = visibleForm(word);
                 if (target && seen === visibleForm(target)) return null;
                 if (!override && [preferred ?? "", ...others].some((f) => visibleForm(f) === seen)) {
                     // the farhang accepts this form too, with one that has a ZWNJ: «زندگینامه» / «زندگی‌نامه».
-                    // The book requires the ZWNJ when the second part is «-نامه/-خانه» (الف-۱، تبصرهٔ ۵، ص ۶۰)
+                    // The book requires the ZWNJ when the second part is «-نامه/-خانه» (الف-۱، تبصرۀ ۵، ص ۶۰)
                     // or a present stem (ب-۲، ص ۶۲). Otherwise both stand (the farhang may list them as equals).
                     if (!preferred || !preferred.includes(ZWNJ) || word.includes(ZWNJ)) return null;
                     const last = preferred.split(ZWNJ).pop()!;
@@ -66,7 +66,7 @@ export default createPatternRule(() => ({
                     return {
                         message: `این ترکیب با نیم‌فاصله نوشته می‌شود: «${preferred}»`,
                         replacement: preferred,
-                        source: suffixoid ? "دستور خط، ترکیب‌ها، الف-۱، تبصرهٔ ۵، ص ۶۰" : "دستور خط، ترکیب‌ها، ب-۲، ص ۶۲"
+                        source: suffixoid ? "دستور خط، ترکیب‌ها، الف-۱، تبصرۀ ۵، ص ۶۰" : "دستور خط، ترکیب‌ها، ب-۲، ص ۶۲"
                     };
                 }
                 const source = override
@@ -77,7 +77,7 @@ export default createPatternRule(() => ({
                         message: `این کلمه در فرهنگ به چند شکل و با معنای متفاوت آمده: «${others.join("»، «")}»`,
                         // one button per form the farhang gives, for the writer to choose by meaning
                         ...(() => {
-                            const forms = others.filter((f) => visibleForm(f) !== seen).map((f) => f.replace(/ۀ/g, "هٔ"));
+                            const forms = others.filter((f) => visibleForm(f) !== seen).map((f) => f.replace(/هٔ/g, "ۀ"));
                             return forms.length ? { replacement: forms[0], alternatives: forms.slice(1) } : {};
                         })(),
                         fix: false,

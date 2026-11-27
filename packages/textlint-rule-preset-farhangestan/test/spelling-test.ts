@@ -13,3 +13,38 @@ new TextLintTester().run("spelling", rule, {
     ],
     invalid: [one("طایقه بزرگی بودند."), one("منظره و منثره"), one("او درکانادا زندگی می‌کند."), one("غرمجاز است.")]
 });
+
+// 1.5.0: spoken forms are not typos; suggestions pass a quality bar, else a note without a replacement
+import assert from "assert";
+import { spellingCheck, editCost, nearLetters } from "../src/util/speller";
+const note = (text: string) => ({ text, output: text, errors: [{ message: `«${text.split(" ")[0]}» در واژه‌نامه نیست (غلط‌یاب (واژه‌نامۀ ساخته‌شده از ویکی‌پدیای فارسی؛ در دستور خط نیامده))` }] });
+new TextLintTester().run("spelling (1.5.0)", rule, {
+    valid: [
+        "برای بار هزارم چمدون‌های تامی و تیلی هر دو روی لحاف و زیر پامون",
+        "میگم: خانما همگی خسته نباشید خدا نگهدار.",
+        "میرم خونه، گرون شده. اومدم بیرون. باد سرد زد توصورتم."
+    ],
+    invalid: [one("مفابل خانه ایستاد."), note("گرونانک آمد")]
+});
+describe("spelling: the quality bar", function () {
+    it("near keys and confused letters cost half", () => {
+        assert.ok(nearLetters("ت", "ط") && nearLetters("ق", "ف") && nearLetters("س", "ش") && !nearLetters("چ", "ن"));
+        assert.strictEqual(editCost("مفابل", "مقابل"), 0.5);
+        assert.ok(editCost("چمدونهای", "نمونهای") > 1.5 && editCost("چمدونهای", "تمدنهای") > 1.5); // beyond the bar
+    });
+    it("no absurd candidate: «چمدونهای» is not «نمونهای» or «تمدنهای»", () => {
+        const r = spellingCheck("چمدونهای");
+        const s = r && "suggestions" in r ? r.suggestions : [];
+        assert.ok(!s.includes("نمونهای") && !s.includes("تمدنهای"), JSON.stringify(r));
+    });
+    it("a candidate keeps the first letter, and a short word one letter more or less at most", () => {
+        for (const w of ["طایقه", "منثره", "مفابل"]) {
+            const r = spellingCheck(w);
+            assert.ok(r && "suggestions" in r && r.suggestions.every((c) => c[0] === w[0] || nearLetters(c[0], w[0])), w + JSON.stringify(r));
+        }
+    });
+    it("in a spoken sentence, two words run together come first: «امروزسه» → «امروز سه»، «بااون» → «با اون»", () => {
+        assert.deepStrictEqual(spellingCheck("امروزسه", true), { suggestions: ["امروز سه"] });
+        assert.deepStrictEqual(spellingCheck("بااون", true), { suggestions: ["با اون"] });
+    });
+});

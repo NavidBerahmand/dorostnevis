@@ -1,5 +1,6 @@
 /**
- * Spelling (typo) checker. Mirrors scripts/spelling/speller.py.
+ * Spelling (typo) checker. Mirrors scripts/spelling/speller.py (the quality bar of 1.5.0,
+ * below, is here only).
  *
  * A word is accepted if its letters (ZWNJ ignored: spacing is other rules'
  * job) are in the lexicon (word forms seen at least 3 times in Persian
@@ -85,7 +86,6 @@ function normalize(w: string): string {
         .replace(/^‌+|‌+$/g, "");
 }
 
-const memo = new Map<string, string[] | null>();
 
 function acceptedSkeleton(w: string, depth: number): boolean {
     const L = lex()!;
@@ -129,31 +129,106 @@ function* edits1(w: string): Generator<string> {
     }
 }
 
-function score(w: string, cand: string, bucket: number): number {
-    if (w.length === cand.length) {
-        const diff: Array<[string, string]> = [];
-        for (let i = 0; i < w.length; i++) if (w[i] !== cand[i]) diff.push([w[i], cand[i]]);
-        if (diff.length === 1 && SOUND_ALIKE.some((g) => g.includes(diff[0][0]) && g.includes(diff[0][1]))) {
-            return bucket + SOUND_ALIKE_BONUS;
+/*
+ * The quality bar for a suggestion (since 1.5.0: «چمدون‌های» was offered «نمونهای»):
+ * - one edit, or two only when one of them is a substitution of a neighbouring key or of a
+ *   letter commonly confused with it (ت/ط، س/ص/ث، ب/پ، ک/گ…): a weighted distance of at most
+ *   1.5, where such a substitution, or two letters swapped, costs 0.5 and any other edit 1;
+ * - the same first letter, unless the first letter is the one swapped for a near one;
+ * - the most frequent such word first (corpus count), a cheaper edit before a dearer one.
+ * Words the old, looser search found candidates for but none passes are still reported,
+ * without a replacement («در واژه‌نامه نیست»).
+ */
+const KEY_ROWS = ["ضصثقفغعهخحجچ", "شسیبلاتنمکگ", "ظطزرذدپو"];
+const KEY_POS = new Map<string, [number, number]>();
+KEY_ROWS.forEach((row, r) => [...row].forEach((c, i) => KEY_POS.set(c, [r, i])));
+const CONFUSED = [...SOUND_ALIKE, "بپتثنی", "جچحخ", "دذ", "رزژ", "سش", "صض", "طظ", "عغ", "فق", "کگ", "وؤ", "اآأ", "هۀة"];
+
+/** A substitution of a neighbouring key or of a commonly confused letter. */
+export function nearLetters(a: string, b: string): boolean {
+    if (CONFUSED.some((g) => g.includes(a) && g.includes(b))) return true;
+    const pa = KEY_POS.get(a);
+    const pb = KEY_POS.get(b);
+    return !!pa && !!pb && Math.abs(pa[0] - pb[0]) <= 1 && Math.abs(pa[1] - pb[1]) <= 1;
+}
+
+/** Weighted Damerau–Levenshtein: near substitutions and swaps 0.5, other edits 1 (capped). */
+export function editCost(a: string, b: string, cap = 2): number {
+    const n = a.length;
+    const m = b.length;
+    if (Math.abs(n - m) > cap) return cap + 1;
+    const d: number[][] = Array.from({ length: n + 1 }, (_, i) => Array.from({ length: m + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+    for (let i = 1; i <= n; i++) {
+        for (let j = 1; j <= m; j++) {
+            const sub = a[i - 1] === b[j - 1] ? 0 : nearLetters(a[i - 1], b[j - 1]) ? 0.5 : 1;
+            let v = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + sub);
+            if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, d[i - 2][j - 2] + 0.5);
+            d[i][j] = v;
         }
     }
-    return bucket;
+    return d[n][m];
 }
+
+/** Does `cand` pass the quality bar as a correction of `w`? Its cost, or null. */
+function passes(w: string, cand: string): number | null {
+    const c = editCost(w, cand);
+    if (c > 1.5) return null;
+    // the first letter: the same, or swapped for a near one (same length)
+    if (w[0] !== cand[0] && !(w.length === cand.length && nearLetters(w[0], cand[0]))) return null;
+    // a short word: one letter more or less at most
+    if (w.length <= 5 && Math.abs(w.length - cand.length) > 1) return null;
+    return c;
+}
+
+export type SpellResult = { suggestions: string[] } | { note: true } | null;
+const memo2 = new Map<string, SpellResult>();
 
 /** Up to three suggestions for a word the lexicon does not accept, or null. */
 export function spellingSuggestions(raw: string): string[] | null {
+    const r = spellingCheck(raw);
+    return r && "suggestions" in r ? r.suggestions : null;
+}
+
+/**
+ * The checker's answer for a word: suggestions that pass the quality bar; a note
+ * (`note`: unknown, nothing convincing to offer); or null (accepted, or no reason to doubt it).
+ */
+export function spellingCheck(raw: string, spokenSentence = false): SpellResult {
     const L = lex();
     if (!L || L.size === 0) return null;
     const word = normalize(raw);
-    const cached = memo.get(word);
+    const mk = (spokenSentence ? "s\0" : "") + word;
+    const cached = memo2.get(mk);
     if (cached !== undefined) return cached;
-    const result = suggestFor(word, L);
-    if (memo.size > 20000) memo.clear();
-    memo.set(word, result);
+    const result = checkWord(word, L, spokenSentence);
+    if (memo2.size > 20000) memo2.clear();
+    memo2.set(mk, result);
     return result;
 }
 
-function suggestFor(word: string, L: Map<string, number>): string[] | null {
+/** Short words a spoken sentence runs into the next one: «بااون»، «روعالی»، «مثلاچی». */
+const SPOKEN_FUNCTION = ["با", "رو", "تو", "از", "به", "که", "این", "اون", "یه", "هم", "چه", "چی", "مثلا", "واسه", "برای", "دیگه"];
+
+/**
+ * In a spoken sentence (1.5.0): two words run together first (any frequent first word, or a
+ * short spoken one: «امروزسه» → «امروز سه»، «بااون» → «با اون»), and one edit only.
+ */
+function checkWord(word: string, L: Map<string, number>, spokenSentence = false): SpellResult {
+    if (spokenSentence) {
+        const w = skeleton(word);
+        if (accepted(word)) return null;
+        for (let i = 2; i <= w.length - 2; i++) {
+            const a = w.slice(0, i);
+            const b = w.slice(i);
+            const aOk = SPOKEN_FUNCTION.includes(a) || (L.get(a) ?? -1) >= 11;
+            const bOk = SPOKEN_FUNCTION.includes(b) || ((L.get(b) ?? -1) >= 10 && (b.length >= 3 || (L.get(b) ?? -1) >= 12));
+            if (aOk && bOk) return { suggestions: [a + " " + b] };
+        }
+        const r = checkWord(word, L, false);
+        if (!r || !("suggestions" in r)) return r;
+        const one = r.suggestions.filter((c) => c.includes(" ") || editCost(w, skeleton(c)) <= 1);
+        return one.length ? { suggestions: one } : { note: true };
+    }
     // a function word run into the next word: «درکانادا» → «در کانادا» (checked first:
     // the affix rules would otherwise accept «در» + «کانادا» as a prefixed word)
     const sk = skeleton(word);
@@ -161,36 +236,52 @@ function suggestFor(word: string, L: Map<string, number>): string[] | null {
         for (const f of ["و", "در", "از", "به", "با", "که", "را", "این", "آن", "تا", "هر"]) {
             if (!sk.startsWith(f)) continue;
             const rest = sk.slice(f.length);
-            if (rest.length >= 3 && (L.get(rest) ?? -1) >= SPLIT_BUCKET && !verbForm(rest)) return [f + " " + rest];
+            if (rest.length >= 3 && (L.get(rest) ?? -1) >= SPLIT_BUCKET && !verbForm(rest)) return { suggestions: [f + " " + rest] };
         }
     }
     if (accepted(word)) return null;
     // Arabic names and terms with the article: «المعلی»، «الدروس»
     if (word.startsWith("ال") && word.length >= 5) return null;
     const w = skeleton(word);
-    const cands = new Map<string, number>();
+    // frequent words one edit away; two only if none of those passes (and, as before 1.5.0,
+    // the old search went two edits away for long words with nothing one edit away)
+    const loose = new Map<string, number>();
     for (const c of edits1(w)) {
         const b = L.get(c);
-        if (b !== undefined && b >= SUGGEST_BUCKET) cands.set(c, score(w, c, b));
+        if (b !== undefined && b >= SUGGEST_BUCKET) loose.set(c, b);
     }
-    if (cands.size === 0 && w.length >= 6) {
+    const pass = new Map<string, number>();
+    for (const [c, b] of loose) {
+        const cost = passes(w, c);
+        if (cost !== null) pass.set(c, b + (cost <= 0.5 ? SOUND_ALIKE_BONUS : 0));
+    }
+    if (pass.size === 0 && w.length >= 5) {
+        const oldTwo = loose.size === 0 && w.length >= 6;
         for (const c1 of edits1(w)) {
             for (const c2 of edits1(c1)) {
+                if (pass.has(c2)) continue;
                 const b = L.get(c2);
-                if (b !== undefined && b >= SUGGEST_BUCKET && !cands.has(c2)) cands.set(c2, b);
+                if (b === undefined || b < SUGGEST_BUCKET) continue;
+                if (oldTwo) loose.set(c2, b);
+                const cost = passes(w, c2);
+                if (cost !== null) pass.set(c2, b + (cost <= 1 ? 0 : -3));
             }
         }
     }
-    const out = [...cands.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c).slice(0, 3);
-    // two words run together: «درکانادا» → «در کانادا», first when it starts with a function word
+    const ranked = [...pass.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+    const out = ranked.slice(0, 3);
+    // two words run together: «درکانادا» → «در کانادا» (a function word first), or two frequent words
+    let looseSplit = false;
     for (let i = 1; i < w.length - 1; i++) {
         const a = w.slice(0, i);
         const b = w.slice(i);
         if ((FUNCTION_WORDS.has(a) || (L.get(a) ?? -1) >= SPLIT_BUCKET) && (L.get(b) ?? -1) >= SPLIT_BUCKET) {
-            if (FUNCTION_WORDS.has(a)) out.unshift(a + " " + b);
-            else out.push(a + " " + b);
+            looseSplit = true;
+            if (FUNCTION_WORDS.has(a) && b.length >= 2) out.unshift(a + " " + b);
+            else if (a.length >= 3 && b.length >= 3) out.push(a + " " + b); // «ثروتمندشدن»، not «خان ما»
             break;
         }
     }
-    return out.length ? out.slice(0, 3) : null;
+    if (out.length) return { suggestions: out.slice(0, 3) };
+    return loose.size || looseSplit ? { note: true } : null;
 }

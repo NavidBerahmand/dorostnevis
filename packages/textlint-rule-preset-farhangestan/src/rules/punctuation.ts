@@ -1,26 +1,26 @@
 /*
  * نشانه‌گذاری و حروف‌چینی
  *
- * دستور خط دربارهٔ نشانه‌گذاری قاعده‌ای ندارد. این قاعده قراردادهای رایج
+ * دستور خط دربارۀ نشانه‌گذاری قاعده‌ای ندارد. این قاعده قراردادهای رایج
  * نگارش فارسی را اجرا می‌کند (همان‌هایی که ویراستار و ویراستیار هم اجرا
  * می‌کنند)، و فقط در متن فارسی: کنار حروف لاتین، عدد انگلیسی، نشانی
  * اینترنتی و ایمیل دست نمی‌زند.
  *
  * - «,» «;» «?» ← «،» «؛» «؟»
- * - گیومهٔ انگلیسی ("…"، '…'، ''…''، “…”) ← «…»
+ * - گیومۀ انگلیسی ("…"، '…'، ''…''، “…”) ← «…»
  * - «...» ← «…»
- * - فاصله پیش از نشانه‌ها حذف، پس از آن‌ها یک فاصله؛ فاصلهٔ داخل پرانتز و گیومه حذف
+ * - فاصله پیش از نشانه‌ها حذف، پس از آن‌ها یک فاصله؛ فاصلۀ داخل پرانتز و گیومه حذف
  * - «؟؟؟» ← «؟»، «!!!» ← «!»، «!؟»/«?!» ← «؟!»
- * - چند فاصلهٔ پشت سر هم ← یک فاصله
+ * - چند فاصلۀ پشت سر هم ← یک فاصله
  * - «((…))» و «<<…>>» ← «…»
- * - دو نشانهٔ پشت سر هم («هستند،:»، «.،»، «؛.»، «؟،») ← یکی، قوی‌تر: «؟ !» بر «:»، «:» بر «.»،
+ * - دو نشانۀ پشت سر هم («هستند،:»، «.،»، «؛.»، «؟،») ← یکی، قوی‌تر: «؟ !» بر «:»، «:» بر «.»،
  *   «.» بر «؛»، «؛» بر «،» («؟!» می‌ماند)
  * - «؛» در پایان بند ← «.» یا، اگر فهرست یا توضیحی در پی است، «:» (پیشنهاد)
- * - سه‌نقطهٔ چسبیده به کلمهٔ بعد («آمد…دیوارها») ← «آمد… دیوارها»
+ * - سه‌نقطۀ چسبیده به کلمۀ بعد («آمد…دیوارها») ← «آمد… دیوارها»
  * - خط تیره میان دو واژه «—» با یک فاصله از دو طرف (سمیعی، ص ۲۳۹): «ساختمان—مثل»، «فرقه - حشاشیون»،
  *   «او ـ که» ← «… — …»؛ آغاز گفت‌وگو «— »
- * - گیومهٔ “…” درون «…» دست نمی‌خورد (الگوی «“ ”» برای نقل‌قول تودرتو)
- * - گیومه و کمانک بی‌جفت: پیشنهاد، روی خود نشانه؛ گیومهٔ باز در پایان جمله بسته می‌شود
+ * - گیومۀ “…” درون «…» دست نمی‌خورد (الگوی «“ ”» برای نقل‌قول تودرتو)
+ * - گیومه و کمانک بی‌جفت: پیشنهاد، روی خود نشانه؛ گیومۀ باز در پایان جمله بسته می‌شود
  * - پرانتز درون پرانتز: فقط پیشنهاد، توضیحِ درون کمانک در قلاب «[ ]» می‌آید
  * - رقم انگلیسی در متن فارسی ← رقم فارسی («12%» ← «۱۲٪»، «4.7» ← «۴٫۷»، «12,543» ← «۱۲٬۵۴۳»)
  *
@@ -153,7 +153,7 @@ export default createPatternRule<Options>((options) => {
                 if (inForeignToken(m.input, m.index) && !/[؀-ۿ]/.test(inner)) return null;
                 // a quotation inside «…» keeps its own marks: «او گفت “نه”»
                 if (insideGuillemets(m.input, m.index)) return null;
-                return { message: "در متن فارسی گیومهٔ فارسی «» به کار می‌رود", replacement: `«${inner.trim()}»`, source: SOURCE };
+                return { message: "در متن فارسی گیومۀ فارسی «» به کار می‌رود", replacement: `«${inner.trim()}»`, source: SOURCE };
             }
         });
     }
@@ -163,7 +163,7 @@ export default createPatternRule<Options>((options) => {
             // «((…))»، «<<…>>» used as quotation marks
             pattern: new RegExp(`\\(\\(([^()\\n]*${FA_LETTER}[^()\\n]*)\\)\\)|<<([^<>\\n]*${FA_LETTER}[^<>\\n]*)>>`, "g"),
             check: (m) => ({
-                message: "«(( ))» و «<< >>» گیومه نیستند؛ گیومهٔ فارسی «» به کار می‌رود",
+                message: "«(( ))» و «<< >>» گیومه نیستند؛ گیومۀ فارسی «» به کار می‌رود",
                 replacement: `«${(m[1] ?? m[2]).trim()}»`,
                 source: SOURCE
             })
@@ -229,7 +229,7 @@ export default createPatternRule<Options>((options) => {
                 if (!persianContext(m.input, m.index) || inForeignToken(m.input, m.index + m[0].length - 1)) return null;
                 // «آمد...دیوارها»: and a space after it, before the next word
                 const glued = new RegExp(`^${FA_LETTER}`).test(m.input.slice(m.index + m[0].length)) && m.index > 0 && /\S/.test(m.input[m.index - 1]);
-                return { message: "سه‌نقطه یک نویسه است («…») و بی‌فاصله به کلمهٔ پیش از خود می‌چسبد", replacement: glued ? "… " : "…", source: SOURCE };
+                return { message: "سه‌نقطه یک نویسه است («…») و بی‌فاصله به کلمۀ پیش از خود می‌چسبد", replacement: glued ? "… " : "…", source: SOURCE };
             }
         });
         checks.push({
@@ -271,7 +271,7 @@ export default createPatternRule<Options>((options) => {
                 const keep = STRENGTH[b] >= STRENGTH[a] ? b : a;
                 const dropsComma = (keep === a ? b : a) === "،";
                 return {
-                    message: dropsComma ? `ویرگول پیش یا پس از نشانهٔ دیگر نمی‌آید: «${keep}» کافی است` : `دو نشانه پشت سر هم: «${keep}» کافی است`,
+                    message: dropsComma ? `ویرگول پیش یا پس از نشانۀ دیگر نمی‌آید: «${keep}» کافی است` : `دو نشانه پشت سر هم: «${keep}» کافی است`,
                     replacement: keep,
                     source: SOURCE
                 };
@@ -298,7 +298,7 @@ export default createPatternRule<Options>((options) => {
             {
                 // space before a mark: «سلام ،» → «سلام،»
                 // (closing brackets are the next check's; «...» is the ellipsis check's)
-                // (not before a dot that starts a Latin token: «دامنهٔ .gt»، «فایل .pdf»)
+                // (not before a dot that starts a Latin token: «دامنۀ .gt»، «فایل .pdf»)
                 pattern: new RegExp(`(?<=[${FA}»)\\]…!؟]) +(?=(?:[،؛:!؟…]|\\.(?![.A-Za-z]))(?![0-9۰-۹]))`, "g"),
                 check: (m) => {
                     if (inForeignToken(m.input, m.index - 1)) return null;
@@ -342,7 +342,7 @@ export default createPatternRule<Options>((options) => {
                 // spaces at the end of a line (not at the end of a text node: in Markdown a
                 // node ends before a link or emphasis, and that space is real)
                 pattern: /(?<=\S)[ \t]+(?=\n)/g,
-                check: (m) => (persianContext(m.input, m.index) ? { message: "فاصلهٔ اضافه در پایان سطر", replacement: "", source: SOURCE } : null)
+                check: (m) => (persianContext(m.input, m.index) ? { message: "فاصلۀ اضافه در پایان سطر", replacement: "", source: SOURCE } : null)
             },
             {
                 // several spaces between words
@@ -363,7 +363,7 @@ export default createPatternRule<Options>((options) => {
     if (on("spacing")) {
         let placesText = "";
         let places = new Map<number, string>();
-        const WHAT: Record<string, string> = { unit: "عدد و واحدش", citation: "نشانهٔ ارجاع و شماره‌اش", date: "روز و ماه" };
+        const WHAT: Record<string, string> = { unit: "عدد و واحدش", citation: "نشانۀ ارجاع و شماره‌اش", date: "روز و ماه" };
         checks.push({
             // a no-break space where the two sides must stay on one line (1.4.0): «۲۰ درصد»، «ص ۲۳۹»، «۲۵ مهر ۱۴۰۳»
             pattern: new RegExp(`(?<=[0-9۰-۹٠-٩]|(?<![${LETTERS}])(?:${CITATIONS.join("|")}))[ \u00A0]+(?=[${LETTERS}0-9۰-۹٠-٩])`, "g"),
@@ -374,7 +374,7 @@ export default createPatternRule<Options>((options) => {
                 }
                 const what = places.get(m.index);
                 if (!what || m[0] === "\u00A0") return null;
-                return { message: `میان ${WHAT[what]} فاصلهٔ نشکن می‌آید تا در دو سطر نیفتند`, replacement: "\u00A0", source: SOURCE };
+                return { message: `میان ${WHAT[what]} فاصلۀ نشکن می‌آید تا در دو سطر نیفتند`, replacement: "\u00A0", source: SOURCE };
             }
         });
     }
@@ -385,7 +385,7 @@ export default createPatternRule<Options>((options) => {
             pattern: /(?<=[۰-۹])[,.](?=[۰-۹])/g,
             check: (m) => {
                 const fixed = m[0] === "," ? "٬" : "٫";
-                return { message: `جداکنندهٔ ${m[0] === "," ? "هزارگان" : "اعشار"} در عدد فارسی «${fixed}» است`, replacement: fixed, source: SOURCE };
+                return { message: `جداکنندۀ ${m[0] === "," ? "هزارگان" : "اعشار"} در عدد فارسی «${fixed}» است`, replacement: fixed, source: SOURCE };
             }
         });
     }
@@ -403,7 +403,7 @@ export default createPatternRule<Options>((options) => {
                 if (word.length <= 1 || /^(ام|امین|امی|مین|ین|ها|های|تا|تایی|ای|یی|ی)$/.test(word)) return null;
                 if (joinsNumber(word)) return null;
                 return {
-                    message: "میان عدد و کلمهٔ پس از آن یک فاصله می‌آید",
+                    message: "میان عدد و کلمۀ پس از آن یک فاصله می‌آید",
                     replacement: m[1] + (isUnit(word) ? "\u00A0" : " ") + word,
                     // an adjective made with the number («۵کیلویی») may be meant: only a suggestion
                     fix: /(ی|ه|گی)$/.test(word) ? false : undefined,
@@ -459,7 +459,7 @@ export default createPatternRule<Options>((options) => {
                 check: (m) => {
                     if (!persianContext(m.input, m.index)) return null;
                     const lead = m[0].match(/^[ \t]*/)![0];
-                    return { message: "خط تیرهٔ آغاز گفت‌وگو «—» است و یک فاصله پس از آن می‌آید", replacement: lead + "— ", end: m[0].length + (m.input.slice(m.index + m[0].length).match(/^ */)![0].length), source: S_DASH };
+                    return { message: "خط تیرۀ آغاز گفت‌وگو «—» است و یک فاصله پس از آن می‌آید", replacement: lead + "— ", end: m[0].length + (m.input.slice(m.index + m[0].length).match(/^ */)![0].length), source: S_DASH };
                 }
             }
         );
@@ -468,7 +468,7 @@ export default createPatternRule<Options>((options) => {
     if (on("digits")) {
         checks.push({
             pattern: /(?<=[۰-۹])%/g,
-            check: () => ({ message: "نشانهٔ درصد فارسی «٪» است", replacement: "٪", source: SOURCE })
+            check: () => ({ message: "نشانۀ درصد فارسی «٪» است", replacement: "٪", source: SOURCE })
         });
         checks.push({
             // an English number standing on its own in Persian text (not part of a Latin token)

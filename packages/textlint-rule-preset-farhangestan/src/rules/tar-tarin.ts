@@ -6,13 +6,13 @@
  *   می‌شوند، مگر در: بهتر، کهتر، مهتر، بیشتر، کمتر، کلانتر (رئیس کلانتری)
  *
  * چه چیزهایی گرفته می‌شود:
- * - «بزرگ ترین» (فاصلهٔ کامل) ← «بزرگ‌ترین». «ترین» به‌تنهایی کلمه نیست، پس امن است.
+ * - «بزرگ ترین» (فاصلۀ کامل) ← «بزرگ‌ترین». «ترین» به‌تنهایی کلمه نیست، پس امن است.
  * - «بزرگ تر از» ← «بزرگ‌تر از». «تر» به‌تنهایی صفت هم هست (لباس تر)،
  *   برای همین فقط وقتی «از» بعدش آمده اصلاح می‌شود.
  * - استثناها با نیم‌فاصله/فاصله («بیش‌تر»، «کم تر») ← پیوسته.
  *
- * - «بزرگتر»، «سریعترین» (پیوسته) ← «بزرگ‌تر»، «سریع‌ترین»، فقط وقتی پایهٔ
- *   کلمه در فهرست صفت‌های Hazm است و «Xتر» خودش واژهٔ دیگری نیست (دفتر،
+ * - «بزرگتر»، «سریعترین» (پیوسته) ← «بزرگ‌تر»، «سریع‌ترین»، فقط وقتی پایۀ
+ *   کلمه در فهرست صفت‌های Hazm است و «Xتر» خودش واژۀ دیگری نیست (دفتر،
  *   دکتر، بستر، مستتر دست نمی‌خورند).
  *
  * «کلانتر» عمداً کنار گذاشته شده، چون «کلان‌تر» (بزرگ‌تر) هم درست است.
@@ -22,6 +22,13 @@ import { START, END, LETTER, WORD, ZWNJ, joinWithHalfSpace, isNonJoining } from 
 import { isDictionaryWord } from "../util/words";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 import posTags from "../dict/ezafe-pos.json";
+import { spoken } from "../util/colloquial";
+
+/** A spoken adjective («گرون» for «گران»، since 1.5.0): «گرون تر» ← «گرون‌تر». */
+const spokenAdjective = (w: string) => {
+    const s = spoken(w);
+    return !!s && ADJECTIVES.has(s.formal);
+};
 
 
 const SOURCE = "دستور خط، «تر و ترین»، ص ۴۰";
@@ -47,7 +54,7 @@ export default createPatternRule(() => ({
             pattern: new RegExp(`${START}(${LETTER}+?)(ترین|تر)(ها|های|هایی|ی)?(?=${ZWNJ}|${END})`, "g"),
             check: (m) => {
                 const stem = m[1];
-                if (!ADJECTIVES.has(stem) || BLOCKED.has(stem)) return null;
+                if (!(ADJECTIVES.has(stem) || spokenAdjective(stem)) || BLOCKED.has(stem)) return null;
                 // after a non-joining letter the joined form is already right («جدیدتر»);
                 // a dictionary word is another word altogether («فیلتر»)
                 if (isNonJoining(stem[stem.length - 1]) || isDictionaryWord(stem + m[2])) return null;
@@ -67,7 +74,7 @@ export default createPatternRule(() => ({
             // «لباس تر را پهن کرد»: before «را» it is the adjective «wet»
             pattern: new RegExp(`${START}(${LETTER}+) +(تری|تر)${END}(?! +(?:از|را)${END})`, "g"),
             check: (m) => {
-                if (!(ADJECTIVES.has(m[1]) || ANY_ADJECTIVE.has(m[1])) || BLOCKED.has(m[1]) || NOT_A_STEM.has(m[1])) return null;
+                if (!(ADJECTIVES.has(m[1]) || ANY_ADJECTIVE.has(m[1]) || spokenAdjective(m[1])) || BLOCKED.has(m[1]) || NOT_A_STEM.has(m[1])) return null;
                 const fixed = joinWithHalfSpace(m[1], m[2]);
                 return { message: `«${m[2]}» با نیم‌فاصله/بی‌فاصله به صفت می‌چسبد: «${fixed}»`, replacement: fixed };
             }
@@ -77,7 +84,7 @@ export default createPatternRule(() => ({
             check: (m) => {
                 if (EXCEPTION_STEMS.includes(m[1]) || NOT_A_STEM.has(m[1])) return null;
                 return {
-                    message: "«ترین» با نیم‌فاصله به کلمهٔ پیش از خود می‌چسبد",
+                    message: "«ترین» با نیم‌فاصله به کلمۀ پیش از خود می‌چسبد",
                     replacement: joinWithHalfSpace(m[1].replace(/\u200c+$/, ""), m[2])
                 };
             }
@@ -87,7 +94,7 @@ export default createPatternRule(() => ({
             check: (m) => {
                 if (EXCEPTION_STEMS.includes(m[1]) || NOT_A_STEM.has(m[1])) return null;
                 return {
-                    message: "«تر» با نیم‌فاصله به کلمهٔ پیش از خود می‌چسبد",
+                    message: "«تر» با نیم‌فاصله به کلمۀ پیش از خود می‌چسبد",
                     replacement: joinWithHalfSpace(m[1], m[2])
                 };
             }

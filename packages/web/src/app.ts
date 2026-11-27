@@ -6,7 +6,7 @@ import { TextlintKernel } from "@textlint/kernel";
 import { loadSpellingLexicon } from "../../textlint-rule-preset-farhangestan/src/util/speller";
 import { openReport, sentenceAround, setupOwnerPanel, Report } from "./report";
 import {
-    Msg, Settings, lintOptions, isAuto, isStyle, isEditing, baseRule, wordAround, splitMessage, NOT_IN_BOOK, rank,
+    Msg, Settings, lintText, isAuto, isStyle, isEditing, baseRule, wordAround, splitMessage, NOT_IN_BOOK, rank,
     conflictsOf, outranked, editsOf, applyFix as applyEdit, isTentative, isCertainMsg, applyCertain, isBlue
 } from "./lint-setup";
 
@@ -18,7 +18,7 @@ const RULE_LABELS: Record<string, string> = {
     "bi-prefix": "بی-",
     "plural-ha": "ها",
     "tar-tarin": "تر/ترین",
-    "ezafe-he": "کسرهٔ اضافه",
+    "ezafe-he": "کسرۀ اضافه",
     "copula-attachment": "ام/است",
     lexicon: "فهرست‌های کتاب",
     "joined-words": "ترکیب‌ها",
@@ -39,8 +39,8 @@ const RULE_LABELS: Record<string, string> = {
     calques: "ترجمه‌زدگی",
     redundancy: "حشو",
     "repeated-words": "تکرار",
-    "long-sentences": "جملهٔ بلند",
-    invisible: "فاصله و نویسهٔ نادیدنی",
+    "long-sentences": "جملۀ بلند",
+    invisible: "فاصله و نویسۀ نادیدنی",
     "spaced-compounds": "ترکیب‌ها",
     misspellings: "غلط رایج",
     "ra-placement": "جای «را»",
@@ -191,7 +191,6 @@ const summary = $<HTMLParagraphElement>("summary");
 const showZwnj = $<HTMLInputElement>("show-zwnj");
 const pluralMode = $<HTMLSelectElement>("plural-mode");
 const haApart = $<HTMLInputElement>("ha-apart");
-const mode = $<HTMLSelectElement>("mode");
 const applyAllBtn = $<HTMLButtonElement>("apply-all");
 const copyBtn = $<HTMLButtonElement>("copy");
 const pasteBtn = $<HTMLButtonElement>("paste");
@@ -303,15 +302,15 @@ function autoKey(m: Msg, text: string): string {
 /** The page's settings, as the rules take them. */
 function settings(): Settings {
     return {
-        mode: mode.value,
+        register: "auto",
         pluralMode: pluralMode.value,
         haApart: haApart.checked,
         styleOn: (id) => styleBoxes.find((b) => b.dataset.rule === id)?.checked !== false
     };
 }
-/** The rules to run; `forFix` leaves out what «اعمال همه» must not touch; `autoOnly` keeps the automatic ones. */
-function options(forFix = false, autoOnly = false) {
-    return lintOptions(settings(), forFix, autoOnly);
+/** Lint as the page does (the register found per sentence); `autoOnly` keeps the automatic fixes. */
+function lint(text: string, autoOnly = false): Promise<Msg[]> {
+    return lintText(kernel, text, settings(), false, autoOnly);
 }
 
 function esc(s: string): string {
@@ -326,7 +325,7 @@ function show(s: string): string {
 
 /** A run of text that carries a highlighter mark, and the cards it opens. */
 type Span = { s: number; e: number; items: number[]; red: boolean; blue?: boolean; sentence?: boolean };
-/** Notes about a whole sentence («جملهٔ بلند»): their own layer, a dotted line under the sentence, never a word's highlight. */
+/** Notes about a whole sentence («جملۀ بلند»): their own layer, a dotted line under the sentence, never a word's highlight. */
 const SENTENCE_RULES = new Set(["long-sentences"]);
 const isSentenceNote = (m: Msg) => SENTENCE_RULES.has(baseRule(m.ruleId));
 /** The sentence around a report: from the mark before it to the mark after it. */
@@ -459,8 +458,8 @@ function confidenceMeter(p: number): string {
 /** A book rule applied as written: five full green circles. */
 function bookMeter(): string {
     const dots = Array.from({ length: DOTS }, () => '<span class="dot" style="background:hsl(120 70% 45%);border-color:hsl(120 70% 45%)"></span>').join("");
-    return `<div class="confidence" role="img" aria-label="قاعدهٔ صریح کتاب" title="این اصلاح را قاعدهٔ صریح کتاب می‌گوید؛ احتمالی در کار نیست.">
-                <span class="confidence-label">قاعدهٔ کتاب</span>
+    return `<div class="confidence" role="img" aria-label="قاعدۀ صریح کتاب" title="این اصلاح را قاعدۀ صریح کتاب می‌گوید؛ احتمالی در کار نیست.">
+                <span class="confidence-label">قاعدۀ کتاب</span>
                 <span class="dots">${dots}</span>
             </div>`;
 }
@@ -518,18 +517,18 @@ const isRecommendation = (m: Msg) => m.ruleId === "plural-ha" && /توصیه/.te
 /** Why a card has no circles, in a few words. */
 function noMeterReason(m: Msg): string {
     if (m.ruleId === "spelling") return "حدس غلط‌یاب است، نه قاعده";
-    if (isRecommendation(m)) return "توصیهٔ کتاب است، نه الزام";
+    if (isRecommendation(m)) return "توصیۀ کتاب است، نه الزام";
     if (m.ruleId === "may-break") return "پیشنهاد سبکی است، نه غلط";
     if (isEditing(m) && !isStyle(m)) return "خطای قطعی ویرایشی است؛ در دستور خط نیامده";
     if (m.ruleId === "punctuation" || NOT_IN_BOOK.test(splitMessage(m).source)) return "قرارداد رایج است، نه کتاب";
-    if (isStyle(m)) return "توصیهٔ ویرایشی است، نه قاعدهٔ کتاب";
+    if (isStyle(m)) return "توصیۀ ویرایشی است، نه قاعدۀ کتاب";
     return "به معنای جمله بستگی دارد";
 }
 
 function meterFor(m: Msg, p: number | null): string {
     if (p !== null) return confidenceMeter(p);
     if (m.fix && !isTentative(m) && m.ruleId !== "punctuation" && m.ruleId !== "invisible" && !isStyle(m) && !NOT_IN_BOOK.test(splitMessage(m).source)) return bookMeter();
-    return `<div class="confidence confidence-none" title="این کارت درجهٔ اطمینان ندارد: ${noMeterReason(m)}.">
+    return `<div class="confidence confidence-none" title="این کارت درجۀ اطمینان ندارد: ${noMeterReason(m)}.">
                 <span class="confidence-label">درجه ندارد</span>
                 <span class="confidence-why">${noMeterReason(m)}</span>
             </div>`;
@@ -581,14 +580,14 @@ function buildCards(text: string) {
             suggestion: fixed,
             context: sentenceAround(text, ws, we),
             comment: "",
-            mode: mode.value,
+            mode: "auto",
             at: ""
         });
         const html = `
             ${meter}
             <div class="issue-head">
                 ${labels.map((l) => `<span class="chip">${esc(l)}</span>`).join("")}
-                ${styleOnly ? '<span class="chip chip-advice">ویرایش زبانی · پیشنهاد</span>' : editingCertain ? '<span class="chip">ویرایش زبانی · غلط قطعی</span>' : certain ? "" : advice ? `<span class="chip chip-advice">${isRecommendation(m) ? "توصیهٔ کتاب · پیشنهاد" : m.ruleId === "may-break" ? "پیشنهاد سبکی" : "پیشنهاد"}</span>` : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
+                ${styleOnly ? '<span class="chip chip-advice">ویرایش زبانی · پیشنهاد</span>' : editingCertain ? '<span class="chip">ویرایش زبانی · غلط قطعی</span>' : certain ? "" : advice ? `<span class="chip chip-advice">${isRecommendation(m) ? "توصیۀ کتاب · پیشنهاد" : m.ruleId === "may-break" ? "پیشنهاد سبکی" : "پیشنهاد"}</span>` : '<span class="chip chip-judge">نیازمند تشخیص</span>'}
             </div>
             <p class="change">
                 <span class="from">${show(clip(original)) || "&nbsp;"}</span>
@@ -601,6 +600,7 @@ function buildCards(text: string) {
                     ? alts.map((x, j) => `<button type="button" class="btn btn-small" data-alt="${i}:${j}" title="جایگزین با «${esc(fixedBy(x))}»">${show(clip(fixedBy(x), 18))}</button>`).join("")
                     : m.fix ? `<button type="button" class="btn btn-small" data-apply="${i}">جایگزین</button>` : ""}
                 <button type="button" class="btn btn-small btn-quiet" data-ignore="${i}">نادیده</button>
+                ${members.some((x) => x.ruleId === "spelling") ? `<button type="button" class="btn btn-small btn-quiet" data-learn="${i}" title="«${esc(text.slice(m.range[0], m.range[1]))}» دیگر در این مرورگر علامت نمی‌خورد">افزودن به واژه‌نامه</button>` : ""}
                 <button type="button" class="btn btn-small btn-quiet btn-edit" data-edit="${i}" title="ویرایش همین واژه با صفحه‌کلید">${ICON.pencil}ویرایش</button>
                 <button type="button" class="btn btn-small btn-report" data-report="${i}">این پیشنهاد غلط است</button>
             </div>`;
@@ -622,6 +622,25 @@ function buildCards(text: string) {
 }
 
 let ignored = new Set<string>();
+
+/**
+ * واژه‌نامۀ شخصی (since 1.5.0): words the writer added from a spelling card are never marked as
+ * unknown again, in this browser («vajban:dictionary»).
+ */
+const personal = new Set<string>();
+try {
+    for (const w of JSON.parse(localStorage.getItem("vajban:dictionary") || "[]") as string[]) personal.add(w);
+} catch {
+    /* storage may be unavailable */
+}
+function learn(word: string) {
+    personal.add(word);
+    try {
+        localStorage.setItem("vajban:dictionary", JSON.stringify([...personal]));
+    } catch {
+        /* storage may be unavailable: the word is still left alone until the page is closed */
+    }
+}
 const key = (m: Msg, text: string) => `${m.ruleId}|${text.slice(m.range[0], m.range[1])}|${m.range[0]}`;
 
 // the spelling lexicon is loaded after the page; until then the rule stays quiet
@@ -641,7 +660,7 @@ async function check() {
     if (!composing) pendingAuto = "none";
     let text = input.value;
     status.textContent = "در حال بررسی…";
-    let result = await kernel.lintText(text, options());
+    let result = { messages: await lint(text) };
     if (want !== "none" && input.value === text) {
         const typing = want === "typing" && document.activeElement === box;
         const c = typing ? caret() : null;
@@ -661,7 +680,7 @@ async function check() {
                 if (batch.count) {
                     applyBatch(text, batch);
                     text = batch.text;
-                    result = await kernel.lintText(text, options());
+                    result = { messages: await lint(text) };
                 }
             }
         }
@@ -684,7 +703,7 @@ async function check() {
 
 /** What the page shows for `msgs` (a lint of `text`): not ignored, not made silently, nothing that ping-pongs. */
 async function visible(text: string, msgs: Msg[]): Promise<Msg[]> {
-    const shown = msgs.filter((m) => !ignored.has(key(m, text)) && !(autoBox.checked && isAuto(m, text) && !declined.has(autoKey(m, text))));
+    const shown = msgs.filter((m) => !(m.ruleId === "spelling" && personal.has(text.slice(m.range[0], m.range[1]))) && !ignored.has(key(m, text)) && !(autoBox.checked && isAuto(m, text) && !declined.has(autoKey(m, text))));
     return noPingPong(text, shown);
 }
 
@@ -777,7 +796,7 @@ async function autoFix(text: string, first: Msg[], guard: [number, number] | nul
     const keys: string[] = [];
     let count = 0;
     for (let round = 0; round < 5; round++) {
-        if (round > 0) msgs = (await kernel.lintText(cur, options(false, true))).messages as unknown as Msg[];
+        if (round > 0) msgs = await lint(cur, true);
         const fixes = pickAuto(msgs, cur, g);
         if (!fixes.length) break;
         for (const m of fixes) {
@@ -1038,14 +1057,17 @@ const extrasOf = (m: Msg) => extras[messages.indexOf(m)];
 let justApplied: { before: string; after: string; spans: Array<[number, number]>; rank: number } | null = null;
 const pieceCache = new Map<string, Msg[]>();
 const verdictCache = new Map<string, boolean>();
-const settingsKey = () => JSON.stringify([mode.value, pluralMode.value, haApart.checked, styleBoxes.map((b) => b.checked)]);
-/** The sentence around [s, e): from the mark before it to the mark after it (at most ~600 letters). */
+const settingsKey = () => JSON.stringify([pluralMode.value, haApart.checked, styleBoxes.map((b) => b.checked)]);
+/**
+ * The line around [s, e) (at most ~1400 letters): whether a sentence is spoken depends on the
+ * sentences beside it in its line (1.5.0), so the piece is re-linted with them.
+ */
 function pieceAround(text: string, s: number, e: number): [number, number] {
-    const END_MARK = /[.!?؟؛\n]/;
+    const END_MARK = /\n/;
     let a = s;
-    while (a > 0 && s - a < 300 && !END_MARK.test(text[a - 1])) a--;
+    while (a > 0 && s - a < 700 && !END_MARK.test(text[a - 1])) a--;
     let b = e;
-    while (b < text.length && b - e < 300 && !END_MARK.test(text[b])) b++;
+    while (b < text.length && b - e < 700 && !END_MARK.test(text[b])) b++;
     if (b < text.length) b++; // with its full stop
     return [a, b];
 }
@@ -1055,7 +1077,7 @@ async function noPingPong(text: string, msgs: Msg[]): Promise<Msg[]> {
         const k = sk + "\0" + piece;
         let r = pieceCache.get(k);
         if (!r) {
-            r = (await kernel.lintText(piece, options())).messages as unknown as Msg[];
+            r = await lint(piece);
             if (pieceCache.size > 4000) pieceCache.clear();
             pieceCache.set(k, r);
         }
@@ -1292,6 +1314,16 @@ pop.addEventListener("click", (ev) => {
             });
         });
     }
+    const ln = target.closest("[data-learn]") as HTMLElement | null;
+    if (ln) {
+        const m = messages[Number(ln.dataset.learn)];
+        const sp = [m, ...extras[Number(ln.dataset.learn)]].find((x) => x.ruleId === "spelling") ?? m;
+        learn(input.value.slice(sp.range[0], sp.range[1]));
+        void check().then(() => {
+            status.textContent = "به واژه‌نامۀ شما افزوده شد.";
+        });
+        return;
+    }
     if (ig) {
         const i = Number(ig.dataset.ignore);
         for (const x of [messages[i], ...extras[i]]) ignored.add(key(x, input.value));
@@ -1333,7 +1365,7 @@ fetch("kahroba.woff2")
 /*
  * «درست‌کن»: every red mark, and only those (since 1.4.0 the page does it itself: textlint's
  * own fixer would also make the yellow suggestions, which now carry their replacements).
- * One fix can make another possible («همه دفترهارا» → «همه دفترها را» → «همهٔ دفترها را»).
+ * One fix can make another possible («همه دفترهارا» → «همه دفترها را» → «همۀ دفترها را»).
  */
 applyAllBtn.addEventListener("click", async () => {
     status.textContent = "در حال جایگزینی…";
@@ -1344,7 +1376,7 @@ applyAllBtn.addEventListener("click", async () => {
     remember();
     let text = input.value;
     for (let round = 0; round < 3; round++) {
-        const msgs = await visible(text, (await kernel.lintText(text, options())).messages as unknown as Msg[]);
+        const msgs = await visible(text, await lint(text));
         const next = applyCertain(text, msgs);
         if (next === text) break;
         text = next;
@@ -1370,7 +1402,7 @@ applyAllBtn.addEventListener("click", async () => {
  * iOS shows its «Paste» bubble only for a user gesture.
  */
 pasteBtn.addEventListener("click", () => {
-    const denied = () => (status.textContent = "اجازهٔ خواندن حافظه داده نشد؛ متن را با نگه‌داشتن انگشت بچسبانید");
+    const denied = () => (status.textContent = "اجازۀ خواندن حافظه داده نشد؛ متن را با نگه‌داشتن انگشت بچسبانید");
     if (!navigator.clipboard?.readText) return void denied();
     const at = document.activeElement === box ? caret() : null;
     navigator.clipboard.readText().then((t) => {
@@ -1473,16 +1505,10 @@ for (const b of styleBoxes) {
         check();
     });
 }
-mode.addEventListener("change", () => {
-    try {
-        localStorage.setItem("vajban:mode", mode.value);
-    } catch {
-        /* storage may be unavailable */
-    }
-    check();
-});
+// «نوع متن» is gone (1.5.0): the register is found per sentence; the old setting is forgotten
 try {
-    mode.value = stored("mode") || "formal";
+    localStorage.removeItem("vajban:mode");
+    localStorage.removeItem("dorostnevis:mode");
 } catch {
     /* storage may be unavailable */
 }

@@ -78,7 +78,7 @@ export default createPatternRule(() => ({
             check: (m) => {
                 if (!KNOWN.has(m[1])) return null;
                 return {
-                    message: `در گفت‌وگو نشانهٔ جمع «ها» به کار می‌رود: «${m[1]}${"اآدذرزژو".includes(m[1].slice(-1)) ? "" : Z}ها»`,
+                    message: `در گفت‌وگو نشانۀ جمع «ها» به کار می‌رود: «${m[1]}${"اآدذرزژو".includes(m[1].slice(-1)) ? "" : Z}ها»`,
                     replacement: `${m[1]}${"اآدذرزژو".includes(m[1].slice(-1)) ? "" : Z}ها`,
                     fix: false,
                     source: `${BOOK}، ص ۲۳`

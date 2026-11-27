@@ -1,5 +1,5 @@
 /*
- * جملهٔ خیلی بلند و «که»ی پی‌درپی (پیشنهاد، بدون اصلاح خودکار)
+ * جملۀ خیلی بلند و «که»ی پی‌درپی (پیشنهاد، بدون اصلاح خودکار)
  *
  * - جمله‌ای با بیش از maxWords کلمه (پیش‌فرض ۴۰): شکستن آن به دو جمله
  *   خواندن را آسان می‌کند.
@@ -40,7 +40,7 @@ const rule: TextlintRuleModule<Options> = (context, options = {}) => {
                     const k = kes[maxKe];
                     const start = m.index + k.index!;
                     report(node, new RuleError(
-                        `${fa(kes.length)} «که» در یک جمله آمده است؛ جمله‌های وابستهٔ تودرتو را می‌شود جدا کرد (${source})`,
+                        `${fa(kes.length)} «که» در یک جمله آمده است؛ جمله‌های وابستۀ تودرتو را می‌شود جدا کرد (${source})`,
                         { padding: locator.range([start, start + 2]) }
                     ));
                 }

@@ -158,6 +158,9 @@
 
   /* the editor: the text itself is editable, and the marks are painted on its own words
      (::highlight), so they cannot drift off them */
+  .editor-head { display: flex; justify-content: flex-start; align-items: center; margin: -8px 0 -10px; }
+  .auto-toggle { display: inline-flex; gap: 6px; align-items: center; min-height: 32px; font-size: 0.85rem; color: var(--muted); cursor: pointer; user-select: none; }
+  .auto-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--lapis); flex: none; }
   .editor { position: relative; }
   .text {
     min-height: 12em;
@@ -187,7 +190,7 @@
   .text::highlight(vb-blue) { background-color: rgb(70 140 255 / 0.26); color: inherit; }
   .text::highlight(vb-blue-open) { background-color: rgb(50 120 240 / 0.5); color: inherit; }
   .text::highlight(vb-zwnj) { text-decoration: underline 2px #5f6549; text-underline-offset: 6px; }
-  /* a note about the whole sentence («جملهٔ بلند»): a dotted line under it, not a word's highlight */
+  /* a note about the whole sentence («جملۀ بلند»): a dotted line under it, not a word's highlight */
   .text::highlight(vb-sentence) { text-decoration: underline dotted 2px rgb(50 120 240 / 0.7); text-underline-offset: 9px; }
   .text::highlight(vb-sentence-open) { text-decoration: underline dotted 3px rgb(50 120 240); text-underline-offset: 9px; background-color: rgb(70 140 255 / 0.1); }
   :root[data-theme="dark"] .text::highlight(vb-red) { background-color: rgb(255 90 90 / 0.32); }
@@ -365,13 +368,16 @@
     <div class="bar">
       <p class="summary" id="summary" aria-live="polite">در حال بارگذاری قواعد…</p>
       <div class="toolbar">
-        <button type="button" class="btn" id="apply-all" title="جایگزینی همهٔ غلط‌های قطعی" aria-label="جایگزینی همهٔ غلط‌های قطعی">درست‌کن</button>
+        <button type="button" class="btn" id="apply-all" title="جایگزینی همۀ غلط‌های قطعی" aria-label="جایگزینی همۀ غلط‌های قطعی">درست‌کن</button>
         <button type="button" class="icon-btn" id="review" title="مرور ایرادها" aria-label="مرور ایرادها"><svg class="icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h6"/><circle cx="17.5" cy="16.5" r="3"/><path d="M19.7 18.7L22 21"/></svg></button>
         <button type="button" class="icon-btn" id="undo" title="بازگشت" aria-label="بازگشت" disabled><svg class="icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 7l5 5-5 5"/><path d="M20 12H9a5 5 0 0 0 0 10h2"/></svg></button>
         <button type="button" class="icon-btn" id="paste" title="چسباندن" aria-label="چسباندن"><svg class="icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 11h6M9 15h4"/></svg></button>
         <button type="button" class="icon-btn" id="copy" title="رونوشت" aria-label="رونوشت"><svg class="icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2"/></svg></button>
         <button type="button" class="icon-btn" id="clear" title="پاک کردن" aria-label="پاک کردن"><svg class="icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M9 7V4h6v3"/></svg></button>
       </div>
+    </div>
+    <div class="editor-head">
+      <label class="auto-toggle" title="اصلاح خودکار ایرادهای تایپی: فاصله و نیم‌فاصلۀ اشتباه، «ی» و «ک» عربی، نویسه‌های نادیدنی، گیومه و ویرگول لاتین، تنوین جاافتاده، بی‌پرسش درست می‌شوند؛ هر بار با «بازگشت» برمی‌گردد."><input type="checkbox" id="auto-fix" checked aria-label="اصلاح خودکار ایرادهای تایپی (فاصله، نیم‌فاصله، «ی» و «ک» عربی، نشانه‌های لاتین)؛ با «بازگشت» برمی‌گردد"><span>اصلاح خودکار</span></label>
     </div>
     <div class="editor" id="editor">
       <div id="text" class="text" role="textbox" aria-multiline="true" contenteditable="true" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="متن برای بررسی" data-placeholder="متن فارسی را اینجا بنویسید یا بچسبانید…"></div>
@@ -385,25 +391,18 @@
       <ol></ol>
     </details>
     <div class="options">
-      <label class="opt"><span>نوع متن</span>
-        <select id="mode">
-          <option value="formal">متن رسمی</option>
-          <option value="dialogue">گفت‌وگوی داستان (شکسته)</option>
-        </select>
-      </label>
-      <label class="opt opt-check" title="فاصله و نیم‌فاصلهٔ اشتباه، «ی» و «ک» عربی، نویسه‌های نادیدنی، گیومه و ویرگول لاتین، تنوین جاافتاده، بی‌پرسش درست می‌شوند؛ هر بار با «بازگشت» برمی‌گردد."><input type="checkbox" id="auto-fix" checked><span>اصلاح خودکار ایرادهای تایپی</span></label>
       <label class="opt opt-check" title="«شباهتهای» ← «شباهت‌های»: پیوسته‌نویسی «ها» غلط نیست، ولی اگر همیشه جدا می‌نویسید، با اصلاح خودکار بی‌پرسش جدا می‌شود."><input type="checkbox" id="ha-apart"><span>همیشه «ها» را جدا بنویس</span></label>
       <label class="opt opt-check"><input type="checkbox" id="show-zwnj"><span>نمایش نیم‌فاصله‌ها</span></label>
       <label class="opt"><span>«ها»ی جمع</span>
         <select id="plural-mode">
-          <option value="recommended">با توصیهٔ جدانویسی</option>
+          <option value="recommended">با توصیۀ جدانویسی</option>
           <option value="required-only">فقط موارد الزامی</option>
         </select>
       </label>
     </div>
     <details class="style-rules" id="style-rules">
       <summary>ویرایش زبانی <span class="style-hint">پیشنهاد، و غلط‌های قطعی؛ در متن رسمی</span></summary>
-      <p class="style-note">بیشترشان توصیه‌های رایج ویراستاران‌اند، نه قاعدهٔ دستور خط: آبی‌اند (پیشنهاد) و خودکار جایگزین نمی‌شوند. آنچه کتاب‌های ویرایش در هر بافتی غلط می‌دانند («با این وجود»، «مثمر ثمر») قرمز است و با «درست‌کن» درست می‌شود. هر کدام را می‌شود خاموش کرد.</p>
+      <p class="style-note">بیشترشان توصیه‌های رایج ویراستاران‌اند، نه قاعدۀ دستور خط: آبی‌اند (پیشنهاد) و خودکار جایگزین نمی‌شوند. آنچه کتاب‌های ویرایش در هر بافتی غلط می‌دانند («با این وجود»، «مثمر ثمر») قرمز است و با «درست‌کن» درست می‌شود. هر کدام را می‌شود خاموش کرد.</p>
       <div class="style-grid">
         <label><input type="checkbox" data-rule="redundant-verbs" checked> فعل زائد <small>«می‌باشد»، «مورد بررسی قرار گرفت»</small></label>
         <label><input type="checkbox" data-rule="arabic-plurals" checked> جمع عربی <small>«اساتید»، «مسئولین»، «اقشار»</small></label>
@@ -411,7 +410,7 @@
         <label><input type="checkbox" data-rule="calques" checked> ترجمه‌زدگی <small>«در رابطه با»، «به چالش کشیدن»، «آتش گشودن»</small></label>
         <label><input type="checkbox" data-rule="redundancy" checked> حشو <small>«بازگشت مجدد»، «سایر … دیگر»، «در سن … سالگی»</small></label>
         <label><input type="checkbox" data-rule="repeated-words" checked> تکرار <small>«را را»، «و و»</small></label>
-        <label><input type="checkbox" data-rule="long-sentences" checked> جملهٔ بلند <small>بیش از ۴۰ کلمه، «که»ی پی‌درپی</small></label>
+        <label><input type="checkbox" data-rule="long-sentences" checked> جملۀ بلند <small>بیش از ۴۰ کلمه، «که»ی پی‌درپی</small></label>
         <label><input type="checkbox" data-rule="ra-placement" checked> جای «را» <small>«کتابی که خواندی را» ← «کتابی را که خواندی»</small></label>
         <label><input type="checkbox" data-rule="comma-before-va" checked> ویرگول پیش از «و» <small>«رفتم، و گل بردم»</small></label>
         <label><input type="checkbox" data-rule="word-choice" checked> واژه‌گزینی <small>«جنگ اول جهانی»، «قرون وسطی»، «درب»، «ضمناً»، «مربوطه»</small></label>
@@ -421,9 +420,9 @@
   </main>
 
   <footer class="foot">
-    <a href="/about">دربارهٔ واج‌بان، منابع و مجوزها</a>
+    <a href="/about">دربارۀ واج‌بان، منابع و مجوزها</a>
     <span class="foot-end">
-      <span class="ver">نسخهٔ {{VERSION}}</span>
+      <span class="ver">نسخۀ {{VERSION}}</span>
       <button type="button" class="icon-btn icon-btn-small" id="theme" title="حالت تیره/روشن" aria-label="حالت تیره/روشن"><svg class="icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button>
     </span>
     <details class="reports-panel" id="reports-panel" hidden>

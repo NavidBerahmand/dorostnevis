@@ -10,9 +10,9 @@
  *
  * حالت پیش‌فرض («recommended») جدانویسی توصیه‌شده را گزارش می‌کند ولی خودکار
  * اعمال نمی‌کند: پیوسته‌نویسی («آنها»، «کتابها») غلط نیست. فقط مورد الزامی
- * (کلمهٔ مختوم به «ه»: «خانهها» ← «خانه‌ها») اصلاح خودکار دارد.
- * با گزینهٔ { "mode": "required-only" } فقط موارد الزامی (کلمهٔ مختوم به «ه»)
- * گزارش می‌شوند و نویسنده می‌تواند «ها» را در بقیهٔ موارد پیوسته بنویسد.
+ * (کلمۀ مختوم به «ه»: «خانهها» ← «خانه‌ها») اصلاح خودکار دارد.
+ * با گزینۀ { "mode": "required-only" } فقط موارد الزامی (کلمۀ مختوم به «ه»)
+ * گزارش می‌شوند و نویسنده می‌تواند «ها» را در بقیۀ موارد پیوسته بنویسد.
  */
 import commonNouns from "../dict/hazm-common-nouns.json";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
@@ -58,7 +58,7 @@ export default createPatternRule<Options>((options) => ({
         {
             pattern: SPACED,
             check: (m) => ({
-                message: "«ها»ی جمع با فاصلهٔ کامل نوشته نمی‌شود",
+                message: "«ها»ی جمع با فاصلۀ کامل نوشته نمی‌شود",
                 replacement: joinWithHalfSpace(m[1], "ها" + (m[2] ?? ""))
             })
         },
@@ -109,7 +109,7 @@ export default createPatternRule<Options>((options) => ({
                     };
                 }
                 return {
-                    message: "پس از «ه» نشانهٔ جمع «ها» باید جدا (با نیم‌فاصله) نوشته شود",
+                    message: "پس از «ه» نشانۀ جمع «ها» باید جدا (با نیم‌فاصله) نوشته شود",
                     replacement: separate
                 };
             }

@@ -1,7 +1,7 @@
 /**
  * The «no ping-pong» checker: no rule may take back what another rule (or itself) just fixed.
  *
- * For a text, in a mode (formal or «گفت‌وگو»), as the page runs the rules:
+ * For a text, with the register found per sentence (or one register forced), as the page runs the rules:
  * - every single fix is made and the text linted again: a new message on the changed
  *   letters must not give the old text back, bring the fixing rule back over a further step,
  *   object from a rule of higher precedence, or object without a fix (lint-setup.ts, conflictsOf);
@@ -12,7 +12,7 @@
  * Used by test/no-ping-pong-test.ts; the same logic ran over ~15,000 texts for 1.3.1.
  */
 import { TextlintKernel } from "@textlint/kernel";
-import { Msg, Settings, lintOptions, conflictsOf, isAuto, isCertainMsg, isTentative, applyCertain, editsOf, touches, applyFix, splitMessage, rank } from "../src/lint-setup";
+import { Msg, Settings, makeLint, conflictsOf, isAuto, isCertainMsg, isTentative, applyCertain, editsOf, touches, applyFix, splitMessage, rank } from "../src/lint-setup";
 
 const kernel = new TextlintKernel();
 const vis = (s: string) => s.replace(/‌/g, "‹").replace(/\n/g, "⏎");
@@ -46,16 +46,9 @@ function spansOf(a: string, b: string): Array<[number, number]> {
 
 export async function pingPong(text: string, settings: Settings): Promise<string[]> {
     const problems: string[] = [];
-    const full = lintOptions(settings);
-    const auto = lintOptions(settings, false, true);
-    const cache = new Map<string, Msg[]>();
-    const lint = async (t: string) => {
-        let r = cache.get(t);
-        if (!r) cache.set(t, (r = (await kernel.lintText(t, full)).messages as unknown as Msg[]));
-        return r;
-    };
-    const alint = async (t: string) => (await kernel.lintText(t, auto)).messages as unknown as Msg[];
-    const say = (what: string) => problems.push(`[${settings.mode}] ${what}\n      in «${vis(text)}»`);
+    const lint = makeLint(kernel, settings);
+    const alint = makeLint(kernel, settings, false, true);
+    const say = (what: string) => problems.push(`[${settings.register}] ${what}\n      in «${vis(text)}»`);
 
     // each fix on its own
     const msgs = await lint(text);

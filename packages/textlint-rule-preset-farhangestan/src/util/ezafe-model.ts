@@ -1,6 +1,6 @@
 /**
  * The ezafe model: is a word ending in a silent «ه», followed by another word,
- * in the ezafe («خانهٔ قبلی») or not («خانه بزرگ است»)?
+ * in the ezafe («خانۀ قبلی») or not («خانه بزرگ است»)?
  *
  * A logistic regression trained by scripts/ezafe-model/train.py on Persian
  * Wikipedia articles that mark the ezafe consistently. This file mirrors
@@ -152,7 +152,7 @@ export interface EzafeCandidate {
 
 /**
  * Every word in `text` that ends in a silent «ه» and is followed by another
- * word, with the model's ezafe probability. Words already marked («خانهٔ»،
+ * word, with the model's ezafe probability. Words already marked («خانۀ»،
  * «خانۀ»، «خانه‌ی») are skipped: other checks own them.
  */
 export function ezafeCandidates(text: string): EzafeCandidate[] {

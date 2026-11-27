@@ -5,7 +5,8 @@
  */
 import textPlugin from "@textlint/textlint-plugin-text";
 import preset from "../../textlint-rule-preset-farhangestan/src/index";
-import shekaste from "../../textlint-rule-preset-shekaste/src/index";
+import shekaste, { formalRules as spokenInFormal } from "../../textlint-rule-preset-shekaste/src/index";
+import { registerSegments, spokenAt } from "../../textlint-rule-preset-farhangestan/src/util/colloquial";
 import virayesh, { CERTAIN_RULES } from "../../textlint-rule-preset-virayesh/src/index";
 
 export type Msg = {
@@ -16,16 +17,20 @@ export type Msg = {
 };
 
 export type Settings = {
-    mode: string; // "formal" | "dialogue"
+    /**
+     * The register (since 1.5.0 found per sentence and quotation: util/colloquial.ts). "auto" (the
+     * page), or one register for the whole text ("formal", "spoken"), for tests.
+     */
+    register?: "auto" | "formal" | "spoken";
     pluralMode: string;
     /** «همیشه «ها» را جدا بنویس»: joined «ها» is fixed, silently with the typing fixes. */
     haApart?: boolean;
     /** Which language-editing rules are on (all, if not given). */
     styleOn?: (ruleId: string) => boolean;
 };
-export const DEFAULT_SETTINGS: Settings = { mode: "formal", pluralMode: "recommended" };
-/** The ezafe after a silent «ه» is always «هٔ» (ه + U+0654) on the site, never «ۀ» (since 1.4.0). */
-export const EZAFE_STYLE = "he-hamza";
+export const DEFAULT_SETTINGS: Settings = { register: "auto", pluralMode: "recommended" };
+/** The ezafe after a silent «ه» is always «ۀ» (U+06C0) on the site, never «هٔ» (ه + U+0654; since 1.5.0, the other way round in 1.4.0). */
+export const EZAFE_STYLE = "he-yeh";
 
 /**
  * Language-editing rules (ویرایش زبانی). Each runs as two: under its own id the
@@ -40,7 +45,7 @@ export const baseRule = (ruleId: string) => (ruleId.endsWith(CERTAIN_SUFFIX) ? r
 export const isStyle = (m: Msg) => STYLE_RULES.has(m.ruleId);
 /** Any report of ویرایش زبانی, a suggestion or a certain error. */
 export const isEditing = (m: Msg) => STYLE_RULES.has(baseRule(m.ruleId));
-const SHEKASTE_RULES = new Set(Object.keys(shekaste.rules));
+const SHEKASTE_RULES = new Set([...Object.keys(shekaste.rules), ...Object.keys(spokenInFormal)]);
 
 /*
  * اصلاح خودکار ایرادهای تایپی (since 1.3.0). With the setting on (the default), these fixes
@@ -66,7 +71,7 @@ const SHEKASTE_RULES = new Set(Object.keys(shekaste.rules));
  *   («خستهایم») or the joined-«ها» recommendation (no fix).
  * - plural-ha with «همیشه «ها» را جدا بنویس» on (since 1.4.0): «شباهتهای» → «شباهت‌های».
  * - tar-tarin: «بزرگ تر/بزرگتر/بزرگ ترین» → «بزرگ‌تر/بزرگ‌ترین», «بیش تر» → «بیشتر».
- * - ezafe-he: «ۀ» → «هٔ», the one form of the ezafe the site uses (since 1.4.0).
+ * - ezafe-he: «هٔ» → «ۀ», the one form of the ezafe the site uses (since 1.5.0; the reverse in 1.4.0).
  * - hamza-tanvin and lexicon: a tanvin left out of the closed lists, «ایضا» → «ایضاً»،
  *   «فورا» → «فوراً» (since 1.4.0).
  * - punctuation: Latin «, ; ?» → «، ؛ ؟» after Persian (not in URLs, e-mails, numbers or
@@ -88,14 +93,14 @@ export const AUTO_FIX: Record<string, { only?: RegExp; skip?: RegExp }> = {
     invisible: {},
     "zwnj-cleanup": {},
     "mi-prefix": { only: /^«ن?می» با نیم‌فاصله به فعل می‌چسبد/ },
-    "plural-ha": { only: /^«ها»ی جمع با فاصلهٔ کامل|^پس از «ه» نشانهٔ جمع|^«ها» جدا نوشته می‌شود \(تنظیم/ },
-    "ezafe-he": { only: /^شکل یکدستِ نشانهٔ اضافه/ },
+    "plural-ha": { only: /^«ها»ی جمع با فاصلۀ کامل|^پس از «ه» نشانۀ جمع|^«ها» جدا نوشته می‌شود \(تنظیم/ },
+    "ezafe-he": { only: /^شکل یکدستِ نشانۀ اضافه/ },
     "tar-tarin": {},
     // tanvin left out («ایضا» ← «ایضاً»): the closed lists, never a homograph (those ask, yellow)
     "hamza-tanvin": { only: /^تنوین نصب «اً» نوشته می‌شود/ },
     lexicon: { only: /^تنوین نصب «اً» نوشته می‌شود/ },
     punctuation: {
-        only: /^در متن فارسی «[،؛؟]»|^در متن فارسی گیومهٔ فارسی|^پیش از نشانه فاصله|^پس از نشانه یک فاصله|^پس از نقطه یک فاصله|^پس از سه‌نقطه یک فاصله|^داخل پرانتز و گیومه|^فاصلهٔ اضافه در پایان سطر|^بین دو کلمه یک فاصله|^ویرگول پیش یا پس از نشانهٔ دیگر|^خط تیره \(—\) میان دو واژه|^خط تیرهٔ آغاز گفت‌وگو|^میان (?:عدد و واحدش|نشانهٔ ارجاع و شماره‌اش|روز و ماه) فاصلهٔ نشکن/
+        only: /^در متن فارسی «[،؛؟]»|^در متن فارسی گیومۀ فارسی|^پیش از نشانه فاصله|^پس از نشانه یک فاصله|^پس از نقطه یک فاصله|^پس از سه‌نقطه یک فاصله|^داخل پرانتز و گیومه|^فاصلۀ اضافه در پایان سطر|^بین دو کلمه یک فاصله|^ویرگول پیش یا پس از نشانۀ دیگر|^خط تیره \(—\) میان دو واژه|^خط تیرۀ آغاز گفت‌وگو|^میان (?:عدد و واحدش|نشانۀ ارجاع و شماره‌اش|روز و ماه) فاصلۀ نشکن/
     }
 };
 
@@ -110,7 +115,7 @@ export function isAuto(m: Msg, text: string): boolean {
         const lineStart = text.lastIndexOf("\n", s - 1) + 1;
         const nl = text.indexOf("\n", s);
         const line = text.slice(lineStart, nl < 0 ? text.length : nl);
-        if (/^در متن فارسی گیومهٔ/.test(m.message)) {
+        if (/^در متن فارسی گیومۀ/.test(m.message)) {
             // only "…" and “…”, and only when every quote on the line has its pair
             const q = text[s];
             if (q === '"') return (line.match(/"/g) ?? []).length % 2 === 0;
@@ -126,12 +131,29 @@ export function isAuto(m: Msg, text: string): boolean {
     return true;
 }
 
-/** The rules to run; `forFix` leaves out what «اعمال همه» must not touch; `autoOnly` keeps the automatic ones. */
-export function lintOptions(s: Settings, forFix = false, autoOnly = false) {
-    const dialogue = s.mode === "dialogue";
-    const all: Array<[string, unknown, object]> = Object.entries({ ...preset.rules, ...(dialogue ? shekaste.rules : {}) }).map(([id, r]) => [id, r, {}]);
-    // ویرایش زبانی: not in dialogue, and only the rules the writer left on
-    if (!dialogue && !autoOnly) {
+/** Which rules: those for every sentence, those for written ones, those for spoken ones. */
+export type Part = "common" | "formal" | "spoken";
+/** Rules whose options depend on the register: they run in both parts. */
+const BY_REGISTER = new Set(["ezafe-he"]);
+
+/**
+ * The rules to run for one part; `forFix` leaves out what «اعمال همه» must not touch;
+ * `autoOnly` keeps the automatic ones. Since 1.5.0 there is no «نوع متن» setting: a spoken
+ * sentence or quotation gets «اصول شکسته‌نویسی» and the rules of the book that apply to dialogue
+ * (what «گفت‌وگو» ran before), a written one the rest (ویرایش زبانی, the spoken words written
+ * out); lintText puts the parts together.
+ */
+export function lintOptions(s: Settings, forFix = false, autoOnly = false, part: Part = "common") {
+    const all: Array<[string, unknown, object]> = [];
+    if (part === "common") {
+        for (const [id, r] of Object.entries(preset.rules)) if (!BY_REGISTER.has(id)) all.push([id, r, {}]);
+    } else {
+        for (const id of BY_REGISTER) all.push([id, (preset.rules as Record<string, unknown>)[id], {}]);
+    }
+    if (part === "spoken") for (const [id, r] of Object.entries(shekaste.rules)) all.push([id, r, {}]);
+    if (part === "formal" && !autoOnly) {
+        for (const [id, r] of Object.entries(spokenInFormal)) all.push([id, r, {}]);
+        // ویرایش زبانی: only the rules the writer left on
         for (const [id, rule] of Object.entries(virayesh.rules)) {
             if (s.styleOn && !s.styleOn(id)) continue;
             const split = CERTAIN_RULES.has(id);
@@ -139,18 +161,59 @@ export function lintOptions(s: Settings, forFix = false, autoOnly = false) {
             if (split) all.push([id + CERTAIN_SUFFIX, rule, { part: "certain" }]);
         }
     }
-    // spoken forms («می‌رم»، «خونه») are not typos: no spelling check in dialogue
     const rules = all
-        .filter(([ruleId]) => !(ruleId === "spelling" && dialogue) && (!autoOnly || ruleId in AUTO_FIX))
-        .map(([ruleId, rule, part]) => {
+        .filter(([ruleId]) => !autoOnly || ruleId in AUTO_FIX)
+        .map(([ruleId, rule, partOpts]) => {
             // the page shows every judgement with its replacement (yellow, with a button): not in the automatic runs
-            let opts: object = autoOnly ? { ...part } : { ...part, suggestions: true };
+            let opts: object = autoOnly ? { ...partOpts } : { ...partOpts, suggestions: true };
             if (ruleId === "plural-ha") opts = { ...opts, mode: s.pluralMode, apart: !!s.haApart };
-            if (ruleId === "ezafe-he") opts = { ...opts, style: EZAFE_STYLE, formal: !dialogue };
+            if (ruleId === "ezafe-he") opts = { ...opts, style: EZAFE_STYLE, formal: part !== "spoken" };
             if (baseRule(ruleId) === "calques") opts = { ...opts, ezafe: EZAFE_STYLE };
             return { ruleId, rule: rule as any, options: Object.keys(opts).length ? opts : true };
         });
     return { ext: ".txt", plugins: [{ pluginId: "text", plugin: (textPlugin as any).default ?? textPlugin }], rules };
+}
+
+type Kernel = { lintText(text: string, options: any): Promise<{ messages: unknown[] }> };
+const optionCache = new Map<string, ReturnType<typeof lintOptions>>();
+
+/**
+ * Lint `text` as the page does: the rules for every sentence, then the written-sentence rules
+ * where a sentence is written and the spoken ones where it is spoken (the message's start
+ * decides). Messages in text order.
+ */
+export async function lintText(kernel: Kernel, text: string, s: Settings, forFix = false, autoOnly = false): Promise<Msg[]> {
+    const opts = (part: Part) => {
+        const k = JSON.stringify([part, forFix, autoOnly, s.pluralMode, !!s.haApart, s.styleOn ? STYLE_IDS.map((id) => s.styleOn!(id)) : null]);
+        let o = optionCache.get(k);
+        if (!o) optionCache.set(k, (o = lintOptions(s, forFix, autoOnly, part)));
+        return o;
+    };
+    const run = async (part: Part) => (await kernel.lintText(text, opts(part))).messages as unknown as Msg[];
+    const register = s.register ?? "auto";
+    const segs = register === "auto" ? registerSegments(text) : [];
+    const anySpoken = register === "spoken" || segs.some((x) => x.spoken);
+    const anyFormal = register === "formal" || (register === "auto" && (segs.length === 0 || segs.some((x) => !x.spoken)));
+    const isSpoken = (m: Msg) => (register === "auto" ? spokenAt(segs, m.range[0]) : register === "spoken");
+    const out = await run("common");
+    if (anyFormal) out.push(...(await run("formal")).filter((m) => !isSpoken(m)));
+    if (anySpoken) out.push(...(await run("spoken")).filter(isSpoken));
+    return out.sort((a, b) => a.range[0] - b.range[0] || a.range[1] - b.range[1]);
+}
+const STYLE_IDS = Object.keys(virayesh.rules);
+
+/** A `Lint` for conflictsOf and the tests: lintText with these settings, remembered per text. */
+export function makeLint(kernel: Kernel, s: Settings, forFix = false, autoOnly = false): Lint {
+    const cache = new Map<string, Msg[]>();
+    return async (t: string) => {
+        let r = cache.get(t);
+        if (!r) {
+            r = await lintText(kernel, t, s, forFix, autoOnly);
+            if (cache.size > 20000) cache.clear();
+            cache.set(t, r);
+        }
+        return r;
+    };
 }
 
 // invisible characters inside a word (ZWNJ, ZWSP, ZWJ, RLM, word joiner) belong to it
@@ -162,7 +225,7 @@ export function wordAround(text: string, start: number, end: number): [number, n
 }
 
 export function splitMessage(m: Msg): { text: string; source: string } {
-    // the source is the last parenthesis, which may itself contain one: «… (غلط‌یاب (واژه‌نامهٔ …))»
+    // the source is the last parenthesis, which may itself contain one: «… (غلط‌یاب (واژه‌نامۀ …))»
     const msg = m.message.replace(/[\u2063\u2064]/g, "").trimEnd();
     if (!msg.endsWith(")")) return { text: msg, source: "" };
     let depth = 0;
@@ -175,7 +238,7 @@ export function splitMessage(m: Msg): { text: string; source: string } {
 
 /**
  * A guess or a reading, not a verdict: a model's «(احتمال ۸۲٪)», or «اگر … یک واژه است، …»
- * («خانه دار» may be «خانهٔ دار»). Never red, never an objection to another rule's fix.
+ * («خانه دار» may be «خانۀ دار»). Never red, never an objection to another rule's fix.
  */
 export const TENTATIVE = /احتمال|^[\u2063\u2064]*اگر /;
 /** A judgement the writer makes: a suggestion's replacement (pattern-rule's mark), a guess, an «اگر …». */
@@ -300,7 +363,7 @@ export function touches(e2: Edit, s: number, e: number): boolean {
     return a0 >= s && a0 <= e;
 }
 
-/** A message without the words it quotes: «پرانتز درون پرانتز: «[به گفتهٔ خودش]»» says the same after the fix. */
+/** A message without the words it quotes: «پرانتز درون پرانتز: «[به گفتۀ خودش]»» says the same after the fix. */
 const gist = (m: Msg) => m.message.replace(/«[^«»]*»/g, "«»");
 /** Same rule, same message, on the same letters (as far as a re-lint can tell): an old message, not a new one. */
 const sameMsg = (a: Msg, b: Msg, shift: (p: number) => number) =>

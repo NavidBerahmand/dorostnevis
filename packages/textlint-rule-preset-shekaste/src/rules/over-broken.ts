@@ -19,7 +19,7 @@
  * - «می‌خورن، می‌گن» ← «می‌خورند، می‌گند» (دال آخر خودبه‌خود تلفظ نمی‌شود؛ ص ۱۹، ۴۲)
  * - «رفته‌ان» ← «رفته‌اند» (ص ۲۰)
  * - «اومدم» ← «آمدم» (ماضی «آمدن» و «رفتن» هجا از دست نمی‌دهد؛ ص ۱۷)
- * - «دکترا، کتابا» ← «دکترها، کتاب‌ها» (نشانهٔ جمع را نباید شکست؛ ص ۲۲)
+ * - «دکترا، کتابا» ← «دکترها، کتاب‌ها» (نشانۀ جمع را نباید شکست؛ ص ۲۲)
  * - «بخونمش، می‌دونم، موند» ← «بخوانمش، می‌دانم، ماند» (خواندن، دانستن، ماندن… هجا از
  *   دست نمی‌دهند؛ ص ۱۹ و ۳۰). «می‌تونم» درست است، چون یک هجا کم می‌شود.
  */
@@ -30,6 +30,15 @@ import { isPresentStem, verbForm } from "../../../textlint-rule-preset-farhanges
 import { endsWithSilentHe } from "../../../textlint-rule-preset-farhangestan/src/util/words";
 import hazmAdjectives from "../../../textlint-rule-preset-farhangestan/src/dict/hazm-adjectives.json";
 import commonNouns from "../../../textlint-rule-preset-farhangestan/src/dict/hazm-common-nouns.json";
+import { corpusBucket } from "../../../textlint-rule-preset-farhangestan/src/util/speller";
+
+/** Two common words run together («ماقبلا» = «ما قبلا»): not one word with an ending (1.5.0). */
+function twoWords(w: string): boolean {
+    for (let i = 2; i <= w.length - 3; i++) if ((corpusBucket(w.slice(0, i)) ?? -1) >= 9 && (corpusBucket(w.slice(i)) ?? -1) >= 9) return true;
+    return false;
+}
+/** A preposition run into a short word: «ازتو» = «از تو». */
+const prepAndWord = (w: string) => /^(از|با|به|که|در|تو)/.test(w) && (corpusBucket(w.replace(/^(از|با|به|که|در|تو)/, "")) ?? -1) >= 9;
 
 const ADJECTIVES = new Set<string>(hazmAdjectives.adjectives);
 const COMMON_NOUNS = new Set<string>(commonNouns.words);
@@ -118,8 +127,10 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const word = m[0];
                 const stem = m[1];
-                if (KNOWN.has(word) || !KNOWN.has(stem)) return null;
+                if (KNOWN.has(word) || !KNOWN.has(stem) || prepAndWord(word)) return null; // «ازتو» = «از تو»
                 if ("اوی".includes(stem[stem.length - 1])) return null; // «دریا رو»: here «را» keeps its «ر» anyway
+                // «روشو» is «رویش را» as much as «روش را»: a stem that is also a word ending in a vowel + a pronoun
+                if (/[شتم]$/.test(stem) && /[اوی]$/.test(stem.slice(0, -1)) && KNOWN.has(stem.slice(0, -1))) return null;
                 return {
                     message: `«را» را کامل بنویسید: «${stem} را»`,
                     replacement: `${stem} را`,
@@ -133,10 +144,10 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const stem = m[1];
                 // «بیا» is a verb, not «بی» + «ا»: short stems are too ambiguous
-                if (KNOWN.has(m[0]) || !KNOWN.has(stem) || stem.endsWith("ه") || stem.length < 3) return null;
+                if (KNOWN.has(m[0]) || !KNOWN.has(stem) || stem.endsWith("ه") || stem.length < 3 || twoWords(m[0])) return null;
                 const fixed = "اآدذرزژو".includes(stem[stem.length - 1]) ? stem + "ها" : stem + ZWNJ + "ها";
                 return {
-                    message: `نشانهٔ جمع را کامل بنویسید؛ «${fixed}» خودبه‌خود «${m[0]}» خوانده می‌شود`,
+                    message: `نشانۀ جمع را کامل بنویسید؛ «${fixed}» خودبه‌خود «${m[0]}» خوانده می‌شود`,
                     replacement: fixed,
                     source: `${BOOK}، ص ۲۲`
                 };
@@ -153,7 +164,7 @@ export default createPatternRule(() => ({
                 const formal = [head + "ان", head + "وان"].find(isPresentStem);
                 if (!formal) return null;
                 const end = ({ ه: "د", ن: "ند" } as Record<string, string>)[ending] ?? ending; // «می‌دونه» → «می‌داند»
-                const fixed = prefix + formal + end + pronoun;
+                const fixed = prefix.replace(/^(ن?می)(?!‌)/, "$1‌") + formal + end + pronoun;
                 return {
                     message: `این فعل در گفتار هجا از دست نمی‌دهد؛ کامل بنویسید: «${fixed}»`,
                     replacement: fixed,
@@ -167,6 +178,16 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const [, neg, stem, ending = ""] = m;
                 const fixed = neg + SPOKEN_PAST[stem] + (ending === "ن" ? "ند" : ending);
+                // «دونستن» is also the infinitive «دانستن»: both, to choose
+                if (ending === "ن") {
+                    return {
+                        message: `ماضی یا مصدر این فعل در گفتار هجا از دست نمی‌دهد؛ کامل بنویسید: «${fixed}» یا «${neg + SPOKEN_PAST[stem]}ن»`,
+                        replacement: fixed,
+                        alternatives: [neg + SPOKEN_PAST[stem] + "ن"],
+                        fix: false,
+                        source: `${BOOK}، ص ۱۹ و ۳۰`
+                    };
+                }
                 return {
                     message: `ماضی این فعل در گفتار هجا از دست نمی‌دهد؛ کامل بنویسید: «${fixed}»`,
                     replacement: fixed,

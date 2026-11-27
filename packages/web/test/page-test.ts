@@ -1,6 +1,6 @@
 import assert from "assert";
 import { TextlintKernel } from "@textlint/kernel";
-import { DEFAULT_SETTINGS, Msg, lintOptions, isCertainMsg, isTentative, splitMessage, isAuto } from "../src/lint-setup";
+import { DEFAULT_SETTINGS, Msg, lintText, isCertainMsg, isTentative, splitMessage, isAuto } from "../src/lint-setup";
 
 /*
  * What the page shows (since 1.4.0): every yellow or blue item carries its replacement (a
@@ -8,7 +8,7 @@ import { DEFAULT_SETTINGS, Msg, lintOptions, isCertainMsg, isTentative, splitMes
  * found the same way wherever it stands.
  */
 const kernel = new TextlintKernel();
-const lint = async (t: string, s = DEFAULT_SETTINGS) => (await kernel.lintText(t, lintOptions(s))).messages as unknown as Msg[];
+const lint = async (t: string, s = DEFAULT_SETTINGS) => lintText(kernel, t, s);
 const SAMPLE = [
     "منهای سالهای بچگی و شباهتهای آنها. حالا کمکم کن. صندلی عقبی و دندانهای او.",
     "این خانه توسط پدرم ساخته شد و کتابی که به من داده بودی را خواندم.",
@@ -54,10 +54,10 @@ describe("the page's items", function () {
         assert.ok(per.every((p) => p === per[0] && p.includes("copula-attachment|خامنه‌ای|true")), per.join(" ‖ "));
     });
 
-    it("silent fixes: «ۀ» → «هٔ», a missing tanvin, a comma before another mark, the dash, no-break spaces", async () => {
-        const text = "خانۀ او ایضا هستند،: علی و ساختمان—مثل کوه به ۲۰ درصد در ۲۵ مهر (ص ۲۳۹)";
+    it("silent fixes: «هٔ» → «ۀ» (since 1.5.0), a missing tanvin, a comma before another mark, the dash, no-break spaces", async () => {
+        const text = "خانهٔ او ایضا هستند،: علی و ساختمان—مثل کوه به ۲۰ درصد در ۲۵ مهر (ص ۲۳۹)";
         const auto = (await lint(text)).filter((m) => isAuto(m, text)).map((m) => m.fix!.text);
-        for (const want of ["هٔ", "ایضاً", ":", " —\u00A0", "\u00A0"]) assert.ok(auto.includes(want), `${want} in ${JSON.stringify(auto)}`);
+        for (const want of ["ۀ", "ایضاً", ":", " —\u00A0", "\u00A0"]) assert.ok(auto.includes(want), `${want} in ${JSON.stringify(auto)}`);
         assert.strictEqual(auto.filter((x) => x === "\u00A0").length, 3, JSON.stringify(auto));
     });
 
@@ -74,6 +74,43 @@ describe("the page's items", function () {
             const msgs = await lint(t);
             assert.deepStrictEqual(msgs.map((m) => `${m.ruleId}: ${splitMessage(m).text}`), [], t);
         }
+    });
+
+    it("1.5.0: the user's spoken text: nothing absurd, only its spoken spelling and the book's shekaste rules", async () => {
+        const text = [
+            "میرم سمت صندوق و کارت رو میدم به خانم صندوقدار با لبخند میگه: مبارکت باشه عزیزم رمزت رو وارد کن لطفاً. کارت رو پس می‌گیرم. از سه هفته پیش ۲۰۰ تومان گرون تر شده.",
+            "میگم: خانما همگی خسته نباشید خدا نگهدار.",
+            "از در خروجی سالن اومدم بیرون. باد سرد زد توصورتم. برای بار هزارم چمدون‌های تامی و تیلی هر دو روی لحاف و زیر پامون"
+        ].join("\n");
+        const shown = (await lint(text)).filter((m) => !isAuto(m, text));
+        const marks = shown.map((m) => `${m.ruleId}:${text.slice(m.range[0], m.range[1])}→${m.fix?.text ?? ""}`);
+        // no typo guess at all («نمونهای»، «تمدنهای»، «خانم»، «خان ما» before 1.5.0)
+        assert.deepStrictEqual(shown.filter((m) => m.ruleId === "spelling").map((m) => m.message), []);
+        const allowed = new Set(["میرم", "میدم", "میگه", "میگم", "رو", "گرون", "خانما", "اومدم", "توصورتم"]);
+        const odd = shown.filter((m) => !allowed.has(text.slice(m.range[0], m.range[1])));
+        assert.deepStrictEqual(odd.map((m) => `${m.ruleId}: ${splitMessage(m).text}`), [], marks.join(" | "));
+        for (const w of ["میرم", "میدم", "میگه", "میگم"]) assert.ok(shown.some((m) => text.slice(m.range[0], m.range[1]) === w && m.fix?.text === w.replace(/^می/, "می\u200c")), w);
+        assert.ok(shown.some((m) => m.fix?.text === "تو صورتم"));
+        // «گرون تر» → «گرون‌تر»: a silent typing fix, in its spoken form
+        assert.ok((await lint(text)).some((m) => isAuto(m, text) && m.fix?.text === "گرون\u200cتر"));
+    });
+
+    it("1.5.0: spoken words in a written sentence: the written form, blue; no typo guess", async () => {
+        const text = "در جلسهٔ امروز گرون شدن قیمت‌ها بررسی شد و نتیجه را اعلام کردند. مأموران چمدون‌های مسافران را گشتند.";
+        const shown = (await lint(text)).filter((m) => !isAuto(m, text));
+        const blue = shown.filter((m) => m.ruleId === "spoken-word");
+        assert.deepStrictEqual(blue.map((m) => m.fix?.text), ["گران", "چمدان\u200cهای"]);
+        assert.ok(blue.every((m) => isTentative(m) && m.message.startsWith("\u2064")));
+        assert.deepStrictEqual(shown.filter((m) => m.ruleId === "spelling"), []);
+    });
+
+    it("1.5.0: written prose with a spoken quotation: shekaste rules inside the quotation only", async () => {
+        const text = "او به خانه رفت و در را بست. مادرش گفت: «کجا بودی؟ دیگه نمیدونم باهات چیکار کنم.» پسر جواب نداد.";
+        const msgs = await lint(text);
+        const q = text.indexOf("«");
+        const shek = msgs.filter((m) => ["over-broken", "may-break", "spoken-spelling"].includes(m.ruleId));
+        assert.ok(shek.length > 0 && shek.every((m) => m.range[0] > q && m.range[0] < text.indexOf("»")), JSON.stringify(shek.map((m) => m.range)));
+        assert.ok(!msgs.some((m) => m.ruleId === "spoken-word"));
     });
 
     it("recommendations are blue and never red", async () => {
