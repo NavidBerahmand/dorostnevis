@@ -61,6 +61,12 @@ new TextLintTester().run("punctuation", rule, {
         inv("رفت.، و آمد", "رفت. و آمد"),
         inv("رفتند؛. سپس", "رفتند. سپس"),
         inv("آیا؟، نه", "آیا؟ نه"),
+        // 1.5.1: the mark kept brings the space the next word needs
+        inv("مگه نه؟.راستش", "مگه نه؟ راستش"),
+        // 1.5.1: «...» after the dialogue dash: the dash keeps its space, only the dots become «…»
+        inv("— ...آره", "— …آره"),
+        inv("— ... بگو", "— … بگو"),
+        inv("ـ ...آره", "— …آره", 2),
         // «؛» ending a paragraph: a suggestion, «.» or «:»
         { text: "از این بابت متعجبم؛\nخط بعد", output: "از این بابت متعجبم؛\nخط بعد", errors: [{ message: "نقطه‌ویرگول بند را تمام نمی‌کند: «.»؛ اگر فهرست یا توضیحی در پی است، «:» (قراردادهای رایج نشانه‌گذاری فارسی (در دستور خط نیامده))" }] },
         // a missing space after «:»؛ an ellipsis glued to the next word

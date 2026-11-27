@@ -227,9 +227,18 @@ export default createPatternRule<Options>((options) => {
             pattern: / *\.{3,}|(?<=\S) +…/g,
             check: (m) => {
                 if (!persianContext(m.input, m.index) || inForeignToken(m.input, m.index + m[0].length - 1)) return null;
+                const message = "سه‌نقطه یک نویسه است («…») و بی‌فاصله به کلمۀ پیش از خود می‌چسبد";
+                // after a dash («— ...آره»، «او — ... که»), not after a word: the dash keeps its space
+                // (the dialogue dash: one space after it), only the dots become «…» (1.5.1)
+                const lineBefore = m.input.slice(m.input.lastIndexOf("\n", m.index - 1) + 1, m.index);
+                if (/(?:^|\s)[—–ـ-]+\s*$/.test(lineBefore + m[0].match(/^ */)![0])) {
+                    if (!m[0].includes(".")) return null;
+                    const lead = m[0].match(/^ */)![0].length;
+                    return { message, replacement: "…", start: lead, source: SOURCE };
+                }
                 // «آمد...دیوارها»: and a space after it, before the next word
                 const glued = new RegExp(`^${FA_LETTER}`).test(m.input.slice(m.index + m[0].length)) && m.index > 0 && /\S/.test(m.input[m.index - 1]);
-                return { message: "سه‌نقطه یک نویسه است («…») و بی‌فاصله به کلمۀ پیش از خود می‌چسبد", replacement: glued ? "… " : "…", source: SOURCE };
+                return { message, replacement: glued ? "… " : "…", source: SOURCE };
             }
         });
         checks.push({
@@ -270,9 +279,11 @@ export default createPatternRule<Options>((options) => {
                 if (inForeignToken(m.input, m.index)) return null;
                 const keep = STRENGTH[b] >= STRENGTH[a] ? b : a;
                 const dropsComma = (keep === a ? b : a) === "،";
+                // «نه؟ .راستش» → «نه؟ راستش»: the space the next word needs after the mark comes with it (1.5.1)
+                const space = new RegExp(`^${FA_LETTER}`).test(m.input.slice(m.index + m[0].length)) ? " " : "";
                 return {
                     message: dropsComma ? `ویرگول پیش یا پس از نشانۀ دیگر نمی‌آید: «${keep}» کافی است` : `دو نشانه پشت سر هم: «${keep}» کافی است`,
-                    replacement: keep,
+                    replacement: keep + space,
                     source: SOURCE
                 };
             }

@@ -1,6 +1,6 @@
 import assert from "assert";
 import { TextlintKernel } from "@textlint/kernel";
-import { DEFAULT_SETTINGS, Msg, lintText, isCertainMsg, isTentative, splitMessage, isAuto } from "../src/lint-setup";
+import { DEFAULT_SETTINGS, Msg, lintText, isCertainMsg, isTentative, splitMessage, isAuto, applyCertain } from "../src/lint-setup";
 
 /*
  * What the page shows (since 1.4.0): every yellow or blue item carries its replacement (a
@@ -111,6 +111,23 @@ describe("the page's items", function () {
         const shek = msgs.filter((m) => ["over-broken", "may-break", "spoken-spelling"].includes(m.ruleId));
         assert.ok(shek.length > 0 && shek.every((m) => m.range[0] > q && m.range[0] < text.indexOf("»")), JSON.stringify(shek.map((m) => m.range)));
         assert.ok(!msgs.some((m) => m.ruleId === "spoken-word"));
+    });
+
+    it("1.5.1: in dialogue, a spoken word written in another form is yellow; its half-space is red", async () => {
+        const text = "ـ خانما، دیروز اومدم دنبالت و یه کتابو آوردم. میگه نمیدونم. رفتم پیش خالهم.";
+        const msgs = await lint(text);
+        const at = (w: string) => msgs.filter((m) => m.ruleId === "over-broken" && text.slice(m.range[0], m.range[1]) === w);
+        for (const [w, want] of [["خانما", "خانم\u200cها"], ["اومدم", "آمدم"], ["یه", "یک"], ["کتابو", "کتاب را"]]) {
+            const ms = at(w);
+            assert.ok(ms.length && ms.every((m) => !isCertainMsg(m) && !isAuto(m, text) && isTentative(m)), w);
+            assert.ok(ms.some((m) => m.fix?.text === want), `${w} → ${want}`);
+        }
+        // «درست‌کن» leaves the spoken words as they are
+        const fixed = applyCertain(text, msgs);
+        for (const w of ["خانما", "اومدم", "یه", "کتابو"]) assert.ok(fixed.includes(w), fixed);
+        // the spelling of the spoken form stays red: «میگه» → «می‌گه»، «خالهم» → «خاله‌م»
+        assert.ok(msgs.some((m) => isCertainMsg(m) && m.fix?.text === "می\u200cگه"));
+        assert.ok(at("خالهم").some((m) => isCertainMsg(m) && m.fix?.text === "خاله\u200cم"));
     });
 
     it("recommendations are blue and never red", async () => {

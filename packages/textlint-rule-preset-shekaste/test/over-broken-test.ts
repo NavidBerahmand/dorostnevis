@@ -1,6 +1,15 @@
+import assert from "assert";
 import TextLintTester from "textlint-tester";
+import { TextlintKernel } from "@textlint/kernel";
 import rule from "../src/rules/over-broken";
 import { inv, z } from "./helpers";
+
+/**
+ * Since 1.5.1, a replacement that changes the writer's letters (the formal or fuller form of a
+ * spoken word) is a suggestion: without the option `suggestions` (the command line, here) it has
+ * no fix. Only the half-space, the letters kept, is a fix (red on the page).
+ */
+const ask = (text: string, count = 1) => ({ text, output: text, errors: Array.from({ length: count }, () => ({})) });
 
 new TextLintTester().run("over-broken", rule, {
     valid: [
@@ -11,35 +20,69 @@ new TextLintTester().run("over-broken", rule, {
         z("نمی‹تونم بیام، تونستم"),                  // «تون» loses a syllable: fine
         "دریا، صدا، هوا، دکترا",                     // words ending in «ا» (دکترا = doctorate)
         "خون، خونی، روند",                           // blood, bloody, trend: not verbs
-        "تو هم بیا"
+        "تو هم بیا",
+        "اصلا حتما مطمئنا دقیقا",                    // tanvin left out (lexicon's), not «اصل» + plural «ا»
+        "باید حفظ کنن"                               // «کنند», a verb: not «کن‌اند»
     ],
     invalid: [
-        inv("دو تا نون بخر", "دو تا نان بخر"),
-        inv("رفته خونه", "رفته خانه"),
-        inv("اگه دیگه نیاد", "اگر دیگر نیاد", 2),
-        inv("شکوفه اینجا نیس", "شکوفه اینجا نیست"),
-        inv("یه خرده صبر کن", "یک خرده صبر کن"),
-        inv("میزو تمیز کن", "میز را تمیز کن"),
-        inv("بهش بگو", z("به‹اش بگو")), // p. 21: «به‌ات، به‌اش»
+        // the letters change: a suggestion
+        ask("دو تا نون بخر"),
+        ask("رفته خونه"),
+        ask("اگه دیگه نیاد", 2),
+        ask("شکوفه اینجا نیس"),
+        ask("یه خرده صبر کن"),
+        ask("میزو تمیز کن"),
+        ask("بهش بگو"), // p. 21: «به‌اش»
+        ask("هنوزم دیر نیست"), // p. 26
+        ask("بفرمایین تو"), // p. 19
+        ask(z("می‹کنین؟")),
+        ask("بچه‌ها خارجن."), // p. 40
+        ask(z("می‹خورن")),
+        ask(z("نمی‹تونن")),
+        ask(z("بچه‹ها رفته‹ان")),
+        ask(z("رفته بودم خونه‹ی خاله‹م")),
+        ask("خونۀ ما"),
+        ask("دیروز اومدم"),
+        ask("درختا خشک شد"),
+        ask("کتابا را آورد"),
+        ask("خانما خسته نباشید"),
+        ask("فردا بخونمش"),
+        ask(z("نمی‹دونم")),
+        ask("همان‌جا موند"),
+        ask("کتاب را خوندم"),
+        { text: "اون گفت", errors: [{}] },          // «آن» or «او»: report only
+        // only the half-space: the spelling of the spoken form, a fix
         inv("بهشون گفتم", z("به‹شون گفتم")),
-        inv("هنوزم دیر نیست", "هنوز هم دیر نیست"), // p. 26
-        inv("بفرمایین تو", "بفرمایید تو"), // p. 19
-        inv(z("می‹کنین؟"), z("می‹کنید؟")),
-        inv("بچه‌ها خارجن.", z("بچه‌ها خارج‹اند.")), // p. 40
         inv("رفتم پیش خالهم.", z("رفتم پیش خاله‹م.")), // p. 21
-        inv("تهش چیزی نماند.", z("ته‹ش چیزی نماند.")), // p. 42
-        inv(z("می‹خورن"), z("می‹خورند")),
-        inv(z("نمی‹تونن"), z("نمی‹تونند")),
-        inv(z("بچه‹ها رفته‹ان"), z("بچه‹ها رفته‹اند")),
-        inv(z("رفته بودم خونه‹ی خاله‹م"), z("رفته بودم خانه‹ی خاله‹م")),
-        inv("خونۀ ما", "خانۀ ما"),
-        inv("دیروز اومدم", "دیروز آمدم"),
-        inv("درختا خشک شد", z("درخت‹ها خشک شد")),
-        inv("کتابا را آورد", z("کتاب‹ها را آورد")),
-        inv("فردا بخونمش", "فردا بخوانمش"),
-        inv(z("نمی‹دونم"), z("نمی‹دانم")),
-        inv("همان‌جا موند", "همان‌جا ماند"),
-        inv("کتاب را خوندم", "کتاب را خواندم"),
-        { text: "اون گفت", errors: [{}] }          // «آن» or «او»: report only
+        inv("تهش چیزی نماند.", z("ته‹ش چیزی نماند.")) // p. 42
     ]
+});
+
+describe("over-broken on the page (option `suggestions`)", function () {
+    const kernel = new TextlintKernel();
+    // required here, not imported: textlint-tester is still loading the plugin when this file is
+    const lint = async (text: string) => {
+        const textPlugin = require("@textlint/textlint-plugin-text");
+        return (
+            await kernel.lintText(text, {
+                ext: ".txt",
+                plugins: [{ pluginId: "text", plugin: (textPlugin as any).default ?? textPlugin }],
+                rules: [{ ruleId: "over-broken", rule: rule as any, options: { suggestions: true } }]
+            })
+        ).messages;
+    };
+    it("«اومدم» → «آمدم»، «خانما» → «خانم‌ها»: a suggestion with its replacement", async () => {
+        for (const [t, want] of [["دیروز اومدم", "آمدم"], ["خانما خسته نباشید", z("خانم‹ها")], ["یه خرده", "یک"]]) {
+            const ms = await lint(t);
+            assert.strictEqual(ms.length, 1, t);
+            assert.ok(ms[0].message.startsWith("⁣"), t);
+            assert.strictEqual(ms[0].fix?.text, want, t);
+        }
+    });
+    it("«خالهم» → «خاله‌م»: a fix, not a suggestion", async () => {
+        const ms = await lint("رفتم پیش خالهم.");
+        assert.strictEqual(ms.length, 1);
+        assert.ok(!ms[0].message.startsWith("⁣"));
+        assert.strictEqual(ms[0].fix?.text, z("خاله‹م"));
+    });
 });

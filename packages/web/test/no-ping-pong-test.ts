@@ -116,9 +116,26 @@ const SPOKEN = [
     "خانهٔ او و خانۀ ما و فرماندهٔ سپاه و فرماندۀ لشکر و برنامه ی روزانه و خانه‌ٔ پدری."
 ];
 
+/**
+ * Subtitles (1.5.1: the 68 conflicts of 1.5.0 on 3,000 subtitle passages), one per cause:
+ * «...» right after the dialogue dash (the dash keeps its space, the dots become «…»), «؟ .»
+ * (the mark kept brings the space the next word needs), and a letter the normalizer fixes
+ * twice in a row («ى»، RLM) next to an ezafe, which is no cycle.
+ */
+const SUBTITLES = [
+    "ـ ...میخواستی چی میخواستی؟",
+    "ـ ... بگو ببینم ... دوست عزیز...",
+    "ـ ...آره...",
+    "داری به پای من فکر میکنی ، مگه نه؟ .راستش یادم رفته بود",
+    "ـ ببخشید مال داروهاس؟ .نمیدونم چی کار باید بکنم",
+    "من اصلا نمیفهمم که شما دارید درباره ى چى حرف میزنید",
+    "ـ . و چندتا کلم و اون سه تا کیسه\u200fی سیب\u200fزمینی که . هفته پیش برداشتیم . و ...",
+    "ـ ... و بین خودشان دعوا و مرافعه داشتن . در مورد این\u200fکه قراره چه\u200fطور ما رو بپزن ... یا این\u200fکه !"
+];
+
 describe("no ping-pong: no rule takes back another's fix", function () {
     // the register as the page finds it, and every text read as spoken (any sentence may be)
-    for (const [register, texts] of [["auto", [...CASES, ...DIALOGUE, ...SPOKEN]], ["spoken", [...CASES.slice(0, 26), ...DIALOGUE, ...SPOKEN]]] as const) {
+    for (const [register, texts] of [["auto", [...CASES, ...DIALOGUE, ...SPOKEN, ...SUBTITLES]], ["spoken", [...CASES.slice(0, 26), ...DIALOGUE, ...SPOKEN, ...SUBTITLES]]] as const) {
         it(`${register}: ${texts.length} texts`, async () => {
             const problems: string[] = [];
             for (const t of texts) problems.push(...(await pingPong(t, { ...DEFAULT_SETTINGS, register })));

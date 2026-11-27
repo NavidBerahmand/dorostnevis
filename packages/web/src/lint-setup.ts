@@ -446,9 +446,20 @@ export async function conflictsOf(lint: Lint, text: string, m: Msg, before: Msg[
             out.push({ kind: "flags", by: d });
             continue;
         }
-        // a further change by a rule no higher: fine, unless it brings `m`'s rule back
+        // a further change by a rule no higher: fine, unless it brings `m`'s rule back. Not a
+        // message that was already there on other letters («درباره ى چى»: the second «ى», 1.5.1)
         const third = applyFix(fixed, d.fix);
-        const back = (await lint(third)).some((x) => x.ruleId === m.ruleId && x.message === m.message && x.range[0] <= de + 2 && x.range[1] >= ds - 2);
+        const dDelta = d.fix.text.length - (d.fix.range[1] - d.fix.range[0]);
+        const shiftD = (p: number) => (p <= d.fix!.range[0] ? p : p >= d.fix!.range[1] ? p + dDelta : d.fix!.range[0]);
+        const already = await lint(fixed);
+        const back = (await lint(third)).some(
+            (x) =>
+                x.ruleId === m.ruleId &&
+                x.message === m.message &&
+                x.range[0] <= de + 2 &&
+                x.range[1] >= ds - 2 &&
+                !already.some((y) => y.ruleId === x.ruleId && y.message === x.message && shiftD(y.range[0]) === x.range[0] && shiftD(y.range[1]) === x.range[1])
+        );
         out.push({ kind: back ? "cycle" : "changes", by: d });
     }
     return out;

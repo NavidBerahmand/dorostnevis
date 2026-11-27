@@ -22,6 +22,11 @@
  * - «دکترا، کتابا» ← «دکترها، کتاب‌ها» (نشانۀ جمع را نباید شکست؛ ص ۲۲)
  * - «بخونمش، می‌دونم، موند» ← «بخوانمش، می‌دانم، ماند» (خواندن، دانستن، ماندن… هجا از
  *   دست نمی‌دهند؛ ص ۱۹ و ۳۰). «می‌تونم» درست است، چون یک هجا کم می‌شود.
+ *
+ * Since 1.5.1, a replacement that changes the writer's letters («اومدم» ← «آمدم»، «خانما» ←
+ * «خانم‌ها»، «یه» ← «یک») is a suggestion (yellow, with its button, never in «درست‌کن»): the
+ * writer may keep the dialogue as it is said. One that only adds the half-space and keeps the
+ * letters («خالهم» ← «خاله‌م»، «بهشون» ← «به‌شون») is the spelling of the spoken form: red.
  */
 import { createPatternRule } from "../../../textlint-rule-preset-farhangestan/src/util/pattern-rule";
 import { START, END, LETTER, ZWNJ } from "../../../textlint-rule-preset-farhangestan/src/util/persian";
@@ -31,6 +36,8 @@ import { endsWithSilentHe } from "../../../textlint-rule-preset-farhangestan/src
 import hazmAdjectives from "../../../textlint-rule-preset-farhangestan/src/dict/hazm-adjectives.json";
 import commonNouns from "../../../textlint-rule-preset-farhangestan/src/dict/hazm-common-nouns.json";
 import { corpusBucket } from "../../../textlint-rule-preset-farhangestan/src/util/speller";
+import arabic from "../../../textlint-rule-preset-farhangestan/src/dict/arabic.json";
+import type { PatternCheck } from "../../../textlint-rule-preset-farhangestan/src/util/pattern-rule";
 
 /** Two common words run together («ماقبلا» = «ما قبلا»): not one word with an ending (1.5.0). */
 function twoWords(w: string): boolean {
@@ -39,6 +46,9 @@ function twoWords(w: string): boolean {
 }
 /** A preposition run into a short word: «ازتو» = «از تو». */
 const prepAndWord = (w: string) => /^(از|با|به|که|در|تو)/.test(w) && (corpusBucket(w.replace(/^(از|با|به|که|در|تو)/, "")) ?? -1) >= 9;
+
+/** The book's tanvin words written without it («اصلا»، «حتما»): not «اصل» + plural «ا» (lexicon's). */
+const TANVIN_BARE = new Set<string>(arabic.entries.filter((e) => e.to.endsWith("اً")).flatMap((e) => e.from));
 
 const ADJECTIVES = new Set<string>(hazmAdjectives.adjectives);
 const COMMON_NOUNS = new Set<string>(commonNouns.words);
@@ -81,9 +91,25 @@ const SPOKEN_PAST: Record<string, string> = {
 /** Present stems as people say them («می‌گن» from گفتن), besides Hazm's list. */
 const SPOKEN_STEMS = new Set(["گ", "ر", "آ", "ش", "د", "تون", "خوا", "ذار", "زار", "کن", "خور", "خواب"]);
 
+/** Letters only, without the half-space. */
+const letters = (s: string) => s.replace(/‌/g, "");
+/**
+ * A replacement that writes the spoken word in another form (the formal one, or the book's
+ * fuller one) is the writer's choice: yellow. Only the half-space added: red (1.5.1).
+ */
+const choiceUnlessSpelling = ({ pattern, check }: PatternCheck): PatternCheck => ({
+    pattern,
+    check: (m) => {
+        const r = check(m);
+        if (!r || r.fix === false || r.replacement === undefined) return r;
+        const from = m[0].slice(r.start ?? 0, r.end ?? m[0].length);
+        return letters(from) === letters(r.replacement) ? r : { ...r, fix: false };
+    }
+});
+
 export default createPatternRule(() => ({
     source: BOOK,
-    checks: [
+    checks: ([
         {
             // the word may continue after a ZWNJ («خونه‌ی»، «خونه‌ها»)
             pattern: new RegExp(`${START}(${[...MAP.keys()].sort((a, b) => b.length - a.length).join("|")})(?=${ZWNJ}|${END})`, "g"),
@@ -144,7 +170,7 @@ export default createPatternRule(() => ({
             check: (m) => {
                 const stem = m[1];
                 // «بیا» is a verb, not «بی» + «ا»: short stems are too ambiguous
-                if (KNOWN.has(m[0]) || !KNOWN.has(stem) || stem.endsWith("ه") || stem.length < 3 || twoWords(m[0])) return null;
+                if (KNOWN.has(m[0]) || !KNOWN.has(stem) || stem.endsWith("ه") || stem.length < 3 || twoWords(m[0]) || TANVIN_BARE.has(m[0])) return null;
                 const fixed = "اآدذرزژو".includes(stem[stem.length - 1]) ? stem + "ها" : stem + ZWNJ + "ها";
                 return {
                     message: `نشانۀ جمع را کامل بنویسید؛ «${fixed}» خودبه‌خود «${m[0]}» خوانده می‌شود`,
@@ -214,7 +240,8 @@ export default createPatternRule(() => ({
             pattern: new RegExp(`${START}(${LETTER}{2,})ن${END}`, "g"),
             check: (m) => {
                 const stem = m[1];
-                if (KNOWN.has(m[0]) || verbForm(m[0]) || !(ADJECTIVES.has(stem) || COMMON_NOUNS.has(stem))) return null;
+                // «حفظ کنن» is «کنند», a verb: not «کن» + «اند»
+                if (KNOWN.has(m[0]) || verbForm(m[0]) || isPresentStem(stem) || !(ADJECTIVES.has(stem) || COMMON_NOUNS.has(stem))) return null;
                 if (stem.endsWith("ه") || stem.endsWith("ا") || stem.endsWith("و") || stem.endsWith("ی")) return null;
                 const fixed = "اآدذرزژو".includes(stem[stem.length - 1]) ? stem + "ند" : stem + ZWNJ + "اند";
                 return { message: `«اند» را کامل بنویسید: «${fixed}»`, replacement: fixed, source: `${BOOK}، ص ۴۰–۴۱` };
@@ -245,5 +272,5 @@ export default createPatternRule(() => ({
                 return { message: hints[m[1]], replacement: first, alternatives: rest, fix: false, source: BOOK };
             }
         }
-    ]
+    ] as PatternCheck[]).map(choiceUnlessSpelling)
 }));
