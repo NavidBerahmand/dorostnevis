@@ -8,7 +8,7 @@ import { openReport, sentenceAround, setupOwnerPanel, Report } from "./report";
 import {
     Msg, Settings, lintText, isAuto, isStyle, isEditing, baseRule, wordAround, splitMessage, NOT_IN_BOOK, rank,
     conflictsOf, outranked, editsOf, applyFix as applyEdit, isTentative, isCertainMsg, applyCertain, isBlue,
-    oneAnswerPerSpan, severity, Grouped, undoesJustApplied, JustApplied, REGISTER_RULES
+    oneAnswerPerSpan, severity, Grouped, undoesJustApplied, JustApplied, REGISTER_RULES, isLatinDigits, digitFixes
 } from "./lint-setup";
 import { RULE_LABELS, explainChange } from "./labels";
 
@@ -27,7 +27,9 @@ const ICON = {
     // «همه»: the same change at every place (stacked copies)
     all: svg('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/><path d="M11 14l2 2 4-4"/>'),
     // the question on a colloquial card: a speech bubble
-    talk: svg('<path d="M4 5h16v10H9l-5 4z"/>')
+    talk: svg('<path d="M4 5h16v10H9l-5 4z"/>'),
+    // «همۀ عددها» (1.6.6): the Persian digits «۱۲»
+    digits: svg('<path d="M7 5.5c.6 1.2 1 2.6 1 4.5v9"/><path d="M14 19v-9c0-2-.8-3.4-1.5-4.5"/><path d="M14 9.5c1.6.4 3.6-.3 4.5-3"/>')
 };
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -165,6 +167,8 @@ const pasteBtn = $<HTMLButtonElement>("paste");
 const status = $<HTMLSpanElement>("status");
 
 let messages: Msg[] = [];
+/** How many numbers in Latin digits the digit card marks in the text (1.6.6, «همۀ عددها»): every one, shown or not. */
+let digitRuns = 0;
 /** Other rules' messages folded into card i (same word, same correction). */
 let extras: Msg[][] = [];
 
@@ -582,6 +586,11 @@ function groupSameCards(text: string) {
     sigs.forEach((g, i) => g !== null && groups.set(g, [...(groups.get(g) ?? []), i]));
     sameCards = sigs.map((g, i) => (g === null ? [i] : groups.get(g)!));
 }
+/**
+ * «همۀ عددها» (1.6.6) on a digit card: only when the text has numbers this card and its «همه (n)» do not cover
+ * (one number alone, or the same number everywhere, needs no second button).
+ */
+const asksDigits = (i: number) => [messages[i], ...extras[i]].some(isLatinDigits) && digitRuns > (sameCards[i]?.length ?? 1);
 /** Is the writer asked, on this card, whether the whole text is colloquial? */
 const asksRegister = (i: number) => colloquial === null && [messages[i], ...extras[i]].some((x) => REGISTER_RULES.has(x.ruleId));
 
@@ -645,12 +654,14 @@ function buildCards(text: string) {
                     ? alts.map((x, j) => `<button type="button" class="btn btn-small" data-alt="${i}:${j}" title="جایگزین با «${esc(fixedBy(x))}»">${show(clip(fixedBy(x), 18))}</button>`).join("")
                     : m.fix ? `<button type="button" class="btn btn-small" data-apply="${i}">جایگزین</button>` : ""}
                 ${allButton(i, !!(alts && alts.length > 1))}
+                ${asksDigits(i) ? `<button type="button" class="btn btn-small btn-quiet btn-all" data-digits-ask="${i}" aria-expanded="false" title="همۀ عددهای انگلیسی متن (${digitRuns.toLocaleString("fa-IR")} عدد) با رقم فارسی">${ICON.digits}همۀ عددها</button>` : ""}
                 <button type="button" class="btn btn-small btn-quiet" data-ignore="${i}">نادیده</button>
                 ${members.some((x) => x.ruleId === "spelling") ? `<button type="button" class="btn btn-small btn-quiet" data-learn="${i}" title="«${esc(text.slice(m.range[0], m.range[1]))}» دیگر در این مرورگر علامت نمی‌خورد">افزودن به واژه‌نامه</button>` : ""}
                 <button type="button" class="btn btn-small btn-quiet btn-edit" data-edit="${i}" title="ویرایش همین واژه با صفحه‌کلید">${ICON.pencil}ویرایش</button>
                 <button type="button" class="btn btn-small btn-report" data-report="${i}">این پیشنهاد غلط است</button>
             </div>
-            ${asksRegister(i) ? `<div class="ask" role="group" aria-label="کل متن محاوره‌ای است؟"><span class="ask-q" title="«بله»: واژه‌های محاوره‌ای در همۀ متن درست‌اند و علامت نمی‌خورند. «نه»: همین‌طور می‌ماند. با «محاوره‌ای» بالای متن عوض می‌شود.">${ICON.talk}کل متن محاوره‌ای است؟</span><button type="button" class="btn btn-small btn-quiet" data-colloq="yes">بله</button><button type="button" class="btn btn-small btn-quiet" data-colloq="no">نه</button></div>` : ""}`;
+            ${asksRegister(i) ? `<div class="ask" role="group" aria-label="کل متن محاوره‌ای است؟"><span class="ask-q" title="«بله»: واژه‌های محاوره‌ای در همۀ متن درست‌اند و علامت نمی‌خورند. «نه»: همین‌طور می‌ماند. با «محاوره‌ای» بالای متن عوض می‌شود.">${ICON.talk}کل متن محاوره‌ای است؟</span><button type="button" class="btn btn-small btn-quiet" data-colloq="yes">بله</button><button type="button" class="btn btn-small btn-quiet" data-colloq="no">نه</button></div>` : ""}
+            ${asksDigits(i) ? `<div class="ask ask-digits" role="group" aria-label="همۀ عددهای متن فارسی شود؟" hidden><span class="ask-q" title="«بله»: هر عددی که این پیشنهاد را دارد، یک‌جا با رقم فارسی نوشته می‌شود (نسخه، نشانی، ساعت و کد همان‌طور می‌مانند) و با «بازگشت» برمی‌گردد. «نه»: چیزی عوض نمی‌شود.">${ICON.digits}همۀ عددهای متن فارسی شود؟</span><button type="button" class="btn btn-small btn-quiet" data-digits="yes">بله</button><button type="button" class="btn btn-small btn-quiet" data-digits="no">نه</button></div>` : ""}`;
         cards.push({ cls, html });
     });
     const red = spans.filter((sp) => sp.red).length;
@@ -744,6 +755,7 @@ async function check() {
     }
     const guarded = await visible(text, result.messages as unknown as Msg[]);
     if (input.value !== text) return; // typed meanwhile: the next check starts over
+    digitRuns = digitFixes(result.messages as unknown as Msg[]).length;
     const merged = mergeSame(collapseAlts(guarded), text);
     messages = merged.primary;
     extras = merged.extra;
@@ -1129,7 +1141,12 @@ function applyEverywhere(i: number, j: number): number {
         fixes.push(x.fix);
         ranks.push(...[x, ...extras[k]].map(rank));
     }
-    fixes.sort((a, b) => a.range[0] - b.range[0]);
+    return applyMany(text, fixes, ranks);
+}
+
+/** Several fixes of `text` at once (never two that overlap), in one step of «بازگشت»; how many were made. */
+function applyMany(text: string, fixes: Array<{ range: [number, number]; text: string }>, ranks: number[]): number {
+    fixes = [...fixes].sort((a, b) => a.range[0] - b.range[0]);
     const pick: typeof fixes = [];
     let end = -1;
     for (const f of fixes) {
@@ -1154,6 +1171,20 @@ function applyEverywhere(i: number, j: number): number {
     input.value = after;
     void check();
     return pick.length;
+}
+
+/**
+ * «همۀ عددها» → «بله» (1.6.6): every number the digit card marks in the whole text (the rule's own choice, so a
+ * version, an address, a time or a code stays Latin; ignored cards too: the writer asked for all), at once, one
+ * step of «بازگشت».
+ */
+async function convertAllDigits() {
+    const text = input.value;
+    const msgs = await lint(text);
+    if (input.value !== text) return;
+    const fixes = digitFixes(msgs);
+    const n = applyMany(text, fixes, msgs.filter(isLatinDigits).map(rank));
+    status.textContent = n ? `${n.toLocaleString("fa-IR")} عدد با رقم فارسی نوشته شد.` : "عددی برای فارسی کردن نماند.";
 }
 
 /*
@@ -1482,6 +1513,29 @@ pop.addEventListener("click", (ev) => {
     if (every) {
         const n = applyEverywhere(Number(every.dataset.all), 0);
         status.textContent = `${n.toLocaleString("fa-IR")} جا جایگزین شد.`;
+        return;
+    }
+    const da = target.closest("[data-digits-ask]") as HTMLElement | null;
+    if (da) {
+        // «همۀ عددها»: first the question, in the card
+        const row = da.closest(".issue")?.querySelector<HTMLElement>(".ask-digits");
+        if (row) {
+            row.hidden = !row.hidden;
+            da.setAttribute("aria-expanded", String(!row.hidden));
+        }
+        return;
+    }
+    const dq = target.closest("[data-digits]") as HTMLElement | null;
+    if (dq) {
+        if (dq.dataset.digits !== "yes") {
+            // «نه»: nothing changes
+            const row = dq.closest(".ask-digits") as HTMLElement | null;
+            if (row) row.hidden = true;
+            dq.closest(".issue")?.querySelector("[data-digits-ask]")?.setAttribute("aria-expanded", "false");
+            status.textContent = "عددها همان‌طور ماند.";
+            return;
+        }
+        void convertAllDigits();
         return;
     }
     const cq = target.closest("[data-colloq]") as HTMLElement | null;

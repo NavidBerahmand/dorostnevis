@@ -22,7 +22,8 @@
  * - گیومۀ “…” درون «…» دست نمی‌خورد (الگوی «“ ”» برای نقل‌قول تودرتو)
  * - گیومه و کمانک بی‌جفت: پیشنهاد، روی خود نشانه؛ گیومۀ باز در پایان جمله بسته می‌شود
  * - پرانتز درون پرانتز: فقط پیشنهاد، توضیحِ درون کمانک در قلاب «[ ]» می‌آید
- * - رقم انگلیسی در متن فارسی ← رقم فارسی («12%» ← «۱۲٪»، «4.7» ← «۴٫۷»، «12,543» ← «۱۲٬۵۴۳»)
+ * - رقم انگلیسی در متن فارسی ← رقم فارسی («12%» ← «۱۲٪»، «4.7» ← «۴٫۷»، «12,543» ← «۱۲٬۵۴۳»): پیشنهاد (آبی)، نه
+ *   غلط؛ بی‌اصلاح خودکار (1.6.6)
  *
  * هر بخش را می‌شود خاموش کرد: { "digits": false }، { "quotes": false }…
  */
@@ -737,7 +738,9 @@ export default createPatternRule<Options>((options) => {
                 // «4.7» → «۴٫۷», «12,543» → «۱۲٬۵۴۳», «%» → «٪»
                 s = s.replace(/(\d),(?=\d{3}\b)/g, "$1٬").replace(/(\d)\.(?=\d)/g, "$1٫").replace(/%$/, "٪");
                 const fixed = toPersianDigits(s);
-                return { message: `در متن فارسی رقم فارسی به کار می‌رود: «${fixed}»`, replacement: fixed, source: SOURCE };
+                // a recommendation (1.6.6), never an error: the book has no rule on digits. Blue, not in «درست‌کن», never
+                // made silently; the page converts them all at once, if the writer says so («همۀ عددها»)
+                return { message: `در متن فارسی رقم فارسی به کار می‌رود: «${fixed}»`, replacement: fixed, fix: false, kind: "suggestion", source: SOURCE };
             }
         });
     }

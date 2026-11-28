@@ -51,6 +51,28 @@ const NOT_VERBS = new Set(hazmVerbs.notVerbs);
 /** Present stems used bare after «می» in impersonal constructions: «می‌توان»، «نمی‌توان». */
 const BARE_PRESENT = new Set(["توان"]);
 
+/**
+ * «می‌می‌» never (1.6.6). Right after a lone «می/نمی» and a space, a word that is a verb by itself and starts
+ * with «می» («می میرم»، «نمی میرد»، «می میراند»: the stems «میر» of «مردن»، «میران» of «میراندن»، «میز») is that
+ * verb, not a second «می» + a stem («می‌می‌رم»): the space before it is the fix, «می‌میرم».
+ */
+export function afterLoneMi(text: string, index: number): boolean {
+    const tail = text.slice(Math.max(0, index - 16), index).match(/ن?می[ \u00A0]+$/);
+    if (!tail) return false;
+    const before = text[index - tail[0].length - 1];
+    return before === undefined || !new RegExp(WORD_CHAR).test(before);
+}
+/**
+ * The other «می‌می‌» (1.6.6): a lone «می» before another «می» that is not such a verb («می می‌باشد»، «می می رم»،
+ * «می می توان» after «۱۵» (May), «می می جون»): a «می» typed twice, a name or a month. The lone «می» is left as it
+ * is: never joined to the next one.
+ */
+function miFollows(text: string, end: number): boolean {
+    const next = text.slice(end).match(new RegExp(`^${WORD_CHAR}+`))?.[0] ?? "";
+    // «می‌رم» (with its half-space) is «می» + a verb; «میرم» may be the verb «میر» + «م»
+    return /^ن?می\u200c/.test(next) || (/^ن?می/.test(next) && !verbForm(next.replace(/\u200c/g, "")));
+}
+
 export function isPresentStem(s: string): boolean {
     return PRESENT.has(s);
 }
@@ -146,6 +168,8 @@ export default createPatternRule(() => ({
             pattern: JOINED,
             check: (m) => {
                 if (NOT_VERBS.has(m[0])) return null;
+                // «می میرم»: the verb «میرم» after a lone «می», not «می» + «رم» (1.6.6)
+                if (!m[1] && afterLoneMi(m.input, m.index) && verbForm(m[0])) return null;
                 // «میگوی» is «میگو» (shrimp) + «ی»
                 if (m[0].endsWith("ی") && isKnown(m[0].slice(0, -1)) && !m[1]) return null;
                 const form = verbForm(m[3]);
@@ -158,6 +182,7 @@ export default createPatternRule(() => ({
             // spoken forms with a space (1.6.0): «می کنه»، «نمی شه»، «می تونن» → «می‌کنه»، «نمی‌شه»، «می‌تونن»
             pattern: new RegExp(`${START}(ن?می) +(?=(${LETTER}{1,}(?:ه|ن|ین))(?!${WORD_CHAR}))`, "g"),
             check: (m) => {
+                if (miFollows(m.input, m.index + m[0].length)) return null;
                 const s = spoken(m[1] + ZWNJ + m[2]);
                 if (!s || !/^ن?می‌/.test(s.formal)) return null;
                 return { message: `«${m[1]}» با نیم‌فاصله به فعل می‌چسبد`, replacement: m[1] + ZWNJ };
@@ -165,14 +190,17 @@ export default createPatternRule(() => ({
         },
         {
             pattern: PARTICIPLE,
-            check: (m) => (PAST.has(m[2]) ? { message: `«${m[1]}» با نیم‌فاصله به فعل می‌چسبد`, replacement: m[1] + ZWNJ } : null)
+            check: (m) => (PAST.has(m[2]) && !miFollows(m.input, m.index + m[0].length) ? { message: `«${m[1]}» با نیم‌فاصله به فعل می‌چسبد`, replacement: m[1] + ZWNJ } : null)
         },
         {
             pattern: PATTERN,
-            check: (m) => ({
-                message: `«${m[1]}» با نیم‌فاصله به فعل می‌چسبد`,
-                replacement: m[1] + ZWNJ
-            })
+            check: (m) =>
+                miFollows(m.input, m.index + m[0].length)
+                    ? null
+                    : {
+                          message: `«${m[1]}» با نیم‌فاصله به فعل می‌چسبد`,
+                          replacement: m[1] + ZWNJ
+                      }
         }
     ]
 }));

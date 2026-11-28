@@ -104,9 +104,10 @@ describe("1.6.1: the false reds 1.6.0 left", function () {
             const p = await page(t);
             assert.deepStrictEqual(p.shown.filter((m) => /[0-9]/.test(at(p.text, m))).map((m) => at(p.text, m)), [], t);
         }
-        // a number standing alone still gets Persian digits (red, never silent)
+        // a number standing alone still gets Persian digits (blue since 1.6.6, red before; never silent)
         const p = await page("در سال 2020 رفتم.");
-        assert.deepStrictEqual(reds(p.on("2020")).map((m) => m.fix?.text), ["۲۰۲۰"]);
+        assert.deepStrictEqual(reds(p.on("2020")).map((m) => m.fix?.text), []);
+        assert.deepStrictEqual(p.on("2020").filter(isBlue).map((m) => m.fix?.text), ["۲۰۲۰"]);
         assert.ok(!(await makeLint(kernel, DEFAULT_SETTINGS)("در سال 2020 رفتم.")).some((m) => isAuto(m, "در سال 2020 رفتم.")));
     });
 

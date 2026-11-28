@@ -45,7 +45,7 @@ new TextLintTester().run("punctuation (1.6.1)", punctuation, {
     invalid: [
         ask("شمردم یک..دو..سه", 2), // a judgement each (on the page with «… » and «. »)
         inv("گلپر و . . . در اینجا", "گلپر و… در اینجا"),
-        inv("در سال 2020 بود.", "در سال ۲۰۲۰ بود.")
+        inv("در سال 2020 بود.", "در سال 2020 بود.") // reported, blue and without a fix since 1.6.6
     ]
 });
 

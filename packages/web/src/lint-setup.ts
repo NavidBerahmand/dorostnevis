@@ -343,6 +343,35 @@ export function applyCertain(text: string, msgs: Msg[]): string {
     return out;
 }
 
+/**
+ * The Latin-digit card (1.6.6): «3» ← «۳». The book has no rule on digits, so it is a recommendation (blue): never
+ * in «درست‌کن», never made silently. Its versions, addresses, times, codes and Latin neighbours stay out (the rule).
+ */
+export const isLatinDigits = (m: Msg) => m.ruleId === "punctuation" && !!m.fix && /^[\u2063\u2064]*در متن فارسی رقم فارسی به کار می‌رود/.test(m.message);
+/**
+ * «همۀ عددها» → «بله» (1.6.6): every number the digit card marks in `msgs` (a lint of `text`) written in Persian
+ * digits, with their separators as the card writes them («4.5» ← «۴٫۵»، «1,000» ← «۱٬۰۰۰»), all at once.
+ */
+export function digitFixes(msgs: Msg[]): Array<{ range: [number, number]; text: string }> {
+    const fixes = msgs
+        .filter(isLatinDigits)
+        .map((m) => m.fix!)
+        .sort((a, b) => a.range[0] - b.range[0] || a.range[1] - b.range[1]);
+    const pick: typeof fixes = [];
+    let end = -1;
+    for (const f of fixes) {
+        if (f.range[0] < end) continue;
+        pick.push(f);
+        end = f.range[1];
+    }
+    return pick;
+}
+export function convertDigits(text: string, msgs: Msg[]): string {
+    let out = text;
+    for (const f of digitFixes(msgs).reverse()) out = out.slice(0, f.range[0]) + f.text + out.slice(f.range[1]);
+    return out;
+}
+
 /** A common convention the book has no rule for: no book meter, never «قطعی». */
 export const NOT_IN_BOOK = /در دستور خط نیامده/;
 

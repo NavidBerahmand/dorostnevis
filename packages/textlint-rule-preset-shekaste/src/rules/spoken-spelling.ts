@@ -11,7 +11,7 @@ import { START, END, LETTER } from "../../../textlint-rule-preset-farhangestan/s
 import { isKnown } from "../../../textlint-rule-preset-farhangestan/src/util/words";
 import { spoken, knownish } from "../../../textlint-rule-preset-farhangestan/src/util/colloquial";
 import { corpusBucket } from "../../../textlint-rule-preset-farhangestan/src/util/speller";
-import { verbForm } from "../../../textlint-rule-preset-farhangestan/src/rules/mi-prefix";
+import { verbForm, afterLoneMi } from "../../../textlint-rule-preset-farhangestan/src/rules/mi-prefix";
 
 const Z = "‌";
 
@@ -21,6 +21,8 @@ export default createPatternRule(() => ({
         {
             pattern: new RegExp(`${START}(ن?می)(${LETTER}{2,})${END}`, "g"),
             check: (m) => {
+                // «می میرم»: «میرم» is the verb after a lone «می» (→ «می‌میرم»), not «می‌رم» (1.6.6)
+                if (afterLoneMi(m.input, m.index) && verbForm(m[0])) return null;
                 const s = spoken(m[0]);
                 // «میتونید»: the pattern for «-ون» gives «میتوانید» without the half-space; still «می» + a verb (1.6.2)
                 if (!s || !(/^ن?می‌/.test(s.formal) || (/^ن?می/.test(s.formal) && verbForm(s.formal.replace(/^ن?می/, ""))))) return null;
