@@ -113,7 +113,8 @@ describe("1.6.3: the model's guess (yellow)", function () {
     });
 
     it("no card on a counter after a number, nor before a verb, in writing", async () => {
-        for (const t of ["کل بنا از ۲۴ قطعه سنگ ساخته شده است.", "آن‌ها هر روز دو حلقه فیلم کمدی داشتند.", "او را شیفته خود کرده است."]) {
+        // 1.6.10: «او را شیفته خود کرده است» is out: «شیفتۀ خود کردن» does take the ezafe; the retrained model suggests it
+        for (const t of ["کل بنا از ۲۴ قطعه سنگ ساخته شده است.", "آن‌ها هر روز دو حلقه فیلم کمدی داشتند."]) {
             assert.deepStrictEqual((await page(t)).ezafe, [], t);
         }
     });

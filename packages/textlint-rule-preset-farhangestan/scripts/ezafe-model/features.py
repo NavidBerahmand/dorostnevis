@@ -34,6 +34,8 @@ NOT_EZAFE = {
     "بلکه", "که", "چه", "آنچه", "هرچه", "چنانچه", "اگرچه", "گرچه", "همیشه", "البته", "دوباره", "همواره",
     "هماره", "یکباره", "وگرنه", "نه", "ناگه", "همانا", "زیراکه", "چنانکه", "آنکه", "اینکه",
     # determiners and numbers: «این‌گونه واژه‌ها»، «سه کتاب»
+    # spoken «یه» (a), «چیه»، «کیه» (what/who is): no ezafe heads (since 1.6.10 words in «ـیه» are candidates)
+    "یه", "چیه", "کیه",
     "اینگونه", "این‌گونه", "آنگونه", "آن‌گونه", "همین‌گونه", "همان‌گونه", "همینگونه", "همانگونه", "هرگونه", "هیچ‌گونه", "هیچگونه", "چگونه", "بدین‌گونه", "بدینگونه", "سه", "یازده", "دوازده", "سیزده", "چهارده", "پانزده", "شانزده", "هفده", "هجده", "هیجده", "نوزده",
 }
 
@@ -44,10 +46,20 @@ def normalize(text: str) -> str:
     return MARKS.sub("", text)
 
 
+# Since 1.6.10 a long vowel before «ه» is no sign by itself («شیوه، نحوه، سایه، پایه، نظریه، حاشیه» end in a silent «ه»):
+# only these words (the closed list of src/util/words.ts PRONOUNCED_HE_WORDS), «ـاه/ـآه» and «ـپژوه» are pronounced.
+PRONOUNCED_HE_WORDS = {
+    "فرمانده", "بازده", "گره", "زره", "بزه", "فربه", "توجه", "متوجه", "مواجه", "مشابه", "متشابه", "مرفه",
+    "منزه", "مشتبه", "تنبه", "متنبه", "وجه", "فقیه", "سفیه", "شبیه", "کریه", "وجیه", "نزیه", "تنبیه",
+    "تشبیه", "توجیه", "تنزیه", "موجه", "ابله", "مکروه", "کوه", "گروه", "شکوه", "انبوه", "اندوه", "ستوه",
+    "فقه", "واله", "سپه", "نستوه", "نبیه", "سیه",
+}
+
+
 def ends_with_silent_he(word: str) -> bool:
-    if not word.endswith("ه") or len(word) < 2 or word in PRONOUNCED_HE:
+    if not word.endswith("ه") or len(word) < 2 or word in PRONOUNCED_HE or word in PRONOUNCED_HE_WORDS:
         return False
-    return word[-2] not in "اویآ"
+    return word[-2] not in "اآ" and not word.endswith("پژوه")
 
 
 def tokens(text: str) -> list[str]:
@@ -203,8 +215,20 @@ def features(toks: list[str], i: int) -> list[str]:
         # since 1.6.3: the word after next («اطلاع دارید»، «رنگ گذاشتین»: a compound verb begins at w1)
         "w1w2t=" + w1 + "|" + tag2(w2),
         "m1w1=" + m1 + "|" + w1,
+        # since 1.6.10: which mark ends the phrase after w1 or comes before w0 («،» or «.» or «»»), and w0 with the
+        # word after next («درباره … است»)
+        "w2P=" + mark(toks, i + 2),
+        "m1P=" + mark(toks, i - 1),
+        "w0w2t=" + w0 + "|" + tag2(w2),
     ]
     return f
+
+
+def mark(toks: list[str], j: int) -> str:
+    """The punctuation mark at toks[j] («،»، «.»، «»»…), «<S>» at either end, «-» for a word, a number or Latin."""
+    if j < 0 or j >= len(toks):
+        return "<S>"
+    return toks[j] if norm_tok(toks[j]) == "<P>" else "-"
 
 
 def candidates(text: str):

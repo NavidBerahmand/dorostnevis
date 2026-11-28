@@ -41,6 +41,8 @@ const PRONOUNCED_HE = new Set([
 export const NOT_EZAFE = new Set([
     "بلکه", "که", "چه", "آنچه", "هرچه", "چنانچه", "اگرچه", "گرچه", "همیشه", "البته", "دوباره", "همواره",
     "هماره", "یکباره", "وگرنه", "نه", "ناگه", "همانا", "زیراکه", "چنانکه", "آنکه", "اینکه",
+    // spoken «یه» (a), «چیه»، «کیه» (since 1.6.10 words in «ـیه» are candidates)
+    "یه", "چیه", "کیه",
     // determiners and numbers: «این‌گونه واژه‌ها»، «سه کتاب»
     "اینگونه", "این‌گونه", "آنگونه", "آن‌گونه", "همین‌گونه", "همان‌گونه", "همینگونه", "همانگونه", "هرگونه", "هیچ‌گونه", "هیچگونه", "چگونه", "بدین‌گونه", "بدینگونه", "سه", "یازده", "دوازده", "سیزده", "چهارده", "پانزده", "شانزده", "هفده", "هجده", "هیجده", "نوزده"
 ]);
@@ -49,9 +51,17 @@ function normalize(text: string): string {
     return text.replace(/ي/g, "ی").replace(/ى/g, "ی").replace(/ك/g, "ک").replace(MARKS, "");
 }
 
+/** Since 1.6.10 a long vowel before «ه» is no sign by itself («شیوه، نحوه، سایه، نظریه»): words/PRONOUNCED_HE_WORDS and «ـاه». */
+const PRONOUNCED_HE_WORDS = new Set([
+    "فرمانده", "بازده", "گره", "زره", "بزه", "فربه", "توجه", "متوجه", "مواجه", "مشابه", "متشابه", "مرفه",
+    "منزه", "مشتبه", "تنبه", "متنبه", "وجه", "فقیه", "سفیه", "شبیه", "کریه", "وجیه", "نزیه", "تنبیه",
+    "تشبیه", "توجیه", "تنزیه", "موجه", "ابله", "مکروه", "کوه", "گروه", "شکوه", "انبوه", "اندوه", "ستوه",
+    "فقه", "واله", "سپه", "نستوه", "نبیه", "سیه"
+]);
+
 function endsWithSilentHe(word: string): boolean {
-    if (!word.endsWith("ه") || word.length < 2 || PRONOUNCED_HE.has(word)) return false;
-    return !"اویآ".includes(word[word.length - 2]);
+    if (!word.endsWith("ه") || word.length < 2 || PRONOUNCED_HE.has(word) || PRONOUNCED_HE_WORDS.has(word)) return false;
+    return !"اآ".includes(word[word.length - 2]) && !word.endsWith("پژوه");
 }
 
 function plain(tok: string): string {
@@ -205,8 +215,18 @@ function features(toks: string[], i: number): string[] {
         "w0w1t=" + w0 + "|" + tag2(w1),
         // since 1.6.3: the word after next («اطلاع دارید»: a compound verb begins at w1), and the words around
         "w1w2t=" + w1 + "|" + tag2(w2),
-        "m1w1=" + m1 + "|" + w1
+        "m1w1=" + m1 + "|" + w1,
+        // since 1.6.10: the mark after w1 / before w0, and w0 with the word after next
+        "w2P=" + mark(toks, i + 2),
+        "m1P=" + mark(toks, i - 1),
+        "w0w2t=" + w0 + "|" + tag2(w2)
     ];
+}
+
+/** The punctuation mark at toks[j], «<S>» at either end, «-» for a word, a number or Latin (features.py mark()). */
+function mark(toks: string[], j: number): string {
+    if (j < 0 || j >= toks.length) return "<S>";
+    return normTok(toks[j]) === "<P>" ? toks[j] : "-";
 }
 
 export interface EzafeCandidate {

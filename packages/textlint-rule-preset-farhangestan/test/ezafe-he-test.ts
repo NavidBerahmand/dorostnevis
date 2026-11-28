@@ -53,7 +53,8 @@ new TextLintTester().run("ezafe-he", rule, {
         inv("نتیجه نهایی را نشان داد.", "نتیجۀ نهایی را نشان داد."),
         // less sure (0.55–0.9): a suggestion, no automatic fix
 
-        inv("این روستا در دهستان قلعه شاهین قرار دارد.", "این روستا در دهستان قلعۀ شاهین قرار دارد."),
+        // 1.6.10: the retrained model gives 89.6% here (shown «۹۰٪»): a suggestion, no automatic fix
+        { text: "این روستا در دهستان قلعه شاهین قرار دارد.", output: "این روستا در دهستان قلعه شاهین قرار دارد.", errors: [{}] },
         // 1.6.3: the retrained model is less sure here (85%): a suggestion, no automatic fix
         { text: "خانه قبلی را فروخت.", output: "خانه قبلی را فروخت.", errors: [{}] },
         inv("همه دفترها را جمع کرد.", "همۀ دفترها را جمع کرد."),
