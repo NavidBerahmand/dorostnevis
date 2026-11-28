@@ -54,6 +54,11 @@ const TANVIN_STEMS = [
         ...MISSING_TANVIN.map((w) => w.slice(0, -1))
     ])
 ].sort((a, b) => b.length - a.length);
+/** Is `stem` + «اً» an adverb of the tanvin lists («حتم» → «حتماً»)? (1.6.8: a tanvin typed as «"» after «حتما») */
+const TANVIN_SET = new Set(TANVIN_STEMS);
+export function isTanvinStem(stem: string): boolean {
+    return TANVIN_SET.has(stem);
+}
 const WRONG_TANVIN = "(?:ا[\u064E\u064C\u0652\u064F]|أ|آ)";
 const N = (page: string) => `غلط ننویسیم، ابوالحسن نجفی، ص ${page}`;
 /** alef with or without tanvin, in either order; or only with tanvin */

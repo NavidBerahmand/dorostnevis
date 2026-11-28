@@ -27,11 +27,12 @@
  *
  * هر بخش را می‌شود خاموش کرد: { "digits": false }، { "quotes": false }…
  */
-import { createPatternRule, PatternResult } from "../util/pattern-rule";
+import { createPatternRule, PatternResult, documentText, strStart } from "../util/pattern-rule";
 import { toPersianDigits } from "../util/persian";
 import { joinsNumber } from "../util/number-compounds";
 import { nbspPlaces, isUnit, CITATIONS, LETTERS } from "../util/nbsp";
 import { isKnown } from "../util/words";
+import { isTanvinStem } from "./hamza-tanvin";
 import commonNouns from "../dict/hazm-common-nouns.json";
 
 const COMMON_NOUNS_P = new Set<string>(commonNouns.words);
@@ -213,6 +214,180 @@ function isProtected(text: string, start: number, end: number): boolean {
     return protSpans.some(([a, b]) => start < b && end > a) || smileySpans(text).some(([a, b]) => start < b && end >= a);
 }
 
+
+/**
+ * 1.6.8: is the guillemet at `at` (offset in the whole text) one end of a quotation that runs over a line break
+ * inside one paragraph: «« … \n … »» with no blank line between, at most four line breaks, no other guillemet
+ * between, and the partner «"» or the right guillemet (a straight mark there is converted by its own check)?
+ */
+function guillemetAcrossLines(text: string, at: number): boolean {
+    const c = text[at];
+    const step = c === "«" ? 1 : -1;
+    const want = c === "«" ? "»" : "«";
+    let lines = 0;
+    for (let i = at + step; i >= 0 && i < text.length && Math.abs(i - at) <= 1200; i += step) {
+        const ch = text[i];
+        if (ch === "\n") {
+            if (++lines > 4) return false;
+            const j = i + step;
+            if (/^[ \t]*\n/.test(step > 0 ? text.slice(j) : text.slice(0, i).split("").reverse().join(""))) return false; // a blank line
+            continue;
+        }
+        if (ch === want || ch === '"') return lines > 0;
+        if (ch === c) return false;
+    }
+    return false;
+}
+
+/**
+ * 1.6.8: straight double quotes «"» in Persian text, all of them. Every «"» of a paragraph (the text between
+ * blank lines) is paired by order: the 1st with the 2nd, the 3rd with the 4th…, whatever the spaces say and
+ * across line breaks. Before pairing, marks that are not quotation marks are set aside: an escaped «\"», a run
+ * «""», a paragraph with an HTML attribute («="»); and, when the count would not pair up otherwise, a tanvin
+ * typed as «"» («حتما"») or an inch/ditto mark after a digit («۵"»). A pair is converted only when it holds a
+ * Persian letter, is not inside «…» already (a quotation inside a quotation keeps its marks) and is not
+ * absurdly long. Returns each converted mark's offset → its partner's.
+ */
+const PAIRS_CACHE = { text: "\u0000", pairs: new Map<number, number>() };
+export function straightQuotePairs(text: string): Map<number, number> {
+    if (PAIRS_CACHE.text === text) return PAIRS_CACHE.pairs;
+    const pairs = new Map<number, number>();
+    const faLetter = new RegExp(FA_LETTER);
+    const maybe = (i: number) => {
+        if (text[i] !== '"' || !/^(?:[\s.،؛:!؟?)\u200c]|$)/.test(text.slice(i + 1, i + 2))) return false;
+        // an inch mark after a digit, or a tanvin typed as «"» after an adverb of the tanvin lists («حتما"»)
+        if (/[0-9۰-۹]/.test(text[i - 1] ?? "")) return true;
+        const w = /([\u0600-\u06FF]+)ا\u064B?$/.exec(text.slice(Math.max(0, i - 30), i));
+        return !!w && isTanvinStem(w[1]);
+    };
+    // order the marks of `list` into pairs, or null: doubtful marks set aside when the count is odd or one would
+    // open a pair; guillemets in their place; no narration ending in «:» between two quotations
+    const order = (list: number[]): number[] | null => {
+        if (list.length % 2 === 1 || list.some((i, k) => k % 2 === 0 && maybe(i))) {
+            const rest = list.filter((i) => !maybe(i));
+            if (rest.length % 2 === 1 || rest.length === list.length) return null;
+            list = rest;
+        }
+        if (list.some((i, k) => (text[i] === "«" && k % 2 === 1) || (text[i] === "»" && k % 2 === 0))) return null;
+        // more than one pair: no two marks in a row that both look like openers or both like closers (a quotation
+        // inside another one written with the same marks: «"… و "قهرمان…" …"»)
+        if (list.length > 2) {
+            const shape = list.map((i) => {
+                const b = text[i - 1] ?? " ", a = text[i + 1] ?? " ";
+                return text[i] === "«" ? "o" : text[i] === "»" ? "c" : /[\s(\[{:،؛]/.test(b) && !/\s/.test(a) ? "o" : !/\s/.test(b) && /[\s)\]}.،؛:!؟?,;]/.test(a) ? "c" : "x";
+            }).join("");
+            if (/oo|cc/.test(shape)) return null;
+        }
+        if (list.some((i, k) => k % 2 === 0 && /:\s*$/.test(text.slice(i + 1, list[k + 1])))) return null;
+        return list;
+    };
+    const take = (list: number[]) => {
+        for (let k = 0; k + 1 < list.length; k += 2) {
+            const o = list[k], c = list[k + 1];
+            if (text[o] !== '"' && text[c] !== '"') continue;
+            const inner = text.slice(o + 1, c);
+            if (!faLetter.test(inner) || inner.length > 1500 || (inner.match(/\n/g) ?? []).length > 6) continue;
+            if (!inner.trim() || /[|[\]{}]/.test(inner)) continue;
+            // already inside «…» on its line: a quotation within a quotation keeps its marks
+            const ls = text.lastIndexOf("\n", o - 1) + 1;
+            if (text[o] === '"' && insideGuillemets(text.slice(ls, text.indexOf("\n", o) < 0 ? text.length : text.indexOf("\n", o)), o - ls)) continue;
+            if (text[o] === '"') pairs.set(o, c);
+            if (text[c] === '"') pairs.set(c, o);
+        }
+    };
+    const blockRe = /\n[ \t]*\n/g;
+    const bounds: Array<[number, number]> = [];
+    let from = 0, bm: RegExpExecArray | null;
+    while ((bm = blockRe.exec(text)) !== null) { bounds.push([from, bm.index]); from = bm.index + bm[0].length; }
+    bounds.push([from, text.length]);
+    for (const [bs, be] of bounds) {
+        const block = text.slice(bs, be);
+        if (!block.includes('"')) continue;
+        // not quotation marks: a run «""», an escaped «\"», and the marks of a line with an HTML attribute («="»)
+        const skip = (i: number) => text[i - 1] === "\\" || text[i - 1] === '"' || text[i + 1] === '"' ||
+            text.slice(text.lastIndexOf("\n", i - 1) + 1, text.indexOf("\n", i) < 0 ? text.length : text.indexOf("\n", i)).includes('="');
+        // a guillemet without its partner in the paragraph counts too: the writer may have fixed one end already
+        const lone = new Set<number>();
+        const stack: number[] = [];
+        for (let i = bs; i < be; i++) {
+            if (text[i] === "«") stack.push(i);
+            else if (text[i] === "»") { if (stack.length) stack.pop(); else lone.add(i); }
+        }
+        for (const i of stack) lone.add(i);
+        // first each line on its own (as before 1.6.8): a line whose marks pair up keeps its pairs; the marks
+        // of the lines that do not are then paired across lines, in order
+        const pool: number[] = [];
+        let ls = bs;
+        while (ls <= be) {
+            let le = text.indexOf("\n", ls);
+            if (le < 0 || le > be) le = be;
+            const marks: number[] = [];
+            for (let i = ls; i < le; i++) if ((text[i] === '"' && !skip(i)) || lone.has(i)) marks.push(i);
+            // a line's own pairs are the one-line check's (as before 1.6.8); a line with an odd number of «"» leaves
+            // one mark for a partner on another line: its first if that one closes (it ends a word and a space or a
+            // mark follows), else its last; a guillemet left over from elsewhere joins too
+            const raw = marks.filter((i) => text[i] === '"');
+            // doubtful marks (a tanvin typed as «"», an inch mark) are set aside only when the line's count is odd
+            const mine = raw.length % 2 === 1 ? raw.filter((i) => !maybe(i)) : raw;
+            const hasLone = marks.some((i) => text[i] !== '"');
+            if (hasLone && marks.some((i) => text[i] === '"')) {
+                // «"» and a guillemet without its partner on one line («بهترین بازی‌ها" …): the one-line checks' case
+            } else if (mine.length % 2 === 1) {
+                const f = mine[0];
+                const closes = !/\s/.test(text[f - 1] ?? " ") && f !== ls && /^(?:[\s)\]}.،؛:!؟?,;(]|$)/.test(text.slice(f + 1, f + 2));
+                const cand = closes ? f : mine[mine.length - 1];
+                // not a mark right after «ا» (a tanvin typed as «"»: «واقعا"‌حسابی»، «عموما"کتب»)
+                if (!/ا\u064B?$/.test(text.slice(cand - 2, cand))) pool.push(cand);
+            }
+            if (!marks.some((i) => text[i] === '"')) pool.push(...marks);
+            ls = le + 1;
+        }
+        pool.sort((a, b) => a - b);
+        if (pool.some((i) => text[i] === '"')) {
+            const across = order(pool);
+            // only pairs that run over a line break (the rest is the one-line check's), and only where the opening
+            // mark does not look like a closing one (it ends a word and a space or a mark follows) and the closing
+            // mark does not look like an opening one (a space or the line start before it, a letter after it)
+            const looksClosing = (i: number) => text[i] === "»" || (text[i] === '"' && !/\s/.test(text[i - 1] ?? "\n") && /^(?:[\s)\]}.،؛:!؟?,;]|$)/.test(text.slice(i + 1, i + 2)));
+            const looksOpening = (i: number) => text[i] === "«" || (text[i] === '"' && /[\s(\[{]/.test(text[i - 1] ?? "\n") && /[^\s.،؛:!؟?,;)\]}]/.test(text[i + 1] ?? " "));
+            if (across) {
+                const keep: number[] = [];
+                for (let k = 0; k + 1 < across.length; k += 2) {
+                    const o = across[k], c = across[k + 1];
+                    if (!text.slice(o, c).includes("\n") || looksClosing(o) || looksOpening(c)) continue;
+                    keep.push(o, c);
+                }
+                take(keep);
+            }
+        }
+    }
+    PAIRS_CACHE.text = text;
+    PAIRS_CACHE.pairs = pairs;
+    return pairs;
+}
+/** The fix for one paired «"» at `at`: [start, end, replacement] in the whole text, spaces put right. */
+export function straightQuoteFix(text: string, at: number): [number, number, string] | null {
+    const partner = straightQuotePairs(text).get(at);
+    if (partner === undefined) return null;
+    const lineStart = text.lastIndexOf("\n", at - 1) + 1;
+    let lineEnd = text.indexOf("\n", at);
+    if (lineEnd < 0) lineEnd = text.length;
+    if (partner > at) {
+        // opening: «… "سلام» / «…" سلام» → «… «سلام»: one space before (none at a line start or after a bracket), none after
+        let e = at + 1;
+        while (e < lineEnd && text[e] === " ") e++;
+        const before = text[at - 1];
+        const space = at > lineStart && !/[\s(\[{«‌]/.test(before ?? "") ? " " : "";
+        return [at, e, space + "«"];
+    }
+    // closing: «سلام "» / «سلام"و» → «سلام» و»: none before, one after unless a mark, a suffix or the line end follows
+    let s = at;
+    while (s > lineStart && text[s - 1] === " " && s - 1 > partner) s--;
+    const rest = text.slice(at + 1, lineEnd);
+    const space = rest !== "" && !/^[\s.،؛:!؟?,;)\]}»…\-–—\u200c\u200e\u200f]/.test(rest) && !/^(?:ی|یی|ئی|ها|های|هایی|ای|اش|ام|ات|ان)(?![\u0600-\u06FF])/.test(rest) ? " " : "";
+    return [s, at + 1, "»" + space];
+}
+
 export default createPatternRule<Options>((options) => {
     const on = (k: keyof Options) => options[k] !== false;
     const checks: Array<{ pattern: RegExp; check: (m: RegExpExecArray) => PatternResult | null }> = [];
@@ -274,7 +449,7 @@ export default createPatternRule<Options>((options) => {
                     lead = /[\s(\[{]/.test(before) || m.index === ls ? "" : " ";
                     // (a suffix or a ZWNJ after the closing mark stays attached: «"رسا"ی دلواپسان» → «رسا»ی)
                     const rest = m.input.slice(m.index + m[0].length);
-                    trail = /[\s)\]}.،؛:!؟?,;\u200c\u200e\u200f]/.test(after) || m.index + m[0].length >= (le < 0 ? m.input.length : le) || /^(?:ی|ها|های|هایی|ه|ای|اش|ام|ات|ان)(?![\u0600-\u06FF])/.test(rest) ? "" : " ";
+                    trail = /[\s)\]}.،؛:!؟?,;\u200c\u200e\u200f]/.test(after) || m.index + m[0].length >= (le < 0 ? m.input.length : le) || /^(?:ی|یی|ئی|ها|های|هایی|ه|ای|اش|ام|ات|ان)(?![\u0600-\u06FF])/.test(rest) ? "" : " ";
                 }
                 // a single «'» is also an apostrophe: only short, all-Persian quotations
                 if (open === "'" && (inner.length > 40 || /[A-Za-z]/.test(inner))) return null;
@@ -282,6 +457,20 @@ export default createPatternRule<Options>((options) => {
                 // a quotation inside «…» keeps its own marks: «او گفت “نه”»
                 if (insideGuillemets(m.input, m.index)) return null;
                 return { message: "در متن فارسی گیومۀ فارسی «» به کار می‌رود", replacement: `${lead}«${inner.trim()}»${trail}`, source: SOURCE };
+            }
+        });
+    }
+
+    if (on("quotes")) {
+        checks.push({
+            // 1.6.8: every paired «"» (straightQuotePairs), each mark its own fix
+            pattern: /"/g,
+            check: (m) => {
+                const base = strStart();
+                const fix = straightQuoteFix(documentText(), base + m.index);
+                if (!fix) return null;
+                const [fs, fe, replacement] = fix;
+                return { message: "در متن فارسی گیومۀ فارسی «» به کار می‌رود", replacement, start: 0, end: 1, fixStart: fs - base - m.index, fixEnd: fe - base - m.index, source: SOURCE };
             }
         });
     }
@@ -305,6 +494,8 @@ export default createPatternRule<Options>((options) => {
             check: (m) => {
                 if (!persianContext(m.input, m.index) || !unmatchedAt(m.input, m.index)) return null;
                 const c = m[0];
+                // 1.6.8: a quotation that runs over a line break inside a paragraph is closed on a later line
+                if ((c === "«" || c === "»") && guillemetAcrossLines(documentText(), strStart() + m.index)) return null;
                 // a guillemet typed backwards, or one the guillemet check asks about (1.5.2): that check's
                 if (c === "«" || c === "»") {
                     const line = quoteLine(m.input, m.index);

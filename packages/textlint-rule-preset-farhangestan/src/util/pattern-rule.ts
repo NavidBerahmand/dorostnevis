@@ -81,9 +81,13 @@ export const isSuggestion = (message: string) => /^\u2064?\u2063/.test(message);
 export const KIND_SUGGESTION = "\u2064";
 
 /** The text being linted (the Document node's source): `m.input` of a check is only its paragraph. */
-const DOCUMENT = { text: "" };
+const DOCUMENT = { text: "", strStart: 0 };
 export function documentText(): string {
     return DOCUMENT.text;
+}
+/** Where the paragraph being checked starts in documentText() (1.6.8: checks that pair marks across lines). */
+export function strStart(): number {
+    return DOCUMENT.strStart;
 }
 
 export function createPatternRule<T extends object = object>(
@@ -100,6 +104,7 @@ export function createPatternRule<T extends object = object>(
             },
             [Syntax.Str](node) {
                 const text = getSource(node);
+                DOCUMENT.strStart = node.range[0];
                 for (const { pattern, check } of spec.checks) {
                     const re = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g");
                     let m: RegExpExecArray | null;

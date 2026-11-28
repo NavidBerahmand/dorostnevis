@@ -4,6 +4,7 @@ import { inv } from "./helpers";
 
 new TextLintTester().run("punctuation", rule, {
     valid: [
+        'او گفت "سلام\n\nخوبی؟ و رفت.', 'او گفت «سلام\nخوبی؟» و رفت.', 'قد ۵"\nو وزن ۶" بود.',
         // never: times and ratios, URLs, ranges, Latin compounds, a hyphen starting a list line, «؟!»
         "ساعت ۱۲:۳۰ بود و نسبت ۳:۱ است.", "نشانی http://example.com است.", "۴-۵\u00A0روز و ۱۳۹۰–۱۴۰۰ و ص\u00A0۱۲–۱۵", "x-y فارسی",
         "- مورد اول", "واقعاً؟! بله", "سال ۱۴۰۳ و ۵ ساله", "یک روز —\u00A0اگر باشد\u00A0— رفت.", "ق.م.، رفت",
@@ -35,6 +36,11 @@ new TextLintTester().run("punctuation", rule, {
         "او (که [به گفتهٔ خودش] آمده بود) رفت."
     ],
     invalid: [
+        // 1.6.8: a quotation over a line break inside one paragraph
+        { text: 'نوشته است:\n"جمعی از اهالی آمدند.\nشاه متغیر شده فرمودند، دور کردند.".(۴)', output: 'نوشته است:\n«جمعی از اهالی آمدند.\nشاه متغیر شده فرمودند، دور کردند.».(۴)', errors: [{}, {}] },
+        { text: 'او گفت "سلام\nخوبی؟" و رفت.', output: 'او گفت «سلام\nخوبی؟» و رفت.', errors: [{}, {}] },
+        { text: 'او گفت «سلام\nخوبی؟" و رفت.', output: 'او گفت «سلام\nخوبی؟» و رفت.', errors: [{}] },
+        { text: 'او گفت "سلام\nخوبی؟» و رفت.', output: 'او گفت «سلام\nخوبی؟» و رفت.', errors: [{}] },
         // 1.6.5: straight quotes typed against the wrong word still pair up by order on the line
         { text: 'مبنی بر اینکه" برو سؤال کن، شاید یادشون رفته" کاشف به عمل آمد.', output: 'مبنی بر اینکه «برو سؤال کن، شاید یادشون رفته» کاشف به عمل آمد.', errors: [{}] },
         { text: 'او گفت" برو "و رفت.', output: 'او گفت «برو» و رفت.', errors: [{}] },

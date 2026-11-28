@@ -7,6 +7,7 @@ import textPlugin from "@textlint/textlint-plugin-text";
 import preset from "../../textlint-rule-preset-farhangestan/src/index";
 import shekaste, { formalRules as spokenInFormal, commonRules as spokenEverywhere } from "../../textlint-rule-preset-shekaste/src/index";
 import { inBank } from "../../textlint-rule-preset-farhangestan/src/util/colloquial-bank";
+import { straightQuotePairs } from "../../textlint-rule-preset-farhangestan/src/rules/punctuation";
 import { registerSegments, spokenAt } from "../../textlint-rule-preset-farhangestan/src/util/colloquial";
 import virayesh, { CERTAIN_RULES } from "../../textlint-rule-preset-virayesh/src/index";
 
@@ -138,8 +139,17 @@ export function isAuto(m: Msg, text: string): boolean {
         const line = text.slice(lineStart, nl < 0 ? text.length : nl);
         if (/^در متن فارسی گیومۀ/.test(m.message)) {
             // only "…" and “…”, and only when every quote on the line has its pair
+            // 1.6.8: one mark of a quotation over a line break (its own fix «« / »»): silent when it is one of a pair
+            if (/^ ?[«»] ?$/.test(m.fix.text)) {
+                const qAt = text.slice(s, e).indexOf('"');
+                return qAt >= 0 && straightQuotePairs(text).has(s + qAt);
+            }
             const q = text[s];
-            if (q === '"') return (line.match(/"/g) ?? []).length % 2 === 0;
+            // (1.6.8: when the count is odd, a tanvin typed as «"» after «ا» or an inch mark after a digit is not counted)
+            if (q === '"') {
+                const n = (line.match(/"/g) ?? []).length;
+                return n % 2 === 0 || (line.replace(/(?<=[\u0600-\u06FF]ا\u064B?|[0-9۰-۹])"(?=[\s.،؛:!؟?)]|$)/g, "").match(/"/g) ?? []).length % 2 === 0;
+            }
             if (q === "“") return (line.match(/“/g) ?? []).length === (line.match(/”/g) ?? []).length;
             return false;
         }

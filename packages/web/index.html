@@ -172,7 +172,9 @@
     font-weight: 350;
     line-height: 2.3;
     white-space: pre-wrap;
-    overflow-wrap: break-word;
+    /* «anywhere», not «break-word» (1.6.9): a long address or a run of «____» in the text would otherwise widen
+       the box past the screen and shift the whole page sideways on a phone */
+    overflow-wrap: anywhere;
     direction: rtl;
     /* always right to left (1.6.5): «plaintext» (1.5.2) let an empty line or a line starting with a Latin
        word run left to right; the iPhone tap past a line's end is put right in app.ts (fixTapCaret) */
@@ -323,7 +325,7 @@
   .chip-judge { color: var(--judge); background: var(--judge-soft); }
   .chip-style { color: var(--ok); background: var(--bg); border: 1px solid var(--line); }
   .chip-advice { color: var(--advice); background: var(--advice-soft); }
-  .change { margin: 0; font-size: 1.15rem; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+  .change { margin: 0; font-size: 1.15rem; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; overflow-wrap: anywhere; min-width: 0; }
   .change-words { font-size: 0.85rem; }
   .from { text-decoration: line-through; text-decoration-color: var(--muted); color: var(--muted); }
   .issue-judge .from, .no-fix .from { text-decoration: none; color: var(--ink); }
