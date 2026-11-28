@@ -29,6 +29,7 @@
  */
 import { createPatternRule } from "../util/pattern-rule";
 import { LETTER, WORD_CHAR, START, END } from "../util/persian";
+import arabic from "../dict/arabic.json";
 
 const S_HAMZA = "دستور خط، «همزۀ پایانی»، تبصرۀ ۲، ص ۵۱";
 const S_TANVIN = "دستور خط، «تنوین»، ص ۵۶";
@@ -42,6 +43,18 @@ const S_TANVIN = "دستور خط، «تنوین»، ص ۵۶";
  */
 const MISSING_TANVIN = ["اصطلاحا", "منحصرا", "جمعا", "علنا", "مشترکا", "نوعا", "ترجیحا", "متناوبا", "ضرورتا", "اختصاصا", "مضافا", "ندرتا", "عادتا", "منطقا", "مختصرا", "سهوا", "غیابا", "متفقا", "بدوا", "مفصلا", "ایضا", "قلبا", "قهرا", "ماهیتا"];
 const S_TA = "دستور خط، «ة»، ص ۵۴";
+/**
+ * Tanvin typed with the wrong mark (1.6.7): «شخصاَ»، «عینأ»، «واقعاٌ»، «اصلاْ»، «حتمآ» ← «شخصاً»، «عیناً»، «واقعاً»، «اصلاً»،
+ * «حتماً». A fatha, a damma (or its tanvin), a sukun, a hamza or a madda on the alef of an adverb the tanvin lists hold (the book's, arabic.json,
+ * and MISSING_TANVIN): the word is that adverb, typed with the key beside the tanvin. None of these forms is a word.
+ */
+const TANVIN_STEMS = [
+    ...new Set([
+        ...(arabic.entries as Array<{ to: string; source: string }>).filter((e) => /«تنوین»/.test(e.source) && /اً$/.test(e.to)).map((e) => e.to.slice(0, -2)),
+        ...MISSING_TANVIN.map((w) => w.slice(0, -1))
+    ])
+].sort((a, b) => b.length - a.length);
+const WRONG_TANVIN = "(?:ا[\u064E\u064C\u0652\u064F]|أ|آ)";
 const N = (page: string) => `غلط ننویسیم، ابوالحسن نجفی، ص ${page}`;
 /** alef with or without tanvin, in either order; or only with tanvin */
 const AN = "(?:اً|ًا|ا)";
@@ -110,6 +123,11 @@ export default createPatternRule(() => ({
         {
             pattern: new RegExp(`${START}خواهش${AN}${END}`, "g"),
             check: () => ({ message: `${NOT_ARABIC("خواهش")}: «لطفاً» یا «خواهش می‌کنم …»`, replacement: "لطفاً", source: `${N("۳۱۹")}، به قیاس «گاهاً»` })
+        },
+        {
+            // «شخصاَ»، «عینأ»، «واقعاٌ»، «اصلاْ» → «…اً» (1.6.7)
+            pattern: new RegExp(`${START}(${TANVIN_STEMS.join("|")})${WRONG_TANVIN}${END}`, "g"),
+            check: (m) => ({ message: `تنوین نصب «اً» نوشته می‌شود: «${m[1]}اً»`, replacement: m[1] + "اً", source: S_TANVIN })
         },
         {
             pattern: new RegExp(`${START}(${MISSING_TANVIN.join("|")})${END}`, "g"),

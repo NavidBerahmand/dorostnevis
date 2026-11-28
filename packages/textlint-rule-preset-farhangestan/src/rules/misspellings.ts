@@ -16,6 +16,8 @@
  */
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, ZWNJ, WORD_CHAR } from "../util/persian";
+import { doubledTypo } from "../util/speller";
+import { registerSegments, spokenAt } from "../util/colloquial";
 
 const S = (page: string) => `نکته‌های ویرایش، علی صلح‌جو، ص ${page}`;
 const N = (page: string) => `غلط ننویسیم، ابوالحسن نجفی، ص ${page}`;
@@ -104,7 +106,20 @@ const HOMOPHONE: Record<string, string> = {
     اوغات: "اوقات",
     ازعان: "اذعان",
     هاشیه: "حاشیه",
-    مطمعن: "مطمئن"
+    مطمعن: "مطمئن",
+    // 1.6.7: frequent misspellings of the blogs and Wikipedia, each checked in its contexts: never a word, a name or a
+    // dialect form (left out so: «اسفدن» a town, «مقیسه» a surname, «سرشاسی» a car part, «تمیشه» a place, «متلب» MATLAB)
+    بنابرین: "بنابراین",
+    فرشگاه: "فروشگاه",
+    خوداری: "خودداری",
+    استفاه: "استفاده",
+    اسفاده: "استفاده",
+    برخودار: "برخوردار",
+    یاداشت: "یادداشت",
+    باردید: "بازدید",
+    انتظآر: "انتظار",
+    امیتاز: "امتیاز",
+    پاورپویینت: "پاورپوینت"
 };
 /** Endings a listed noun or adjective may carry: «حاظرم»، «لحضه‌ای»، «اظافه‌ها». */
 const HOMO_END = "(ی|ای|ها|های|هایی|م|ت|ش|مان|تان|شان|مون|تون|شون|ات|ان|ین|یم|ید|ند|ه)?";
@@ -167,6 +182,16 @@ export default createPatternRule(() => ({
                 const fixed = m[0].replace(/^(ن?می)(?!\u200c)(?=گ)/, "$1\u200c").replace("گز", "گذ");
                 const verb = m[2] === "اشت" ? "گذاشتن" : "گذشتن";
                 return { message: `«${verb}» با «ذ» نوشته می‌شود: «${fixed}»`, replacement: fixed, source: `فرهنگ املایی خطّ فارسی («${verb}»)` };
+            }
+        },
+        {
+            // a letter typed twice (1.6.7): «دووست» ← «دوست»، «وععده» ← «وعده»؛ only where certain (util/speller.ts)
+            pattern: new RegExp(`${START}[آ-ی]*([آ-ی])\\1[آ-ی]*(?=${ZWNJ}|${END})`, "g"),
+            check: (m) => {
+                const spoken = spokenAt(registerSegments(m.input), m.index);
+                const right = doubledTypo(m[0], !spoken);
+                if (!right) return null;
+                return { message: `حرفی دو بار تایپ شده است: «${right}»`, replacement: right, source: "غلط تایپی (واژه‌نامۀ واج‌بان)" };
             }
         },
         {

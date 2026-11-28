@@ -568,3 +568,48 @@ function checkWord(word: string, L: Map<string, number>, spokenSentence = false,
     if (out.length) return { suggestions: out.slice(0, 3) };
     return loose.size || looseSplit ? { note: true } : null;
 }
+
+/**
+ * A letter typed twice by mistake (1.6.7): «دووست» ← «دوست»، «وععده» ← «وعده»، «توججه» ← «توجه». Certain only when
+ * the word is unseen (not three times in Wikipedia, not accepted from the blogs, no word of the lists), removing one
+ * of the two letters gives one word only, a frequent one (≈ 1,000 occurrences), of three letters or more, and no
+ * other reading is possible: a doubled last letter that can be an ending is left out («اسمم» my name, «جوونن» they
+ * are young, «کرسیی»), and so is a letter three times or more (a stretch: «خیلیییی»). `vowelsToo`: «ا، و، ی»
+ * doubled, a stretch in speech («خووب»), only in a written sentence. null if not loaded or not certain.
+ */
+/** Is the doubled letter at i, i+1 part of a known word inside `word` (a prefix or an ending around it)? */
+function pairInWord(word: string, i: number): boolean {
+    const L = lex() ?? NO_LEX;
+    const ok = (w: string) => w.length >= 3 && (isKnown(w) || (L.get(w) ?? -1) >= 6);
+    for (const p of ["", ...PREFIXES]) {
+        if (!word.startsWith(p) || p.length > i) continue;
+        for (const s of ["", ...SUFFIXES]) {
+            if (!word.endsWith(s) || word.length - s.length < i + 2 || (p === "" && s === "")) continue;
+            if (ok(word.slice(p.length, word.length - s.length))) return true;
+        }
+    }
+    return false;
+}
+
+export function doubledTypo(word: string, vowelsToo = true): string | null {
+    if (!/^[آ-ی]+$/.test(word) || /([آ-ی])\1\1/.test(word) || !/([آ-ی])\1/.test(word)) return null;
+    const b = corpusBucket(word);
+    if (b === null || b >= 0 || isKnown(word) || verbForm(word) || ACCEPT.has(word) || NAMES.has(word) || LISTED.has(word)) return null;
+    const found = new Set<string>();
+    for (let i = 0; i + 1 < word.length; i++) {
+        const c = word[i];
+        if (c !== word[i + 1]) continue;
+        // an ending after the same letter («سهامم» my shares), a prefix before it («ببرد»، «ننوشت»، «ممکن»)
+        if (i + 2 === word.length && "متشین".includes(c)) return null;
+        // and «و» joined to a word that starts with «و» («ووطن» is «و وطن»)
+        if (i === 0 && "بنمو".includes(c)) return null;
+        // «اال»: «لا» turned round (copied from a PDF: «باال» is «بالا»), not an «ا» too many
+        if (c === "ا" && word[i + 2] === "ل") return null;
+        // the pair belongs to a word with an ending or a prefix: «مرددی» is «مردد» + «ی», not «مردی»
+        if (pairInWord(word, i)) return null;
+        if (!vowelsToo && "اوی".includes(c)) return null;
+        const w = word.slice(0, i) + word.slice(i + 1);
+        if (w.length >= 3 && isKnown(w) && (corpusBucket(w) ?? -1) >= 10) found.add(w);
+    }
+    return found.size === 1 ? [...found][0] : null;
+}

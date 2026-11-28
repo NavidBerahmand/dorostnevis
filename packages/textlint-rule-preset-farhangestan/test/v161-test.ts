@@ -50,8 +50,9 @@ new TextLintTester().run("punctuation (1.6.1)", punctuation, {
 });
 
 new TextLintTester().run("spaced-compounds (1.6.1)", spacedCompounds, {
-    valid: ["چند روزیه حال ندارم.", "این دو رو رد کرده.", "خداوند آن را در بدن ما قرار داد.", "یک بار دو بار رفتم."],
-    invalid: [ask("سیب زمینی خریدم.")]
+    // «سیب زمینی»: the farhang lists «سیبِ زمینی» too (1.6.7: no card; a yellow one before)
+    valid: ["چند روزیه حال ندارم.", "این دو رو رد کرده.", "خداوند آن را در بدن ما قرار داد.", "یک بار دو بار رفتم.", "سیب زمینی خریدم."],
+    invalid: [ask("تخم مرغ خریدم.")]
 });
 
 describe("1.6.1: data and the spelling checker", function () {

@@ -29,6 +29,10 @@ import { missingMadd } from "../util/madd";
 import { corpusBucket } from "../util/speller";
 import { registerSegments, spokenAt } from "../util/colloquial";
 import commonNouns from "../dict/hazm-common-nouns.json";
+import compounds from "../dict/compounds.json";
+
+/** The joined forms the word lists (lexicon) own: «بهمین»، «بهمراه». */
+const LIST_FORMS = new Set<string>(compounds.entries.flatMap((e: { from: string[] }) => e.from));
 
 const COMMON_NOUNS = new Set<string>(commonNouns.words);
 
@@ -69,7 +73,12 @@ const BE_ZWNJ = new Set([
     // adverbs (ص ۳۸ ب: «به‌سختی»)
     "سختی", "سادگی", "آسانی", "راحتی", "خوبی", "درستی", "زودی", "تازگی", "کلی", "کلّی", "آرامی", "دقت", "دقّت",
     "روشنی", "وضوح", "سادگی", "آهستگی", "نرمی", "تندی", "گرمی", "خوشی", "زیبایی", "کندی", "فوریت", "فوریّت",
-    "اختصار", "تفصیل", "ویژه", "عمد", "اجبار", "اشتباه", "صراحت", "مراتب", "نوبت", "ترتیب", "یقین", "طورکلی"
+    "اختصار", "تفصیل", "ویژه", "عمد", "اجبار", "اشتباه", "صراحت", "مراتب", "نوبت", "ترتیب", "یقین", "طورکلی",
+    // the farhang's «به‌X» (1.6.7: the same forms as the joined «بصورت» ← «به‌صورت» of the word lists)
+    "صورت", "صورتی", "راستی", "قدری", "نوعی", "ناچار", "قدر", "صرفه", "مرور", "سلامتی", "قصد", "حسب", "توسط", "قرار",
+    "غایت", "زعم", "جانب", "نوبه", "سلامت", "پاس", "حکم", "موازات", "عکس", "دروغ", "مجرد", "تبع", "ناحق", "زحمت",
+    "عوض", "تعجیل", "دشواری", "تناوب", "تمامی", "تناسب", "تصادف", "توالی", "ضرورت", "ضمیمه", "طعنه", "رایگان",
+    "تلافی", "تصریح", "تساوی", "عبث", "چابکی", "روزرسانی"
 ]);
 
 const POSSESSIVE = ["مان", "تان", "شان", "م", "ت", "ش"];
@@ -162,8 +171,9 @@ function joinedWord(word: string, prev = "", next = ""): PatternResult | null {
             };
         }
     }
-    // «بهتون، بهشون، بهمون»: «به» + a spoken pronoun, never marked (1.5.2; «تون» is also a noun)
-    if (word.startsWith("به") && !/^به(شون|تون|مون|شان|تان|مان)$/.test(word)) {
+    // «بهتون، بهشون، بهمون»: «به» + a spoken pronoun, never marked (1.5.2; «تون» is also a noun). A joined «ب» +
+    // word of the word lists («بهمین» ← «به همین»، «بهمراه» ← «به‌همراه») is theirs, not «به» + «مین» (1.6.7)
+    if (word.startsWith("به") && !/^به(شون|تون|مون|شان|تان|مان)$/.test(word) && !LIST_FORMS.has(word)) {
         const rest = word.slice(2);
         if (rest.length >= 2 && (commonNoun(rest) || BE_ZWNJ.has(rest))) {
             const fixed = afterBe(rest);

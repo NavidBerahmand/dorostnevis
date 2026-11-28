@@ -22,6 +22,7 @@ import { otherReading, homographMessage } from "../util/homograph";
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, WORD, ZWNJ } from "../util/persian";
 import hazmBi from "../dict/hazm-bi.json";
+import { isKnown } from "../util/words";
 
 const SOURCE = "دستور خط، «بی»، ص ۳۹";
 
@@ -39,6 +40,17 @@ const PREPOSITION_FOLLOWERS = new Set([
     "من", "تو", "او", "ما", "شما", "ایشان", "وی", "همه", "هر", "یک", "چند",
     "در", "با", "از", "به", "را", "و", "که", "تا", "یا", "نیز", "هم"
 ]);
+
+/**
+ * A plural in «ات» of a known word: «مشکلات» (مشکل)، «تبعات» (تبعه)، «جزئیات» (جزئی)، «تحصیلات» (تحصیل). Not «ثبات»،
+ * «کربنات»، «مبالات»: the word without «ات» is no word, or «بی‌» + the whole is a word (the farhang, Hazm).
+ */
+function arabicPlural(word: string): boolean {
+    if (!word.endsWith("ات") || word.length < 5) return false;
+    if (isKnown("بی" + ZWNJ + word) || isKnown("بی" + word) || JOINED_TO_SEPARATED["بی" + word]) return false;
+    const stem = word.slice(0, -2);
+    return [stem, stem + "ه", stem + "ی", stem.replace(/ی$/, "")].some((w) => w.length >= 2 && isKnown(w) && !isKnown("بی" + ZWNJ + w + "ات"));
+}
 
 export default createPatternRule(() => ({
     source: SOURCE,
@@ -72,6 +84,10 @@ export default createPatternRule(() => ({
                 const next = m[1];
                 if (PREPOSITION_FOLLOWERS.has(next)) return null;
                 if (JOINED_EXCEPTIONS.includes("بی" + next)) return null; // handled above
+                // «بی مشکلات»، «بی تبعات»، «بی جزئیات» (1.6.7): before a plural in «ات» «بی» is the preposition (the
+                // book's تبصره: apart). The prefix makes adjectives, and an adjective in «بی‌» never takes «ات»
+                // («بی‌گناهان»، «بی‌سوادها» do). Not a word that ends so by itself («بی ثبات»، «بی کربنات»).
+                if (arabicPlural(next)) return null;
                 return {
                     message: `پیشوند «بی» با نیم‌فاصله نوشته می‌شود: «بی${ZWNJ}${next}»`,
                     replacement: "بی" + ZWNJ,

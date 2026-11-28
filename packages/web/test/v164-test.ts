@@ -45,7 +45,10 @@ describe("1.6.4: the spelling checker", function () {
     this.timeout(60000);
     it("still offers the typo's word, first", async () => {
         assert.deepStrictEqual((await page("کندانسور مشمل بر پنج قطعه است.")).spelling[0], "Y مشمل→مشتمل");
-        assert.deepStrictEqual((await page("نماز واقعآ نماد وقار است.")).spelling[0], "Y واقعآ→واقعاً");
+        // «واقعآ»: a tanvin typed as «آ», made silently since 1.6.7 (hamza-tanvin), no spelling guess left
+        const vq = await page("نماز واقعآ نماد وقار است.");
+        assert.ok(vq.text.includes("واقعاً") && vq.spelling.length === 0, JSON.stringify(vq));
+        assert.deepStrictEqual((await page("مشتری واقعأ راضی بود.")).text.includes("واقعاً"), true);
         assert.deepStrictEqual((await page("چاروق اکنون درزنجان ساخته می‌شود.")).spelling[0], "Y درزنجان→در زنجان");
     });
     it("no card on a name, a loanword or a spoken form many sites use, nor without a replacement", async () => {
@@ -78,9 +81,10 @@ describe("1.6.4: the spaced compounds", function () {
             assert.deepStrictEqual((await page(t)).compounds, [], t);
         }
     });
-    it("the compounds stay: «دانش آموزان» red, «تخم مرغ» and «یک بار» yellow", async () => {
+    it("the compounds stay: «دانش آموزان» red, «تخم مرغ» yellow («یک بار» none since 1.6.7)", async () => {
         assert.deepStrictEqual((await page("دانش آموزان آمدند.")).compounds, ["R دانش آموزان→دانش‌آموزان"]);
         assert.deepStrictEqual((await page("تخم مرغ را بزنید.")).compounds, ["Y تخم مرغ→تخم‌مرغ"]);
-        assert.deepStrictEqual((await page("حتی یک بار هم به روی خودش نیاورد.")).compounds, ["Y یک بار→یک‌بار"]);
+        // 1.6.7: the farhang lists both «یک بار» (یک دفعه) and «یک‌بار» (ناگهان): no card (yellow before)
+        assert.deepStrictEqual((await page("حتی یک بار هم به روی خودش نیاورد.")).compounds, []);
     });
 });
