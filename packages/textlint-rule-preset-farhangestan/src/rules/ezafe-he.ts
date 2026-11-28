@@ -27,6 +27,8 @@
  * از روی کلمه‌های اطراف حدس می‌زند. اگر مدل دست‌کم ۹۰٪ مطمئن باشد و کلمه
  * شناخته‌شده باشد اصلاح خودکار (در صفحه همیشه زرد)، و از ۸۰٪ به بالا فقط پیشنهاد؛ در سطر
  * محاوره‌ای فقط برای چند کلمه (از ۱.۶.۳). با گزینۀ { "model": false } خاموش می‌شود.
+ * از ۱.۶.۸ کسرۀ اضافۀ قطعی قرمز است (اصلاح بی‌پرسش): «درباره»، «به» + «گفته، وسیله، اندازه…»، «در/از/به» +
+ * «دوره، سده، زمینه…» (redEzafe، فقط در جملۀ نوشتاری).
  */
 import { createPatternRule } from "../util/pattern-rule";
 import { START, END, LETTER, LETTER_RANGE, ZWNJ, toPersianDigits } from "../util/persian";
@@ -54,7 +56,7 @@ import { missingMadd } from "../util/madd";
 import { isSpokenStem, spoken as spokenForm, registerSegments } from "../util/colloquial";
 import hazmAdjectives from "../dict/hazm-adjectives.json";
 import commonNouns from "../dict/hazm-common-nouns.json";
-import { ezafeCandidates, EzafeCandidate, isFiniteVerb } from "../util/ezafe-model";
+import { ezafeCandidates, EzafeCandidate, isFiniteVerb, barePresent } from "../util/ezafe-model";
 import { inBank } from "../util/colloquial-bank";
 import { accepted, spellingReady } from "../util/speller";
 
@@ -81,6 +83,35 @@ const PRONOUN_MIN_P = 0.3;
 const COMPOUND_SUGGEST = 0.6;
 const COMPOUND_SUGGEST_SPOKEN = 0.8;
 const SPOKEN_HEADS = new Set(["همه", "درباره", "ادامه", "زمینه", "نسخه"]);
+/*
+ * 1.6.8: the ezafe the writer can trust without reading it, red (so «درست‌کن» makes it). Measured on a held-out gold
+ * of 84,339 cases (Wikipedia articles and blogs that mark the ezafe themselves, the marks stripped; none of them in
+ * the model's training; where gold and site disagreed the case was read by hand) and on blog cards judged by hand.
+ * Only in a written sentence on a line with no spoken one, and never before a verb or a pronoun:
+ * - words that head an ezafe in nearly every use: «درباره» (2,074 of 2,076 in the gold), and after «به» the words of
+ *   BE_HEADS («به گفتۀ او»، «به وسیلۀ»، «به اندازۀ»، «به مثابۀ»: every one right, whatever the model says);
+ * - after «در، از، به» the words of PREP_HEADS when the model gives at least 70% («در دورۀ صفوی»، «از سدۀ هشتم»،
+ *   «در زمینۀ»، «در محدودۀ»); below 70% they are mostly a phrase's end («در میانه وجود داشت»، «از رده خارج»).
+ * In the gold 4,888 red cards; of the 95 the gold calls wrong, read by hand, one is («در نسخه تشخیص داده شده»). Blogs,
+ * 558 judged over four rounds: 3 wrong, each now left out, «پا به عرصه گذاریم» (a verb with no «می»: barePresent)،
+ * «صاف تا نیمه ابریه» (so «نیمه»، a prefix too, and «تا» are out)، «مرحله به مرحله» (a word said twice around «به»);
+ * the last 345 judged under these rules, all right. The model alone,
+ * even at 95% and more (99.8% right in the gold, Wikipedia), was 96.8% right on blogs («به جای نوک سینه آنها را»،
+ * «اندر نتیجه این اشخاص»، «بیچاره عثمان»، «لحظات خیره کننده جهان ما»): it stays yellow.
+ */
+const HEADS_RED = new Set(["درباره", "به‌وسیله", "به‌واسطه", "به‌منزله", "به‌مثابه", "به‌اندازه", "به‌گفته", "به‌نوشته", "به‌عقیده", "به‌نوبه", "به‌بهانه"]);
+const BE_HEADS = new Set(["گفته", "نوشته", "عقیده", "وسیله", "واسطه", "منزله", "مثابه", "اندازه", "نوبه", "بهانه"]);
+const PREP_HEADS = new Set(["دوره", "سده", "زمینه", "حوزه", "مرحله", "محدوده", "نسخه", "فاصله", "رتبه", "رده", "درجه", "عرصه", "اندیشه", "میانه", "مجله", "دهه", "اداره"]);
+const PREP_HEAD_RED = 0.7;
+/** Is the ezafe on `word` (after `prev2 prev`, before `next`, model probability `p`) one to make without asking (red)? */
+function redEzafe(word: string, prev: string, prev2: string, next: string, p: number): boolean {
+    // a verb may come next, written without «می» («پا به عرصه گذاریم»), or a pronoun that begins a new phrase
+    if (barePresent(next) || EZAFE_PRONOUNS.includes(next) || PRONOUNS.has(next)) return false;
+    // «مرحله به مرحله»، «دوره به دوره»: an adverb
+    if (prev2 === word && prev === "به") return false;
+    if (HEADS_RED.has(word) || (prev === "به" && BE_HEADS.has(word))) return true;
+    return PREP_HEADS.has(word) && /^(در|از|به)$/.test(prev) && p >= PREP_HEAD_RED;
+}
 /** Does the line around `index` have a spoken sentence (informal text)? */
 function informalLine(input: string, index: number): boolean {
     const a = input.lastIndexOf("\n", index - 1) + 1;
@@ -129,6 +160,15 @@ function isPronouncedHe(word: string): boolean {
     const before = word[word.length - 2];
     // long vowel before ه → pronounced: راه، کوه، فقیه، شبیه، گناه
     return before === "ا" || before === "و" || before === "ی" || before === "آ";
+}
+
+/**
+ * The ezafe the writer typed in another form («شهریه ی»، «حاشیه‌ی»، «سایهء»): the word is in the ezafe, so only a
+ * pronounced «ه» is left out, from the closed list («فقیه»، «کوه»، «گروه») or in «ـاه» (1.6.8: a long vowel before
+ * «ه» is no sign by itself, «شهریه ی مناسب» ← «شهریۀ مناسب»; before, every «ـیه»، «ـوه» was left alone).
+ */
+function writtenMarkPronounced(word: string): boolean {
+    return PRONOUNCED_HE.has(word) || hasPronouncedHe(word) || word.endsWith("آه") || /پژوه$/.test(word) || ["نستوه", "نبیه", "سیه"].includes(word);
 }
 
 const PRONOUNS = new Set([
@@ -314,9 +354,12 @@ export default createPatternRule<Options>((options) => {
         checks: [
             {
                 // word ending in ه + (space|ZWNJ) + ی (optionally with kasra) as a separate token
-                pattern: new RegExp(`${START}(${LETTER}+ه)[ ${ZWNJ}]ی\\u0650?${END}`, "g"),
+                // 1.6.8: any run of spaces, no-break spaces and ZWNJs between them («شهریه  ی»، «خانه‌ ی»)
+                pattern: new RegExp(`${START}(${LETTER}+ه)[ \u00a0${ZWNJ}]+ی\\u0650?${END}`, "g"),
                 check: (m) => {
-                    if (isPronouncedHe(m[1])) return null;
+                    if (writtenMarkPronounced(m[1])) return null;
+                    // a long vowel before «ه» (left alone before 1.6.8): only a known word, not spoken «یه»، «چیه»، «خوبیه»
+                    if (/[وی]ه$/.test(m[1]) && (!isKnown(m[1]) || m[1] === "یه" || spokenCopula(m[1]))) return null;
                     // 1.6.3: «بشه ی کمک» (a verb + «یه»)، «واسه ی» (spoken «برای»)، a word of the colloquial bank («خونه ی»:
                     // spelled as said, no card), «ن و ه ی» (letters)
                     if (isFiniteVerb(m[1]) || SPOKEN_NOT_EZAFE.has(m[1]) || NEVER_HEAD.has(m[1]) || inBank(m[1])) return null;
@@ -420,7 +463,9 @@ export default createPatternRule<Options>((options) => {
                     if (compound && isDictionaryWord(compound.replace(/\s.*$/, ""))) return null;
                     // «ایده ال» (ایده‌آل)، «همه جا»: one word written apart, no ezafe (1.6.3)
                     if (!compound && [m[1] + m[2], m[1] + ZWNJ + m[2], m[1] + ZWNJ + m[2].replace(/^ا/, "آ")].some((w) => isKnown(w))) return null;
-                    if (compound ? c.p < (informal ? COMPOUND_SUGGEST_SPOKEN : COMPOUND_SUGGEST) : informal ? !SPOKEN_HEADS.has(m[1]) || c.p < MODEL_SUGGEST_SPOKEN : c.p < MODEL_SUGGEST) return null;
+                    // 1.6.8: red in a written sentence where the ezafe is (nearly) certain, whatever the bar below
+                    const red = !compound && !informal && isKnown(m[1]) && redEzafe(m[1], prev, m.input.slice(0, m.index).match(/([\p{L}\u200c]+)[ \u200c]+[\p{L}\u200c]+[ \u200c]*$/u)?.[1] ?? "", m[2], c.p);
+                    if (!red && (compound ? c.p < (informal ? COMPOUND_SUGGEST_SPOKEN : COMPOUND_SUGGEST) : informal ? !SPOKEN_HEADS.has(m[1]) || c.p < MODEL_SUGGEST_SPOKEN : c.p < MODEL_SUGGEST)) return null;
                     if (compound) {
                         return {
                             message: `اگر «${m[1]} ${m[2]}» یک ترکیب است، با نیم‌فاصله نوشته می‌شود: «${compound}»`,
@@ -431,6 +476,7 @@ export default createPatternRule<Options>((options) => {
                         };
                     }
                     const fixed = m[1].slice(0, -1) + target;
+                    if (red) return { message: `نشانۀ اضافه پس از «ه»ی غیرملفوظ «${target}» است: «${fixed} ${m[2]}»`, replacement: fixed };
                     const sure = c.p >= MODEL_FIX && isKnown(m[1]);
                     return {
                         message: `اگر «${m[1]}» در حالت اضافه است (احتمال ${toPersianDigits(Math.round(c.p * 100))}٪)، «${fixed}» نوشته می‌شود`,
@@ -441,9 +487,9 @@ export default createPatternRule<Options>((options) => {
             },
             {
                 // the ezafe typed as a separate hamza: «بهانهء»، «بهانه ء»، «خانه‌ٔ»
-                pattern: new RegExp(`${START}(${LETTER}*ه)(?:[ ${ZWNJ}]?ء|${ZWNJ}\u0654)(?!${LETTER})`, "g"),
+                pattern: new RegExp(`${START}(${LETTER}*ه)(?:[ \u00a0${ZWNJ}]*ء|${ZWNJ}\u0654)(?!${LETTER})`, "g"),
                 check: (m) => {
-                    if (isPronouncedHe(m[1])) return null;
+                    if (writtenMarkPronounced(m[1])) return null;
                     return { message: `نشانۀ اضافه پس از «ه»ی غیرملفوظ «${target}» است`, replacement: m[1].slice(0, -1) + target };
                 }
             },

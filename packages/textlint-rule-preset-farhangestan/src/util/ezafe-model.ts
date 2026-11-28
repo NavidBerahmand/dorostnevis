@@ -149,6 +149,16 @@ export function isFiniteVerb(w: string): boolean {
     return !t || !t.split(",").includes("N");
 }
 
+/**
+ * A present-tense verb written with no «می» or «ب» («گذاریم»، «دارد»، «باشد»: literary or subjunctive) that is no noun
+ * or adjective as well (1.6.8: no red ezafe before one, «پا به عرصه گذاریم»).
+ */
+export function barePresent(w: string): boolean {
+    const t = POS.get(w);
+    if (t && /(?:^|,)(?:N|AJ)(?:,|$)/.test(t)) return false;
+    return PRESENT_END.some((e) => w.length > e.length + 1 && w.endsWith(e) && PRESENT.has(w.slice(0, w.length - e.length)));
+}
+
 function context(toks: string[], i: number, step: number, n: number): string[] {
     const out: string[] = [];
     let j = i + step;

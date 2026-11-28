@@ -108,7 +108,9 @@ export default createPatternRule(() => ({
             // «ی ادم»: «یه/یک»; not after a word in a vowel («خانه ی»، «دانشجو ی»: the ezafe or «ی» written apart)
             pattern: new RegExp(`${START}ی${END}`, "g"),
             check: (m) => {
-                const [prev, next] = around(m.input, m.index, m.index + 1);
+                const [prev0, next] = around(m.input, m.index, m.index + 1);
+                // 1.6.8: the word before across any run of spaces («شهریه  ی»: the ezafe, two spaces typed)
+                const prev = prev0 || (m.input.slice(0, m.index).match(/(?:^|[^\p{L}\u200c])([\p{L}\u200c]+)[ \u00a0]+$/u)?.[1] ?? "");
                 // after a space only: «همه‏ی»، «پنجره-ی» are the ezafe or «ی» written apart
                 if (m.index > 0 && m.input[m.index - 1] !== " ") return null;
                 if (!next || next.length < 2 || LETTER_CONTEXT.has(prev) || /[اوهیۀءأ]$/.test(prev)) return null;

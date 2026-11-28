@@ -222,7 +222,7 @@ export async function lintText(kernel: Kernel, text: string, s: Settings, forFix
     if (anySpoken) out.push(...(await run("spoken")).filter(isSpoken));
     const kurdish = kurdishLines(text);
     const kept = out.filter((m) => !kurdish.some(([a, b]) => m.range[0] >= a && m.range[0] < b) && !bankQuiet(text, m) && !(s.colloquialText && REGISTER_RULES.has(m.ruleId)));
-    return dedupe(kept).sort((a, b) => a.range[0] - b.range[0] || a.range[1] - b.range[1]);
+    return absorbSpaces(dedupe(kept)).sort((a, b) => a.range[0] - b.range[0] || a.range[1] - b.range[1]);
 }
 
 /**
@@ -241,6 +241,19 @@ function bankQuiet(text: string, m: Msg): boolean {
  * yellow card with one answer): of two reports that make the same change, the higher one stays (red before
  * yellow before blue, then precedence).
  */
+/**
+ * 1.6.8: «شهریه  ی»، «خانه  ای»، «کتاب  ها»: where a certain fix of a word takes in the extra spaces («شهریۀ»،
+ * «خانه‌ای»، «کتاب‌ها»), the «one space between two words» fix of the same spaces is dropped: one answer per word.
+ */
+const DOUBLE_SPACE = /^[\u2063\u2064]*بین دو کلمه یک فاصله کافی است/;
+function absorbSpaces(msgs: Msg[]): Msg[] {
+    const words = msgs.filter((m) => m.fix && m.ruleId !== "punctuation" && isCertainMsg(m));
+    if (!words.length) return msgs;
+    return msgs.filter(
+        (m) => !(m.ruleId === "punctuation" && m.fix && DOUBLE_SPACE.test(m.message) && words.some((w) => w.fix!.range[0] <= m.fix!.range[0] && w.fix!.range[1] >= m.fix!.range[1]))
+    );
+}
+
 function dedupe(msgs: Msg[]): Msg[] {
     const best = new Map<string, Msg>();
     const key = (m: Msg) => `${m.range[0]}:${m.range[1]}|${m.fix!.range[0]}:${m.fix!.range[1]}|${m.fix!.text}`;
