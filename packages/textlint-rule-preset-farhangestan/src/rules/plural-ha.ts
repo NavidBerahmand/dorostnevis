@@ -101,7 +101,7 @@ export default createPatternRule<Options>((options) => ({
                 // the book requires it only after «ه» (تبصره، بند ۵); elsewhere both forms
                 // are correct and separating is a recommendation: reported, never fixed
                 if (!endsWithHe) {
-                    if (options.apart) return { message: `«ها» جدا نوشته می‌شود (تنظیم «همیشه «ها» را جدا بنویس»): «${separate}»`, replacement: separate };
+                    if (options.apart) return { message: `«ها» جدا نوشته می‌شود (تنظیم «ها»ی جمع: «همیشه جدا»): «${separate}»`, replacement: separate };
                     return {
                         message: `کتاب جدانویسی «ها» را توصیه می‌کند: «${separate}»؛ پیوسته هم درست است`,
                         replacement: separate,

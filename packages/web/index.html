@@ -174,9 +174,9 @@
     white-space: pre-wrap;
     overflow-wrap: break-word;
     direction: rtl;
-    /* each paragraph its own bidi paragraph (1.5.2): without it, WebKit (iPhone) put the caret of a tap
-       after a line's end at the end of the next line */
-    unicode-bidi: plaintext;
+    /* always right to left (1.6.5): «plaintext» (1.5.2) let an empty line or a line starting with a Latin
+       word run left to right; the iPhone tap past a line's end is put right in app.ts (fixTapCaret) */
+    unicode-bidi: isolate;
     text-align: right;
     color: var(--ink);
     caret-color: var(--lapis);
@@ -233,6 +233,8 @@
   .opt > span { flex: 0 1 auto; }
   .opt select { flex: 0 1 auto; min-width: 0; max-width: 62%; }
   .opt-check { justify-content: flex-start; gap: 10px; cursor: pointer; }
+  .opt-group { min-width: 0; }
+  .opt-help { margin: 0 0 6px; font-size: 0.8rem; line-height: 1.7; color: var(--muted); overflow-wrap: break-word; }
   .opt-check input { width: 20px; height: 20px; margin: 0; accent-color: var(--lapis); flex: none; }
   select {
     font: inherit; color: var(--ink); background: var(--paper);
@@ -403,7 +405,7 @@
       <label class="auto-toggle" id="colloq-toggle" hidden title="کل متن محاوره‌ای است: واژه‌های محاوره‌ای («دیگه»، «می‌خوام»، «رو»، «اون») در همۀ متن درست شمرده می‌شوند و علامت نمی‌خورند. با پاک کردن متن فراموش می‌شود."><input type="checkbox" id="colloq" aria-label="کل متن محاوره‌ای است؛ واژه‌های محاوره‌ای علامت نمی‌خورند"><span>محاوره‌ای</span></label>
     </div>
     <div class="editor" id="editor">
-      <div id="text" class="text" role="textbox" aria-multiline="true" contenteditable="true" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="متن برای بررسی" data-placeholder="متن فارسی را اینجا بنویسید یا بچسبانید…"></div>
+      <div id="text" class="text" dir="rtl" role="textbox" aria-multiline="true" contenteditable="true" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="متن برای بررسی" data-placeholder="متن فارسی را اینجا بنویسید یا بچسبانید…"></div>
     </div>
     <div class="status-row">
       <p class="status" id="status" role="status"></p>
@@ -414,14 +416,17 @@
       <ol></ol>
     </details>
     <div class="options">
-      <label class="opt opt-check" title="«شباهتهای» ← «شباهت‌های»: پیوسته‌نویسی «ها» غلط نیست، ولی اگر همیشه جدا می‌نویسید، با اصلاح خودکار بی‌پرسش جدا می‌شود."><input type="checkbox" id="ha-apart"><span>همیشه «ها» را جدا بنویس</span></label>
       <label class="opt opt-check"><input type="checkbox" id="show-zwnj"><span>نمایش نیم‌فاصله‌ها</span></label>
-      <label class="opt"><span>«ها»ی جمع</span>
-        <select id="plural-mode">
-          <option value="recommended">با توصیۀ جدانویسی</option>
-          <option value="required-only">فقط موارد الزامی</option>
-        </select>
-      </label>
+      <div class="opt-group">
+        <label class="opt" title="«ها»ی جمع پیوسته («کتابها») یا جدا («کتاب‌ها»): فقط جاهای الزامی، پیشنهاد جدانویسی، یا همیشه جدا"><span>«ها»ی جمع</span>
+          <select id="plural-mode" aria-describedby="plural-help">
+            <option value="required-only">فقط جاهای الزامی</option>
+            <option value="recommended" selected>پیشنهاد جدانویسی</option>
+            <option value="apart">همیشه جدا</option>
+          </select>
+        </label>
+        <p class="opt-help" id="plural-help" aria-live="polite"></p>
+      </div>
     </div>
     <details class="style-rules" id="style-rules">
       <summary>ویرایش زبانی <span class="style-hint">پیشنهاد، و غلط‌های قطعی؛ در متن رسمی</span></summary>

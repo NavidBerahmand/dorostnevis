@@ -244,14 +244,43 @@ export default createPatternRule<Options>((options) => {
                 // an opening quote starts a word and a closing one ends it: «"که اساساً» opens, not closes
                 const before = m.input[m.index - 1] ?? " ";
                 const after = m.input[m.index + m[0].length] ?? " ";
-                if (!/[\s(\[{:،؛]/.test(before) || /^\s/.test(inner) && open !== "''" || /\s$/.test(inner) && open !== "''") return null;
-                if (!/[\s)\]}.،؛:!؟?,;]/.test(after)) return null;
+                let lead = "", trail = "";
+                const spacedRight = /[\s(\[{:،؛]/.test(before) && !(/^\s/.test(inner) && open !== "''") && !(/\s$/.test(inner) && open !== "''")
+                    && /[\s)\]}.،؛:!؟?,;]/.test(after);
+                if (!spacedRight) {
+                    // 1.6.5: «اینکه" برو … میخوره" کاشف», «گفت" برو "و رفت»: straight double quotes typed against
+                    // the word on the wrong side. On a line whose «"» pair up, the 1st, 3rd… open and the 2nd,
+                    // 4th… close, whatever the spaces say: the pair becomes «…» with the spaces put right.
+                    if (open !== '"') return null;
+                    const ls = m.input.lastIndexOf("\n", m.index - 1) + 1;
+                    const le = m.input.indexOf("\n", m.index);
+                    const line = m.input.slice(ls, le < 0 ? m.input.length : le);
+                    if ((line.match(/"/g) ?? []).length % 2 !== 0) return null;
+                    if ((m.input.slice(ls, m.index).match(/"/g) ?? []).length % 2 !== 0) return null;
+                    if (!inner.trim() || /^\s*$/.test(inner)) return null;
+                    // not a «"» that is something else (measured on Wikipedia and the blogs): a tanvin typed as «"»
+                    // («حتما"»، «معمولا"»), an escaped one («\"»), an inch or ditto mark («۵"»), wiki markup inside
+                    // («|بندانگشتی|»، «[[…»), or narration between two quotations that ends in «:» («."دانشجو گفت: "…»)
+                    if (/[\u0600-\u06FF]اً?"(?=[\s.،؛:!؟?]|$)/.test(line) || /\\"/.test(line) || /[0-9۰-۹]"/.test(line)) return null;
+                    if (/[|[\]{}]/.test(inner) || /:\s*$/.test(inner)) return null;
+                    // more than one pair on the line: only when no two marks in a row look like openers or like closers
+                    // (one quotation inside another: «… "کانال‌ها … زیاد "رودخانه‌ها … " … "»)
+                    const marks = [...line.matchAll(/"/g)].map((q) => {
+                        const b = line[q.index! - 1] ?? " ", a = line[q.index! + 1] ?? " ";
+                        return /[\s(\[{:،؛]/.test(b) && !/\s/.test(a) ? "o" : !/\s/.test(b) && /[\s)\]}.،؛:!؟?,;]/.test(a) ? "c" : "x";
+                    }).join("");
+                    if (marks.length > 2 && /oo|cc/.test(marks)) return null;
+                    lead = /[\s(\[{]/.test(before) || m.index === ls ? "" : " ";
+                    // (a suffix or a ZWNJ after the closing mark stays attached: «"رسا"ی دلواپسان» → «رسا»ی)
+                    const rest = m.input.slice(m.index + m[0].length);
+                    trail = /[\s)\]}.،؛:!؟?,;\u200c\u200e\u200f]/.test(after) || m.index + m[0].length >= (le < 0 ? m.input.length : le) || /^(?:ی|ها|های|هایی|ه|ای|اش|ام|ات|ان)(?![\u0600-\u06FF])/.test(rest) ? "" : " ";
+                }
                 // a single «'» is also an apostrophe: only short, all-Persian quotations
                 if (open === "'" && (inner.length > 40 || /[A-Za-z]/.test(inner))) return null;
                 if (inForeignToken(m.input, m.index) && !/[؀-ۿ]/.test(inner)) return null;
                 // a quotation inside «…» keeps its own marks: «او گفت “نه”»
                 if (insideGuillemets(m.input, m.index)) return null;
-                return { message: "در متن فارسی گیومۀ فارسی «» به کار می‌رود", replacement: `«${inner.trim()}»`, source: SOURCE };
+                return { message: "در متن فارسی گیومۀ فارسی «» به کار می‌رود", replacement: `${lead}«${inner.trim()}»${trail}`, source: SOURCE };
             }
         });
     }

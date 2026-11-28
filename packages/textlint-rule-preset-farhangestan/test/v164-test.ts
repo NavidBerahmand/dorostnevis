@@ -70,8 +70,8 @@ tester.run("spelling (1.6.4)", spelling, {
         "الگ توسط ژنرال خزر پسخ شکست خورد.",
         "حادثه‌ای برای کارل وندلینگر در موناکو رخ داد.",
         "فریدون حکومت ضحاک را برانداخت و اثرط، پدر گرشاسپ، درگذشت.",
-        // a written word of three letters: a name or a term
-        "فیلسوف و بنیان‌گذار مذب رواقی بود.",
+        // a written word of three letters: a name or a term («مذب» is on the closed list of 1.6.5: see v165-test)
+        "فیلسوف و بنیان‌گذار پسخ رواقی بود.",
         // words of many blog and forum sites (spoken forms, loanwords, names), of Wikipedia articles and titles
         { text: "خواهرم و خونوادش در مسافرتی بودند.", options: {} },
         "شاید بخواهید با یوزرها صحبت کنید.",

@@ -158,7 +158,7 @@ const pop = $<HTMLDivElement>("popover");
 const summary = $<HTMLParagraphElement>("summary");
 const showZwnj = $<HTMLInputElement>("show-zwnj");
 const pluralMode = $<HTMLSelectElement>("plural-mode");
-const haApart = $<HTMLInputElement>("ha-apart");
+const pluralHelp = $<HTMLParagraphElement>("plural-help");
 const applyAllBtn = $<HTMLButtonElement>("apply-all");
 const copyBtn = $<HTMLButtonElement>("copy");
 const pasteBtn = $<HTMLButtonElement>("paste");
@@ -278,7 +278,6 @@ function settings(): Settings {
     return {
         register: "auto",
         pluralMode: pluralMode.value,
-        haApart: haApart.checked,
         styleOn: (id) => styleBoxes.find((b) => b.dataset.rule === id)?.checked !== false,
         colloquialText: colloquial === true
     };
@@ -1169,7 +1168,7 @@ function applyEverywhere(i: number, j: number): number {
 let justApplied: JustApplied | null = null;
 const pieceCache = new Map<string, Msg[]>();
 const verdictCache = new Map<string, boolean>();
-const settingsKey = () => JSON.stringify([pluralMode.value, haApart.checked, styleBoxes.map((b) => b.checked), colloquial === true]);
+const settingsKey = () => JSON.stringify([pluralMode.value, styleBoxes.map((b) => b.checked), colloquial === true]);
 /**
  * The line around [s, e) (at most ~1400 letters): whether a sentence is spoken depends on the
  * sentences beside it in its line (1.5.0), so the piece is re-linted with them.
@@ -1376,7 +1375,68 @@ box.addEventListener("mousedown", (ev) => {
     // a mouse click on a mark while not typing: the note, without the caret
     if (document.activeElement !== box && spanAt(ev.clientX, ev.clientY) >= 0) ev.preventDefault();
 });
+/** The caret's box for a collapsed range, or null. */
+function caretBox(r: Range): DOMRect | null {
+    const rs = r.getClientRects();
+    if (rs.length) return rs[0];
+    const b = r.getBoundingClientRect();
+    return b.height ? b : null;
+}
+/**
+ * WebKit (iPhone) puts the caret of a tap in the empty space past a line's end at the next line.
+ * «unicode-bidi: plaintext» hid it (1.5.2) but let empty lines and lines starting with a Latin word run
+ * left to right; since 1.6.5 the box is always right to left and the caret is moved back to the end of
+ * the line that was tapped. Elsewhere the caret is already on that line and nothing happens.
+ */
+function fixTapCaret(y: number): void {
+    const sel = getSelection();
+    if (!sel || !sel.rangeCount || !sel.isCollapsed) return;
+    const r0 = sel.getRangeAt(0);
+    if (!box.contains(r0.startContainer)) return;
+    const b0 = caretBox(r0);
+    if (!b0) return;
+    const t = box.firstChild;
+    if (!t || t.nodeType !== Node.TEXT_NODE) return;
+    const len = (t as Text).length;
+    const data = (t as Text).data;
+    const on = (i: number): DOMRect | null => {
+        const r = document.createRange();
+        r.setStart(t, i);
+        r.collapse(true);
+        return caretBox(r);
+    };
+    const place = (i: number) => {
+        const r = document.createRange();
+        r.setStart(t, i);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+    };
+    let off = offsetOf(r0.startContainer, r0.startOffset);
+    if (y >= b0.top - 1 && y <= b0.bottom + 1) {
+        // on the tapped line already, but before the space a line is broken at: the line ends after it (1.6.5)
+        const nb = off < len && data[off] === " " ? on(off + 1) : null;
+        if (nb && !(y >= nb.top - 1 && y <= nb.bottom + 1)) place(off + 1);
+        return;
+    }
+    const step = b0.top > y ? -1 : 1;
+    let found = -1;
+    for (let n = 0; n < 4000 && off >= 0 && off <= len; n++, off += step) {
+        const b = on(off);
+        if (!b) continue;
+        const hit = y >= b.top - 1 && y <= b.bottom + 1;
+        if (hit) {
+            found = off;
+            if (step < 0) break; // walking back: the first offset on the line is its end
+        } else if (found >= 0) break; // walking on: the last offset on the line is its end
+    }
+    if (found < 0) return;
+    // a line broken at a space: walking back, the first offset on the tapped line is before that space (1.6.5)
+    if (step < 0 && found < len && data[found] === " ") found++;
+    place(found);
+}
 box.addEventListener("click", (ev) => {
+    if (!skipClick && document.activeElement === box) fixTapCaret(ev.clientY);
     if (skipClick) return;
     if (!input.collapsed) return;
     const k = spanAt(ev.clientX, ev.clientY);
@@ -1646,21 +1706,44 @@ box.addEventListener("input", (ev) => {
     clearMarks();
     schedule();
 });
-[showZwnj, pluralMode].forEach((el) => el.addEventListener("change", check));
-// «همیشه «ها» را جدا بنویس»: joined «ها» joins the typing fixes; remembered per browser
+showZwnj.addEventListener("change", check);
+/*
+ * «ها»ی جمع (1.6.5: one menu of three, before a menu of two and a checkbox «همیشه «ها» را جدا بنویس» that did
+ * nothing with «فقط موارد الزامی»): only where the book requires it, the blue recommendation (the default), or
+ * always apart (joined «ها» joins the typing fixes). Remembered per browser, with a line of help under it.
+ */
+const PLURAL_HELP: Record<string, string> = {
+    "required-only": "«کتابها» و «کتاب‌ها» هر دو درست‌اند و دست نمی‌خورند؛ فقط «خانهها» ← «خانه‌ها» می‌شود.",
+    recommended: "«کتابها» ← «کتاب‌ها» پیشنهاد می‌شود، ولی خودش عوض نمی‌شود.",
+    apart: "همۀ «ها»های جمع جدا می‌شوند: «کتابها» ← «کتاب‌ها»."
+};
+const showPluralHelp = () => (pluralHelp.textContent = PLURAL_HELP[pluralMode.value] ?? "");
 try {
-    haApart.checked = stored("ha-apart") === "on";
+    const saved = stored("plural-mode");
+    // the old checkbox «همیشه «ها» را جدا بنویس» (1.4.0–1.6.4): on → «همیشه جدا»
+    if (saved && saved in PLURAL_HELP) pluralMode.value = saved;
+    else if (stored("ha-apart") === "on") {
+        pluralMode.value = "apart";
+        localStorage.setItem("vajban:plural-mode", "apart");
+    }
+    localStorage.removeItem("vajban:ha-apart");
+    localStorage.removeItem("dorostnevis:ha-apart");
 } catch {
     /* storage may be unavailable */
 }
-haApart.addEventListener("change", () => {
+showPluralHelp();
+pluralMode.addEventListener("change", () => {
+    showPluralHelp();
     try {
-        localStorage.setItem("vajban:ha-apart", haApart.checked ? "on" : "off");
+        localStorage.setItem("vajban:plural-mode", pluralMode.value);
     } catch {
         /* storage may be unavailable */
     }
-    pendingAuto = "all";
-    autoHold = false;
+    // «همیشه جدا»: the joined «ها» already in the text are fixed at once, as the typing fixes
+    if (pluralMode.value === "apart") {
+        pendingAuto = "all";
+        autoHold = false;
+    }
     void check();
 });
 // which language-editing rules are on: remembered per browser

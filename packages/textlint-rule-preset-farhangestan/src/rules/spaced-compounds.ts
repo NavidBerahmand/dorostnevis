@@ -121,11 +121,13 @@ const OTHER_WORD = new Set(["دارای", "روی", "گاهی", "یکی"]);
  * the pair's first and last word as written (with its suffix), `more` what follows the last word after a ZWNJ
  * («ها» of «سال‌ها»), `spoken` a spoken sentence.
  */
-function twoWords(first: string, last: string, tok: string, suf: string, more: string, prev: string, next: string, after: string, spoken: boolean): boolean {
+function twoWords(first: string, last: string, tok: string, suf: string, more: string, prev: string, next: string, after: string, spoken: boolean, beforePrev = ""): boolean {
     // a number counting on («سی و یک ساله»، «یکی دو هفته»، «هر کدام یک مروارید») or with the «ی» of «a»
     // («یک صدای کریستالی»)، a spoken «ه» («دو روزه تازه خریدین»: «دو روز است»)
     if (NUMBER_WORD.test(first)) {
         if (prev === "و" || prev === "یکی" || prev === "یکی‌دو" || NUMBER_WORD.test(prev) || /^[0-9۰-۹]+$/.test(prev)) return true;
+        // «دو یا چند گونه»، «سه تا چهار روزه»: a number counting on after «یا/تا» (1.6.5)
+        if (/^(یا|تا)$/.test(prev) && /^(یک|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|[0-9۰-۹]+)$/.test(beforePrev)) return true;
         if ((suf === "ی" || suf === "ای") && /[اوی]$/.test(last.slice(0, last.length - suf.length))) return true;
         // a spoken «ه» after a time word, not after a noun it describes: «تو این چند ساله»، «دو روزه تازه خریدین»
         // (but «سفر چند روزه»)
@@ -133,6 +135,14 @@ function twoWords(first: string, last: string, tok: string, suf: string, more: s
     }
     // «در زیر سطح قمر»، «در کنار دریا»: a place word after a preposition is the place, with an ezafe
     if (/^(زیر|روی|پشت|کنار|بالای|پایین|جلوی|میان|بین|درون|بیرون)$/.test(first) && /^(در|از|به|تا|با)$/.test(prev)) return true;
+    // the ezafe reading (1.6.5; of the wrong yellow cards 1.6.4 left, the most were a noun with its ezafe):
+    // an adjective with a pronoun («دل تنگت»، «جان عزیزم»)، a time word before what happened with a pronoun
+    // («سال مرگش»، «روز تولدش»). (Not a reflexive after it: «کپی رایت خودم»، «من باب خود» are compounds.)
+    if (/^(ش|ت|م|شان|تان|مان|اش|ام|ات)$/.test(suf)) {
+        const base = last.slice(0, last.length - suf.length);
+        if (/^(تنگ|عزیز|نازنین|مهربان|گرامی|قشنگ|زیبا)$/.test(base)) return true;
+        if (/^(سال|روز|ماه|شب|تاریخ|هنگام|زمان|لحظه|لحظۀ)$/.test(first)) return true;
+    }
     // «ای جان عزیزم!»: a call; «صدایی مثل چی»: a question word
     if (prev === "ای" || /^(چی|کی|کجا|چه)$/.test(last)) return true;
     if (prev === "هر" && first === "کدام") return true;
@@ -217,10 +227,13 @@ export default createPatternRule(() => ({
                     if (/^(یک|یه|دو|سه) /.test(e.spaced) && /^\s*(یک|دو|سه|چهار|پنج|[0-9۰-۹])/.test(m.input.slice(m.index + end))) return null;
                     const words = m.input.slice(m.index, m.index + end).split(/\s+/);
                     const after = m.input.slice(m.index + end);
-                    const prev = m.input.slice(0, m.index).trimEnd().split(/\s+/).pop() ?? "";
+                    const before = m.input.slice(0, m.index).trimEnd().split(/\s+/);
+                    const prev = before[before.length - 1] ?? "";
                     const next = after.match(/^\s+([\p{L}\u200c]+)/u)?.[1] ?? "";
                     const spoken = spokenAt(registerSegments(m.input), m.index);
-                    if (twoWords(words[0], words[words.length - 1], lastWord, suf, (rest ?? "").replace(/^\u200c/, ""), prev, next, after, spoken)) return null;
+                    // «آقا جان‌خان»: a name (1.6.5)
+                    if (rest === "\u200cخان") return null;
+                    if (twoWords(words[0], words[words.length - 1], lastWord, suf, (rest ?? "").replace(/^\u200c/, ""), prev, next, after, spoken, before[before.length - 2] ?? "")) return null;
                     return {
                         message: `اگر «${m.input.slice(m.index, m.index + end).replace(/\s+/g, " ")}» یک واژه است، ${how} نوشته می‌شود: «${to}»`,
                         replacement: to,

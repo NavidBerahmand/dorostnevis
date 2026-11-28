@@ -47,6 +47,8 @@ const SUGGEST_BUCKET = 9;
 /** A letter left out or a homophone swapped: a word from ≈ 128 occurrences (1.6.4). */
 const SURE_EDIT_BUCKET = 7;
 const SPLIT_BUCKET = 10;
+/** A neighbouring key or a look-alike letter in a written sentence: a word from ≈ 2,000 occurrences (1.6.5). */
+const WRITTEN_NEAR_BUCKET = 11;
 
 let LEX: Map<string, number> | null = null;
 /**
@@ -279,6 +281,49 @@ const EDIT_BONUS: Partial<Record<EditKind, number>> = { missing: 7, homophone: 7
 /** Frequency counts up to ≈ 4,000 occurrences: past that a likelier edit wins («مشمل» ← «مشتمل», not «مشکل»). */
 const RANK_BUCKET_CAP = 12;
 
+/**
+ * A letter too many, typed with the key next to a letter beside it (1.6.5): «مجدادا» ← «مجددا»، «سانتیگیراد» ← «سانتیگراد»،
+ * «استدالال» ← «استدلال». Only in a spoken sentence (in a written one, on held-out Wikipedia and the blogs, as many
+ * were names: «آمهاری»، «اسکاپن»، «کازرگاه»، «بیومار») and in a word of six letters or more: a letter too many in a
+ * shorter word was a name or a loanword («ماهلر»، «دایسک»، «خامک»; 1.6.4 dropped them all).
+ */
+function extraNextToKey(w: string, cand: string, L: Map<string, number>): boolean {
+    if (w.length < 6 || cand.length !== w.length - 1) return false;
+    // (not two words of their own: «ماهیران» is «ماهی» + «ران», a name, not «ماهیان»)
+    for (let i = 3; i <= w.length - 3; i++) if ((L.get(w.slice(0, i)) ?? -1) >= 7 && (L.get(w.slice(i)) ?? -1) >= 7) return false;
+    for (let i = 0; i < w.length; i++) {
+        if (w.slice(0, i) + w.slice(i + 1) !== cand) continue;
+        const k = KEY_POS.get(w[i]);
+        const adj = (x?: string) => {
+            const q = x ? KEY_POS.get(x) : undefined;
+            return !!k && !!q && x !== w[i] && Math.abs(k[0] - q[0]) <= 1 && Math.abs(k[1] - q[1]) <= 1;
+        };
+        if (adj(w[i - 1]) || adj(w[i + 1])) return true;
+    }
+    return false;
+}
+const EXTRA_BONUS = 3;
+/** Letters of one shape, other dots: a first letter may be one of these for another (1.6.5). */
+const LOOK_ALIKE = ["سش", "بپتثنی", "جچحخ", "دذ", "رزژ", "صض", "طظ", "عغ", "فق", "کگ"];
+/** A first letter changed for a neighbouring key or a look-alike: a word from ≈ 4,000 occurrences (1.6.5). */
+const FIRST_LETTER_BUCKET = 12;
+/**
+ * Two nouns run together (1.6.5: «قراردادکاری» → «قرارداد کاری»، «امتیازویژه» → «امتیاز ویژه»): both words of
+ * ≈ 4,000 occurrences or more and four letters at least, the first no prefix and the second no part that makes
+ * compounds («وجودنامه»، «پولورود»، «پردیدگاه» are words or names; 1.6.4 dropped all such pairs).
+ */
+function nounPair(a: string, b: string, L: Map<string, number>): boolean {
+    if (a.length < 4 || b.length < 4 || (L.get(a) ?? -1) < 12 || (L.get(b) ?? -1) < 12) return false;
+    if (ENCYCLOPEDIC.has(a) || ENCYCLOPEDIC.has(b) || NAMES.has(a) || NAMES.has(b) || NAME_FIRST.has(a)) return false;
+    if (a.startsWith("خود") || COMPOUND_HEADS.some((h) => a === h) || COMPOUND_TAILS.some((t) => b === t || (b.startsWith(t) && b.length - t.length <= 3))) return false;
+    return true;
+}
+const COMPOUND_HEADS = ["روی", "پیش", "زیر", "میان", "درون", "بیرون", "خوش", "فوق", "غیر", "نیمه", "همه"];
+const COMPOUND_TAILS = [
+    "نامه", "شهر", "رود", "آباد", "بند", "دار", "گاه", "کده", "ستان", "سازی", "ساز", "گری", "خانه", "گذاری", "شناس",
+    "نویس", "پذیر", "مند", "وار", "گیر", "بان", "دان", "فروش", "سرا", "زار", "پرداز", "آمیز", "انگیز", "بازی", "خوار",
+    "سنج", "یاب", "مدار", "گزار", "پوش", "افزار", "کننده", "دهنده", "آور", "پرور", "تراش", "کوب", "ریز", "گونه", "وند"
+];
 /** Closed-class words: two frequent words run together are offered apart only with one of these or a verb. */
 const CLOSED = new Set(
     ("و در از به با بر که را رو این آن اون تا هر هم یا اما ولی تنها فقط حتی نیز یعنی همه همه‌ی چند کمی خیلی بسیار دیگر دیگه هنوز " +
@@ -292,6 +337,8 @@ const CLOSED = new Set(
  */
 export function closedPair(a: string, b: string): boolean {
     if (a.length < 2 || b.length < 2) return false;
+    // «خود» and a participle or a stem make one word, as «خودساخته»، «خودآموز» (1.6.5: «خودنامیده» was split)
+    if (a === "خود" && ((b.endsWith("ه") && verbish(b)) || PRESENT_STEMS.has(b))) return false;
     // (a verb, not a stem with «ی»: «وادارسازی»، «جلدبندی»، «دوربری» are nouns of their own)
     const verb = (x: string) => verbish(x) && !x.endsWith("ی");
     if (a.length <= 2 && !verb(b)) return false;
@@ -373,17 +420,45 @@ export function spellingCheck(raw: string, spokenSentence = false): SpellResult 
     const mk = (spokenSentence ? "s\0" : "") + word;
     const cached = memo2.get(mk);
     if (cached !== undefined) return cached;
-    const result = checkWord(word, L, spokenSentence);
+    const result = keepZwnj(word, checkWord(word, L, spokenSentence));
     if (memo2.size > 20000) memo2.clear();
     memo2.set(mk, result);
     return result;
 }
 
 /**
+ * Two words run together are found on the letters alone; the parts keep the word's own ZWNJs (1.6.5: «ازماشین‌های»
+ * was offered «از ماشینهای», which the plural «ها» rule put back: a loop with «همیشه جدا»).
+ */
+function keepZwnj(word: string, r: SpellResult): SpellResult {
+    if (!r || !("suggestions" in r) || !word.includes(ZWNJ)) return r;
+    const sk = skeleton(word);
+    return {
+        suggestions: r.suggestions.map((s) => {
+            const parts = s.split(" ");
+            if (parts.length !== 2 || parts.join("") !== sk) return s;
+            // the word's letters up to the first part's length, then the rest
+            let n = 0;
+            let i = 0;
+            while (i < word.length && n < parts[0].length) {
+                if (word[i] !== ZWNJ) n++;
+                i++;
+            }
+            return word.slice(0, i).replace(/\u200c+$/, "") + " " + word.slice(i).replace(/^\u200c+/, "");
+        })
+    };
+}
+
+/**
  * «و» run into the next word («وبدنش»، «وعمدی»، «وزنبور») or «که» onto the last one («حالتیکه»): the
  * two words, when the rest is a word (1.6.1; before, a word two letters away was guessed).
  */
-function runTogether(w: string, L: Map<string, number>): string | null {
+function runTogether(w: string, L: Map<string, number>, written = false): string | null {
+    // «و» before a word of a «w/v» sound is a foreign name, not «و» run into a word: «ووفورد» (Wofford)، «وورفلین»;
+    // and in a written sentence «و» before a word the lexicon hardly has and only takes apart («ولینگبی»، «وگوروس»،
+    // «ولورینز»): on held-out Wikipedia and the judged blog cards such pairs were names 16 times in 25 (1.6.5)
+    if (w.startsWith("وو") && (L.get(w.slice(1)) ?? -1) < 8) return null;
+    if (written && w.startsWith("و") && (L.get(w.slice(1)) ?? -1) < 4 && !isKnown(w.slice(1)) && !spokenInflection(w.slice(1))) return null;
     // «وقصه»: four letters too when the rest is a frequent word (1.6.4; it was guessed «وقفه»)
     if (w.startsWith("و") && w.length === 4 && !w.startsWith("وو") && (L.get(w.slice(1)) ?? -1) >= 9) return "و " + w.slice(1);
     if (w.startsWith("و") && w.length >= 5) {
@@ -405,7 +480,7 @@ const SPOKEN_FUNCTION = ["با", "رو", "تو", "از", "به", "که", "این
  * In a spoken sentence (1.5.0): two words run together first (any frequent first word, or a
  * short spoken one: «امروزسه» → «امروز سه»، «بااون» → «با اون»), and one edit only.
  */
-function checkWord(word: string, L: Map<string, number>, spokenSentence = false): SpellResult {
+function checkWord(word: string, L: Map<string, number>, spokenSentence = false, written = !spokenSentence): SpellResult {
     if (spokenSentence) {
         const w = skeleton(word);
         if (accepted(word) || spokenInflection(w, true)) return null;
@@ -419,7 +494,7 @@ function checkWord(word: string, L: Map<string, number>, spokenSentence = false)
             // two frequent words: with a closed-class word or a verb among them (1.6.4: «ماهیران»، «ریپیر»، «پرفایل»)
             if (aOk && bOk && (SPOKEN_FUNCTION.includes(a) || SPOKEN_FUNCTION.includes(b) || closedPair(a, b))) return { suggestions: [a + " " + b] };
         }
-        const r = checkWord(word, L, false);
+        const r = checkWord(word, L, false, false);
         if (!r || !("suggestions" in r)) return r;
         const one = r.suggestions.filter((c) => c.includes(" ") || editCost(w, skeleton(normalize(c))) <= 1 || /اً$/.test(c));
         return one.length ? { suggestions: one } : { note: true };
@@ -440,7 +515,7 @@ function checkWord(word: string, L: Map<string, number>, spokenSentence = false)
     const w = sk;
     // a tanvin typed as «آ» or «أ» («واقعآ»، «قبلأ»، «حدودآ»): the word with «اً» (1.6.4; it was guessed «واقع»، «قبل»)
     if (/[آأ]$/.test(w) && w.length >= 4 && (L.get(w.slice(0, -1) + "ا") ?? -1) >= 8) return { suggestions: [w.slice(0, -1) + "اً"] };
-    const run = runTogether(sk, L);
+    const run = runTogether(sk, L, written);
     if (run) return { suggestions: [run] };
     // Arabic names and terms with the article: «المعلی»، «الدروس»
     if (word.startsWith("ال") && word.length >= 5) return null;
@@ -455,7 +530,7 @@ function checkWord(word: string, L: Map<string, number>, spokenSentence = false)
         if ((FUNCTION_WORDS.has(a) || (L.get(a) ?? -1) >= SPLIT_BUCKET) && (L.get(b) ?? -1) >= SPLIT_BUCKET) {
             looseSplit = true;
             if (FUNCTION_WORDS.has(a) && b.length >= 2) split = a + " " + b;
-            else if (!word.includes(ZWNJ) && closedPair(a, b)) split = a + " " + b;
+            else if (!word.includes(ZWNJ) && (closedPair(a, b) || nounPair(a, b, L))) split = a + " " + b;
             break;
         }
     }
@@ -467,15 +542,26 @@ function checkWord(word: string, L: Map<string, number>, spokenSentence = false)
     // (a letter left out or a homophone: a less frequent word too, «غرمجاز» ← «غیرمجاز», «اویز» ← «آویز»)
     const loose = new Map<string, number>();
     const pass = new Map<string, number>();
+    const first = new Map<string, number>();
     for (const c of edits1(w)) {
         const b = L.get(c);
         if (b === undefined || b < SURE_EDIT_BUCKET || ENCYCLOPEDIC.has(c)) continue;
         const kind = editKind(w, c);
         if (b < SUGGEST_BUCKET && kind !== "missing" && kind !== "homophone") continue;
+        // in a written sentence (1.6.5): a neighbouring key or a look-alike letter only for a word of ≈ 2,000
+        // occurrences («محمع» → «مجمع»): below that the word was a name 7 times in 8 on held-out Wikipedia
+        // («پخیر» → «پنیر»، «یانج» → «یانگ»، «کاثرین» → «کاترین»); a vowel letter typed twice
+        // («انجییر»، «سییا») is a foreign «ee/oo» below ≈ 1,000
+        if (written && kind === "near" && b < WRITTEN_NEAR_BUCKET) continue;
+        if (written && kind === "double" && /(یی|وو|اا)/.test(w) && b < 10) continue;
         loose.set(c, b);
-        const bonus = EDIT_BONUS[kind];
+        const bonus = EDIT_BONUS[kind] ?? (!written && extraNextToKey(w, c, L) && b >= SUGGEST_BUCKET ? EXTRA_BONUS : undefined);
         if (bonus !== undefined && passes(w, c) !== null) pass.set(c, Math.min(b, RANK_BUCKET_CAP) + bonus);
+        // the first letter a look-alike of the word's, the same shape with other dots («شریع» → «سریع»; 1.6.5): only a word of
+        // ≈ 4,000 occurrences and more, and only when no candidate keeps the first letter
+        else if (kind === "near" && b >= FIRST_LETTER_BUCKET && w.length >= 4 && w[0] !== c[0] && LOOK_ALIKE.some((g) => g.includes(w[0]) && g.includes(c[0]))) first.set(c, b);
     }
+    if (!pass.size) for (const [c, b] of first) pass.set(c, b);
     const ranked = [...pass.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
     const out = ranked.slice(0, 3);
     if (split) out.push(split);

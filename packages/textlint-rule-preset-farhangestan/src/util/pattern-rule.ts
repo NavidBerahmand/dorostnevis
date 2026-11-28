@@ -80,6 +80,12 @@ export const isSuggestion = (message: string) => /^\u2064?\u2063/.test(message);
 /** U+2064 (invisible): the report is a recommendation, not an error («پیشنهاد», blue on the page). */
 export const KIND_SUGGESTION = "\u2064";
 
+/** The text being linted (the Document node's source): `m.input` of a check is only its paragraph. */
+const DOCUMENT = { text: "" };
+export function documentText(): string {
+    return DOCUMENT.text;
+}
+
 export function createPatternRule<T extends object = object>(
     buildSpec: (options: T) => PatternRuleSpec
 ): TextlintFixableRuleModule<T & PatternPart> {
@@ -88,6 +94,10 @@ export function createPatternRule<T extends object = object>(
         const spec = buildSpec((options ?? {}) as T);
         const part = options?.part;
         return {
+            // the whole text, for checks that look past their paragraph (1.6.5: a word that recurs in the text is a name)
+            [Syntax.Document](node) {
+                DOCUMENT.text = getSource(node);
+            },
             [Syntax.Str](node) {
                 const text = getSource(node);
                 for (const { pattern, check } of spec.checks) {

@@ -35,6 +35,10 @@ new TextLintTester().run("punctuation", rule, {
         "او (که [به گفتهٔ خودش] آمده بود) رفت."
     ],
     invalid: [
+        // 1.6.5: straight quotes typed against the wrong word still pair up by order on the line
+        { text: 'مبنی بر اینکه" برو سؤال کن، شاید یادشون رفته" کاشف به عمل آمد.', output: 'مبنی بر اینکه «برو سؤال کن، شاید یادشون رفته» کاشف به عمل آمد.', errors: [{}] },
+        { text: 'او گفت" برو "و رفت.', output: 'او گفت «برو» و رفت.', errors: [{}] },
+        { text: '"برو "و رفت.', output: '«برو» و رفت.', errors: [{}] },
         inv("خوب است.این کتاب", "خوب است. این کتاب"),
         inv("او ۵سال ماند.", "او ۵\u00A0سال ماند."), // a unit: the no-break space (1.4.0)
         inv("او گفت ((بیا)) و رفت.", "او گفت «بیا» و رفت."),

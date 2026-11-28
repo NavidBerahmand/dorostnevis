@@ -23,9 +23,11 @@ export type Settings = {
      * page), or one register for the whole text ("formal", "spoken"), for tests.
      */
     register?: "auto" | "formal" | "spoken";
+    /**
+     * «ها»ی جمع (1.6.5, one menu): "required-only" (only after «ه»: «خانهها»), "recommended" (the default: joined
+     * «کتابها» gets the blue recommendation), "apart" (joined «ها» is fixed, silently with the typing fixes).
+     */
     pluralMode: string;
-    /** «همیشه «ها» را جدا بنویس»: joined «ها» is fixed, silently with the typing fixes. */
-    haApart?: boolean;
     /** Which language-editing rules are on (all, if not given). */
     styleOn?: (ruleId: string) => boolean;
     /**
@@ -83,7 +85,7 @@ const BANK_QUIET = new Set(["spelling", "ezafe-he"]);
  *   «می‌گه»، «میاد» → «می‌آد»): 157 of 157 right in the study of blog and forum text.
  * - plural-ha: «کتاب ها» → «کتاب‌ها», «خانهها» → «خانه‌ها». Not the «ا+ی» reading guess
  *   («خستهایم») or the joined-«ها» recommendation (no fix).
- * - plural-ha with «همیشه «ها» را جدا بنویس» on (since 1.4.0): «شباهتهای» → «شباهت‌های».
+ * - plural-ha with «ها»ی جمع: «همیشه جدا» (since 1.4.0, a checkbox until 1.6.5): «شباهتهای» → «شباهت‌های».
  * - tar-tarin: «بزرگ تر/بزرگتر/بزرگ ترین» → «بزرگ‌تر/بزرگ‌ترین», «بیش تر» → «بیشتر».
  * - ezafe-he: «هٔ» → «ۀ», the one form of the ezafe the site uses (since 1.5.0; the reverse in 1.4.0).
  * - hamza-tanvin and lexicon: a tanvin left out of the closed lists, «ایضا» → «ایضاً»،
@@ -186,7 +188,7 @@ export function lintOptions(s: Settings, forFix = false, autoOnly = false, part:
         .map(([ruleId, rule, partOpts]) => {
             // the page shows every judgement with its replacement (yellow, with a button): not in the automatic runs
             let opts: object = autoOnly ? { ...partOpts } : { ...partOpts, suggestions: true };
-            if (ruleId === "plural-ha") opts = { ...opts, mode: s.pluralMode, apart: !!s.haApart };
+            if (ruleId === "plural-ha") opts = { ...opts, mode: s.pluralMode === "required-only" ? "required-only" : "recommended", apart: s.pluralMode === "apart" };
             if (ruleId === "ezafe-he") opts = { ...opts, style: EZAFE_STYLE, formal: part !== "spoken" };
             if (baseRule(ruleId) === "calques") opts = { ...opts, ezafe: EZAFE_STYLE };
             return { ruleId, rule: rule as any, options: Object.keys(opts).length ? opts : true };
@@ -204,7 +206,7 @@ const optionCache = new Map<string, ReturnType<typeof lintOptions>>();
  */
 export async function lintText(kernel: Kernel, text: string, s: Settings, forFix = false, autoOnly = false): Promise<Msg[]> {
     const opts = (part: Part) => {
-        const k = JSON.stringify([part, forFix, autoOnly, s.pluralMode, !!s.haApart, s.styleOn ? STYLE_IDS.map((id) => s.styleOn!(id)) : null]);
+        const k = JSON.stringify([part, forFix, autoOnly, s.pluralMode, s.styleOn ? STYLE_IDS.map((id) => s.styleOn!(id)) : null]);
         let o = optionCache.get(k);
         if (!o) optionCache.set(k, (o = lintOptions(s, forFix, autoOnly, part)));
         return o;

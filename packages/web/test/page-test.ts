@@ -61,10 +61,10 @@ describe("the page's items", function () {
         assert.strictEqual(auto.filter((x) => x === "\u00A0").length, 3, JSON.stringify(auto));
     });
 
-    it("«همیشه «ها» را جدا بنویس»: joined «ها» becomes a silent fix only with the setting", async () => {
+    it("«ها»ی جمع: «همیشه جدا»: joined «ها» becomes a silent fix only with the setting", async () => {
         const text = "شباهتهای آنها";
         const off = (await lint(text)).filter((m) => isAuto(m, text));
-        const on = (await lint(text, { ...DEFAULT_SETTINGS, haApart: true })).filter((m) => isAuto(m, text));
+        const on = (await lint(text, { ...DEFAULT_SETTINGS, pluralMode: "apart" })).filter((m) => isAuto(m, text));
         assert.strictEqual(off.length, 0);
         assert.ok(on.some((m) => m.fix!.text === "شباهت‌های"), JSON.stringify(on));
     });

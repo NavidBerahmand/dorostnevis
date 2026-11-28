@@ -19,6 +19,10 @@ DICT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src
 # the book's own examples (ص ۵۸–۵۹، بند ۱۰ الف) and words made like them stay: «ده‌پانزده (نفر)»، «یک‌خوابه»
 BOOK = set("ده پانزده|پنج تن|پنج لایه|ده چرخ|نه فلک|هشت بهشت|هفت گنبد|یک خوابه|سی سالگی".split("|"))
 BOOK_LIKE = ("خوابه", "سالگی")
+# lexicalised: the pair means something its words do not (1.6.5, the book's ص ۵۸ بند ۱۰ الف: a compound with a number is
+# written with a ZWNJ or joined): «یک‌کلام» (in a word, decisive), «یک‌تنه» (single-handed), «سیزده‌بدر»، «هفت‌سین»،
+# «پنجاه‌پنجاه»، «سه‌راهی» (a junction), «سه‌تفنگدار» (the title)
+LEXICALISED = set("یک کلام|یک تنه|سیزده بدر|هفت سین|پنجاه پنجاه|سه راهی|سه تفنگدار".split("|"))
 NUM = set("یک دو سه چهار پنج شش هفت هشت نه ده یازده دوازده سیزده چهارده پانزده شانزده هفده هجده نوزده بیست سی چهل پنجاه شصت هفتاد هشتاد نود صد یکصد دویست سیصد هزار".split())
 
 
@@ -31,7 +35,7 @@ def main(shares_path):
     def phrase(spaced):
         v = shares.get(spaced, [0, 0, 0, 0])
         n = sum(v)
-        if spaced in BOOK or spaced.endswith(BOOK_LIKE):
+        if spaced in BOOK or spaced in LEXICALISED or spaced.endswith(BOOK_LIKE):
             return False
         return spaced.split(" ")[0] in NUM and n >= 20 and (v[1] + v[3]) / n < 0.15
 
